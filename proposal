@@ -1,0 +1,851 @@
+Chair of Machine Learning and Reasoning
+(Computer Science 6)
+RWTH AACHEN UNIVERSITY
+
+Master Thesis Proposal
+
+Semantic Partitioning for Partially Observable
+Deterministic Task and Motion Planning
+
+Hani Alassiri Alhabboub
+September 29, 2025
+
+Abstract
+
+This research proposal outlines a plan to extend Partially Observable Deterministic
+(POD) planning methods to the domain of Task and Motion Planning (TAMP)
+under partial observability. Existing TAMP frameworks often assume full observ
+ability or rely on computationally intensive probabilistic models. This project
+addresses the challenge of modeling belief states over object locations in continu
+ous 3D spaces. The central idea is to construct an abstract belief model grounded
+in Semantic Boxels—task-relevant Cuboids that serve as the foundation for be
+lief representation—enabling POD planning to reason about spatial uncertainty
+without requiring exhaustive discretization. The proposed methodology formally
+integrates this semantic abstraction with a PDDLStream-based TAMP framework,
+leveraging its stream mechanism to ground symbolic plans in continuous geo
+metric domains. The expected contribution is a scalable and conceptually simple
+framework that simplifies planning under spatial uncertainty for robotic systems,
+enabling them to perform complex tasks involving information gathering and
+robust manipulation in partially known environments.
+
+1 Introduction
+
+Robotic systems are increasingly envisioned to operate autonomously in complex, dynamic, and
+human-centric environments, performing tasks that demand both long-horizon reasoning and
+intricate physical interaction. To enable such capabilities, Task and Motion Planning (TAMP)
+has emerged as a critical area of research [5, 8]. TAMP addresses the fundamental challenge of
+connecting high-level symbolic task specifications (e.g., ”fetch the blue cup from the kitchen”)
+
+1
+
+1 Introduction
+
+with the low-level, continuous motions a robot must perform to execute those tasks in the real
+world. TAMP combines discrete task planning with continuous motion planning: symbolic
+planners generate high-level sequences of abstract actions—what is known as a task plan.
+However, symbolic planning alone is insufficient for real-world robotic execution. Due to
+necessary abstractions, there exists a significant gap between these abstract plans and the
+physical realities of robot operation. Specifically, we must determine whether the proposed
+symbolic actions are feasible within the robot’s continuous geometric and kinematic constraints,
+and if so, identify the concrete parameters required to execute them—such as object poses,
+grasp configurations, and collision-free trajectories. For instance, a symbolic instruction like
+(pick A) is only viable if object A is actually reachable, graspable, and a feasible motion exists
+to carry out the action. Bridging this gap demands specialized mechanisms to ground symbolic
+plans in continuous state and action spaces.
+
+To this end, various methods have been developed, among which PDDLStream [8] has become
+a widely used framework. PDDLStream extends the classical Planning Domain Definition
+Language (PDDL) [1] by incorporating streams—lazily-evaluated, declarative procedures that
+can interface with external solvers. These streams are capable of generating or validating
+continuous parameters on demand, allowing the symbolic planner to retrieve geometric or
+kinematic information only as needed. This simplifies the coupling between high-level symbolic
+reasoning (what to do) and low-level geometric feasibility (how to do it), making the planning
+process both flexible and efficient.
+
+Despite its effectiveness, the original PDDLStream framework assumes full observability and
+deterministic action outcomes—strong assumptions that limit its applicability in realistic,
+real-world settings. In practice, robots frequently operate under partial observability, due to
+occlusions, limited sensor coverage, or dynamically changing environments. In such settings,
+crucial information—such as the location of a target object or the presence of an obstacle—may
+be initially unknown, necessitating active information gathering as part of task execution.
+
+Addressing this limitation is the central focus of this thesis: extending PDDLStream to operate
+under partial observability. This includes the ability to represent and reason over belief states
+that capture uncertainty in continuous spatial variables. Naive representations—such as
+uniform voxelizations of 3D space—can quickly become computationally intractable, leading
+to an explosion in the size of the belief space. Effective solutions must therefore strike a balance
+between expressivity and computational efficiency in belief representation and planning. The
+core research question is: How can we formally define and integrate a belief representation based
+on semantic partitioning into a POD-TAMP framework? Here, we proposes a novel approach
+to discretizing the workspace based on perceived objects and the occluded regions they form.
+This is done by introducing Semantic Boxels—task-relevant, adaptively generated Cuboids—as
+the foundation for belief representation. Instead of a dense, uniform discretization, Semantic
+Boxels are dynamically created based on perceived objects (using their known 3D models) and
+
+2
+
+2 Background
+
+the occluded regions they form, thereby providing a structured and scalable way to represent
+and reason about spatial uncertainty.
+
+This thesis aims to develop a system where a robot, facing uncertainty about object locations, can
+plan and execute a sequence of information-gathering and manipulation actions as needed. It
+will reason over abstract beliefs about which Boxels objects might occupy, using PDDLStream to
+connect this reasoning to its continuous perception and action capabilities. The expected result
+is a framework that simplifies planning under spatial uncertainty, enhancing robot autonomy
+and robustness in complex, partially known environments. This proposal is structured as
+follows: Section 2 provides essential background information on classical planning, reasoning
+under uncertainty, and specific frameworks like PDDLStream that are foundational to this work.
+Section 3 then reviews related work in TAMP under partial observability, belief representation,
+and relevant planning paradigms. Section 4 details the proposed methodology, including the
+formalization of Boxels through adaptive semantic voxelization, the Semantic POD-TAMP
+model, and the PDDLStream integration. Finally, Section 5 describes the plan for evaluating our
+framework and concludes the proposal by outlining the expected contributions and significance
+of the research.
+
+2 Background
+
+This chapter covers the foundational concepts in AI planning, state representation, reasoning
+under uncertainty, and the relevant frameworks used in this thesis.
+
+2.1 AI Planning Fundamentals
+
+Artificial Intelligence (AI) planning is concerned with the autonomous generation of a sequence
+of actions, or a plan, to achieve a specified goal from a given initial state [10].
+
+2.1.1 State-Space Models in Classical Planning
+
+The formal basis for classical planning problems is a state-space model [9, 10, 13]. Conceptually,
+a state-space model explicitly defines all possible configurations of the world and how actions
+transform one configuration into another.
+
+More formally, a deterministic state-space model can be described as a tuple S = ⟨S, s0, SG, Act, A, f⟩,
+where:
+
+• S: A set representing all possible states the world can be in. For example, in a simple
+blocksworld problem with two blocks A and B and a table, a state could be ”Block A is
+on Block B, and Block B is on the table, and the robot hand is empty.”
+• s0 ∈ S: The specific initial state from which planning begins. E.g., ”Block A is on the
+table, Block B is on the table, hand empty.”
+
+3
+
+2 Background
+
+• SG ⊆ S: The set of goal states. Any state in this set satisfies the desired objective. E.g.,
+any state where ”Block A is on Block B.”
+• Act: A set of all possible actions the agent can perform. E.g., pick blockX, stack blockX on
+blockY.
+• A(s) ⊆ Act: A function that, for any given state s ∈ S, returns the subset of actions from
+Act that are applicable (can be executed) in state s. For example, pick blockA is applicable
+only if Block A is clear (nothing on top of it) and the robot hand is empty.
+• f(a, s) → s': A deterministic state transition function. Given a state s and an applicable
+action a ∈ A(s), f(a, s) returns the unique successor state s' that results from executing
+action a in state s. For example, if s is ”A on table, B on table, hand empty” and a is pick
+blockA, then s' = f(a, s) would be ”B on table, hand holding A.”
+
+A solution or plan is then a sequence of actions σ = [a0, a1, ... , an] such that if si is the state
+before action ai, then ai ∈ A(si), si+1 = f(ai, si), and the final state sn+1 is in SG. Often, we
+are interested in an optimal plan, which could be the shortest sequence of actions or one that
+minimizes some associated cost.
+
+Compact Representation: STRIPS, and PDDL Explicitly enumerating all possible states
+S is infeasible for all but the simplest problems. Therefore, planning problems are typically
+described in a more compact, factored representation using a planning language. In this
+representation, a state is defined by a set of propositions (or ground atoms) that are currently
+true.
+
+A foundational language for this is STRIPS (Stanford Research Institute Problem Solver)
+[6]. In STRIPS:
+
+• States are represented as sets of true propositions (e.g., (on A B), (ontable B),
+(hand-empty) ).
+• Actions are defined by:
+– Preconditions: A set of propositions that must be true in the current state for the
+action to be applicable.
+– Effects: Specified as two lists:
+
+Add-list: A set of propositions that become true after the action is executed.
+
+Delete-list: A set of propositions that become false (are no longer true) after the
+action.
+• The transition function f(a, s) is implicitly defined: the new state s' is obtained by taking
+state s, removing all propositions in the delete-list of a, and then adding all propositions
+in the add-list of a.
+• The initial state (s0) is a set of initially true propositions, and the goal (SG) is specified by
+a set of propositions that must be true in any goal state.
+
+4
+
+2 Background
+
+The Planning Domain Definition Language (PDDL) [1] builds upon and extends the
+STRIPS representation, providing a more expressive and standardized syntax for a wider range
+of classical planning problems. In PDDL:
+
+• Domain File defines:
+– Types: Categories for objects (e.g., block, robot).
+– Predicates: Relations or properties (e.g., (on ?x - block ?y - block)).
+– Action Schemas: Templates for actions, generalizing STRIPS operators. For instance:
+
+1 (:action stack
+2 :parameters (?obj1 - block ?obj2 - block)
+3 :precondition (and (holding ?obj1) (clear ?obj2))
+4 :effect (and (on ?obj1 ?obj2) (not (holding ?obj1))
+5 (not (clear ?obj2)) (hand-empty) (clear
+?obj1))
+6 )
+
+Here, (not (holding ?obj1)) is part of the delete-list, and (on ?obj1 ?obj2)
+is part of the add-list in STRIPS terms.
+• Problem File specifies:
+– Objects: Specific objects (e.g., A, B, C - block).
+– Initial State (Init): Ground atoms true at the start.
+– Goal (G): Ground atoms that must be true in a goal state.
+
+A PDDL problem P = ⟨Domain, Instance⟩ thus compactly encodes the state model S(P).
+Ground actions (action schemas with parameters replaced by specific objects) form the set
+Act. More advanced PDDL versions also support features beyond STRIPS, such as conditional
+effects ((when <condition> <effect>)), numeric fluents, and axioms (derived predicates).
+
+2.2 Planning under Partial Observability
+
+Classical planning’s assumption of full observability is often violated in robotics. When an
+agent has incomplete information about the true state of the world, it must reason about its
+belief state.
+
+2.2.1 Belief States and K-Literals
+
+A belief state represents the agent’s current set of possible world states consistent with its
+history of actions and observations. In Partially Observable Deterministic (POD) planning [2,
+4], the world itself behaves deterministically, but the agent’s knowledge is incomplete. The
+belief state b is explicitly a set of possible states. Actions transition this set, and observations
+prune it. A common way to reason about knowledge in POD planning is through K-literals [3].
+K-literals make the robot’s knowledge about a proposition p explicit. For example:
+
+• K(p) signifies ”p is known to be true.”
+
+5
+
+2 Background
+
+• K(¬p) signifies ”p is known to be false.”
+
+If neither holds, p is uncertain. p is ”possibly true” if K(¬p) is false. POD problems can often
+be compiled into classical planning problems using these K-literals, allowing classical planners
+to find plans that achieve a state of knowledge (e.g., K(goal_achieved)).
+
+2.2.2 Probabilistic vs. Deterministic Partial Observability
+
+It is important to distinguish POD planning from Partially Observable Markov Decision Pro
+cesses (POMDPs) planning [15], particularly as our approach will be compared with existing
+POMDP-based TAMP solutions. In POMDPs, the world is modeled as a Markov Decision
+Process (MDP) with probabilistic transitions and observations, and the belief state is a proba
+bility distribution over world states. While highly expressive, POMDPs are computationally
+very demanding. POD planning, by assuming deterministic (though unknown) outcomes and
+deterministic observations, offers a more tractable framework for many robotic scenarios where
+the primary uncertainty stems from lack of knowledge rather than inherent stochasticity of
+well-modeled actions.
+
+2.3 Task and Motion Planning (TAMP)
+
+Task and Motion Planning (TAMP) connects high-level task goals with a robot’s actual physical
+movements [7]. The core problem is ensuring that a plan is physically possible. High-level
+planners often ignore geometry, leading to plans that seem correct but can’t be executed. Yet,
+including all geometric details from the start makes the problem too complex to solve. This
+challenge of combining high-level logic with real-world geometry is why TAMP is an active
+research area, with frameworks like PDDLStream being developed to bridge the gap.
+
+2.3.1 PDDLStream for TAMP
+
+PDDLStream [8] is a prominent and flexible TAMP framework designed to bridge this symbolic
+continuous gap. It extends the classical Planning Domain Definition Language (PDDL) by
+introducing the core concept of streams.
+
+Streams: Declarative Procedures for Continuous Parameters A stream in PDDLStream
+is a procedure that generates or tests values for continuous parameters required by symbolic
+actions. These parameters might include object poses, robot configurations, grasp transforma
+tions, or motion trajectories. Streams have both a procedural and a declarative component:
+
+• Procedural Component (Conditional Generator): This is the actual code (e.g., a
+Python function) that, given some input values (which can be discrete symbols or other
+continuous values), produces a (potentially infinite) sequence of output values. For
+example, an inverse kinematics (IK) stream, given an object, its target pose, and a grasp,
+
+6
+
+2 Background
+
+would generate a sequence of robot configurations that achieve that end-effector pose. A
+collision-checking stream, given a trajectory, would test if it’s collision-free.
+• Declarative Component (Stream Specification): This part is described in a PDDL-like
+syntax and informs the symbolic planner what the stream does, what inputs it requires,
+what outputs it produces, and, crucially, what logical conditions (fluents) are associated
+with these inputs and outputs. This specification includes:
+– :inputs: The typed parameters the stream procedure takes.
+– :domain: A set of PDDL facts (preconditions) that must be true for the stream to
+be applicable for a given set of inputs. For example, an IK stream might require
+that a valid pose and grasp for the object are already known.
+– :outputs: The typed parameters that the stream procedure generates.
+– :certified: A set of PDDL facts that are guaranteed to be true if the stream
+successfully produces a set of outputs for given inputs. These ”certified fluents”
+are added to the planner’s state and represent new knowledge derived from the
+continuous domain. For instance, if an IK stream successfully finds a configuration
+?q for picking object ?obj at pose ?p with grasp ?g, it might certify the fluent
+(kinematics-sol ?obj ?p ?g ?q).
+
+PDDLStream employs a lazy evaluation strategy. Streams are not called exhaustively before
+hand; instead, the symbolic planner calls them ”on-demand” when it encounters an action
+whose preconditions require a continuous parameter to be instantiated or a continuous condi
+tion to be tested.
+
+Example PDDLStream Workflow Consider a symbolic action (pick ?obj ?p ?g ?q
+?t) (pick object ?obj from pose ?p using grasp ?g via configuration ?q along trajectory ?t).
+For this action to be applicable:
+
+A stream might first be called to sample a stable ?p for ?obj on a surface. If successful,
+it certifies (AtPose ?obj ?p).
+
+Then, another stream samples a grasp ?g for ?obj. If successful, it certifies (Grasp ?obj
+?g).
+
+An IK stream then takes ?obj, ?p, ?g as input and tries to find a robot configuration
+?q. If successful, it certifies (KinSolution ?obj ?p ?g ?q).
+
+Finally, a motion planning stream takes the current configuration and ?q as input to find
+a collision-free trajectory ?t, certifying (Motion ?q_start ?t ?q).
+
+Only if all these streams succeed and certify their respective fluents will the preconditions of
+the symbolic (pick ...) action be met.
+
+The overall PDDLStream algorithm often reduces a TAMP problem to a sequence of finite
+PDDL problems, iteratively calling streams to discover more certified fluents until a com
+
+7
+
+2 Background
+
+plete, grounded plan is found. The original PDDLStream framework, however, was primarily
+designed for fully observable and deterministic settings.
+
+2.4 Spatial Representation for Robotic Planning
+
+For robotic agents interacting with the physical world, a critical component is how the con
+tinuous, often 3D, environment and the objects within it are represented. This representation
+underpins both motion planning (navigating and avoiding collisions) and task planning (rea
+soning about object interactions and achieving goals). The challenge of spatial representation
+becomes even more acute under partial observability, where the robot must represent not just
+what is known, but also what is unknown or uncertain about the environment.
+
+2.4.1 Discretization of Continuous Space
+
+Robots operate in continuous spaces, but many planning algorithms, particularly at the sym
+bolic level, reason over discrete states or abstractions. Therefore, methods to discretize or
+abstract continuous spatial information are essential.
+
+Voxel Grids and Octrees A common approach to represent 3D environments is to discretize
+them into a grid of uniform volumetric pixels, or voxels. Each voxel can store information, such
+as whether it is occupied, free, or unknown. While straightforward, uniform voxel grids can be
+memory-intensive and computationally expensive for large environments or high resolutions.
+
+Octrees 2.4.1 [14, 18] offer a more efficient hierarchical data structure for representing 3D
+space. An Octree is a tree data structure where each internal node has exactly eight children.
+It starts with a single large voxel encompassing the entire space of interest. If this voxel is not
+homogeneous (e.g., it contains both free and occupied space), it is recursively subdivided into
+eight smaller child voxels (octants).
+
+Figure 1: Example of an octree storing free (shaded white) and occupied (black) cells. The
+volumetric model is shown on the left and the corresponding tree representation on
+the right.
+
+This subdivision continues until voxels are homogeneous or a minimum resolution/maximum
+depth is reached. This process creates a tree where large, uniform regions (whether free,
+
+8
+
+3 Related Work
+
+occupied, or unknown) are represented by single nodes at a shallower depth, making it highly
+efficient for representing sparse environments in comparison to uniform grid voxelization. The
+OctoMap framework [14] uses this principle to build probabilistic 3D occupancy maps from
+noisy sensor data. In such a framework, unobservable space is typically represented implicitly
+by the absence of nodes in a given volume; querying such a region returns an ”unknown”
+status.
+
+Sidd’s Critical Regions To make planning more efficient, space can be divided based on
+task-relevant meaning rather than uniform geometric criteria. One such approach is the
+concept of Critical Regions (CRs) as introduced by Siddharth Srivastava. [20]. Those CRs
+are learned sub-regions of the configuration space where important features—such as success
+rates of controllers, object visibility, or transition likelihoods—change significantly between
+those regions.
+
+In Sidd’s approach, these regions are identified using labeled data from motion planning
+problems, where demonstrations or sampled plans reveal which parts of the space are essential
+for solving tasks. Once identified, a region-based Voronoi diagram (RBVD) is used to partition
+the configuration space around the CRs: each point is assigned to the nearest critical region,
+forming abstract states. Transitions between these abstract states define abstract actions,
+forming the backbone for hierarchical planning. By focusing computation on these task
+relevant regions, this approach allows for more scalable and efficient planning, but is limited
+to static and pre-defined regions with labeled data.
+
+Our work combines these techniques, as explained in Section 4.
+
+3 Related Work
+
+Solving TAMP problems is hard, especially when a robot only has partial information. This
+section reviews previous work on this topic, focusing on planning approaches and methods for
+representing a robot’s beliefs about the world. We examine the limitations of current methods
+to provide context for our work.
+
+3.1 TAMP under Partial Observability
+
+Existing approaches to TAMP under partial observability generally either use formal, proba
+bilistic models or more ad-hoc, reactive methods, or a combination of both.
+
+3.1.1 POMDP-based TAMP Solutions
+
+Several works formulate TAMP under uncertainty as a POMDP to formally handle uncertainty
+and find optimal plans [5, 12, 19]. TAMPURA [5], for example, makes this approach more
+tractable by learning a simplified, abstract model of the problem. The planner then chooses
+
+9
+
+3 Related Work
+
+from a library of pre-defined controllers to create high-level plans that are robust to uncertainty
+and can gather information when needed. However, a persistent challenge is the representation
+of belief over continuous properties, particularly object poses. Implementations often resort
+to particle filters over dense voxel grids to approximate these continuous belief states [5, 11],
+which is does not scale well to large environments.
+
+3.1.2 Partially Grounded Plans in TAMP
+
+In contrast to formal probabilistic models, other TAMP systems handle uncertainty by deferring
+it to execution [17]. These methods generate partially grounded plans, leaving ”gaps” for actions
+with unknown outcomes. During execution, specialized reactive controllers attempt to fill
+these gaps. If a controller fails, the failure is treated as a new constraint, and the system replans.
+This reactive approach avoids the need to model outcome probabilities explicitly. However,
+because it does not reason about uncertainty proactively, it can struggle with problems that
+require multi-step, strategic information gathering, such as deciding which of several actions
+is most likely to reveal a hidden object.
+
+3.1.3 Modern Approaches to TAMP under Uncertainty
+
+Recent works have leveraged learning and large models to address partial observability, offering
+different strategies than our own.
+
+One approach adds high-level strategic reasoning on top of standard planners to handle real
+world messiness. For instance, Ma et al. [16] first reason backward from a vague goal to decide
+which objects are important (Task-level Backward Search), and then use a constraint graph to
+find a safe order to move objects in a cluttered scene (Object Manipulation Constraint Graph).
+Our approach is more fundamental. Instead of adding a separate strategic layer, we introduce
+a new geometric belief representation, Boxels. This allows our planner to reason directly about
+what it can and cannot see, integrating information-gathering into the core planning process
+rather than treating it as a separate, pre-planning step.
+
+Another approach uses large foundation models to interpret scenes. Zhao et al. [21], for instance,
+use a Vision-Language Model (VLM) to look at an image and directly answer questions for the
+planner, like ”Is the drawer empty?”. This replaces traditional perception modules with a black
+box model. Our method, in contrast, builds a structured 3D model of the world from sensor
+data. This geometric grounding provides a more robust and transparent basis for reasoning
+about space and occlusion, which is critical for reliable manipulation, as it avoids the potential
+inconsistencies of VLM-based perception.
+
+Finally, some methods move away from symbolic planning altogether and instead use end-to
+end learning. Bai et al. [bai2025learning], for example, train a system that learns a policy for
+where to move the camera to get an informative view before acting (Task-Aware View Planning
+
+10
+
+3 Related Work
+
+or TAVP). This is fundamentally different from our model-based approach, where looking
+around is not a learned reflex but an explicit action chosen by the planner because its world
+model indicates that knowledge is missing. Because our method separates planning from
+execution, it is more transparent and can be applied to new goals and environments without
+needing to be retrained.
+
+3.2 Spatial Belief Representation in TAMP
+
+In a typical TAMP cycle the planner (i) reasons symbolically over high-level actions (pick, place,
+move-to-region), (ii) instantiates them with continuous parameters using a motion planner, (iii)
+executes the resulting trajectory, observes the environment, and (iv) updates its belief before
+the next planning step. Every one of these phases depends critically on how we represent
+spatial belief. While general methods were introduced in Section 2.4, their application in TAMP
+reveals important limitations.
+
+3.2.1 Limitations of Geometric Discretization for POD-TAMP
+
+Octrees: The efficiency of Octrees makes them a particularly useful tool for 3D mapping.
+While an Octree framework like OctoMap [14] can represent unobserved space, its primary
+purpose is to efficiently model occupancy based on noisy sensor measurements. For the task
+of planning to find hidden objects, it has two key limitations:
+
+Lack of Semantic Structure: Standard Octree subdivision is purely geometric and
+based on occupancy variance. It does not create semantically meaningful regions corre
+sponding to, for example, ”the volume occluded by object A”. The planner would have to
+infer this semantic meaning from the raw geometric data, which is a complex task in
+itself.
+
+Object Integrity: The recursive subdivision of an Octree can arbitrarily split a single
+physical object into multiple voxels at different tree depths. This complicates reasoning
+about objects as whole entities, which is essential for manipulation planning (e.g., ”pick
+up object A,” not ”pick up voxels 1, 2, and 5 of object A”).
+
+3.2.2 Limitations of Global Semantic Abstractions
+
+Sidd’s Critical Regions (CRs): The method proposed in [20] for learning a global set of
+task-relevant Critical Regions (CRs) offers a semantically grounded framework for abstracting
+planning challenges. However, in dynamic manipulation scenarios involving specific objects,
+this global and often static partitioning may prove inadequate. For example, the region de
+scribed as ”behind object A” is inherently tied to the current perceived pose of object A and the
+robot’s perspective. A pre-defined or globally fixed CR map struggles to accommodate such
+dynamic, object-specific uncertainties.
+
+11
+
+4 Approach
+
+4 Approach
+
+This chapter details the proposed methodology for integrating a novel spatial abstraction,
+Boxels, into a Partially Observable Deterministic (POD) Task and Motion Planning (TAMP)
+framework built upon PDDLStream. The approach aims to create a tractable yet expressive
+system for planning under spatial uncertainty.
+
+4.1 Overview
+
+The main idea of our methodology is to link abstract belief representation with continuous
+geometric reasoning. This is done through three key components:
+
+Adaptive Semantic Discretization: A dynamic procedure for partitioning the robot’s
+workspace into a set of meaningful Semantic Boxels, i.e. semantically meaningful sub
+spaces, based on perception and known object models.
+
+A Formal POD-TAMP Model: A formal model that uses these Boxels as the foundation
+for its state representation, allowing a POD planner to reason about knowledge and
+uncertainty regarding object locations and unobstructed spaces.
+
+PDDLStream Integration: A concrete implementation using custom PDDL fluents,
+actions, and streams to realize the formal model within the PDDLStream framework.
+This is done by defining PDDL fluents and actions that operate on the belief state over
+Boxels.
+
+4.2 Adaptive Semantic Discretization: Generating Boxels
+
+To create a spatial abstraction that is both meaningful and scalable, we propose a process of
+adaptive semantic discretization. This process dynamically generates a set of Semantic Boxels
+(B X set) by partitioning the workspace based on perceived objects and the occlusions they create.
+This process will be managed by PDDLStream procedures, as illustrated in Figure 4.2.
+
+12
+
+4 Approach
+
+Figure 2: Adaptive Semantic Voxelization Process. (a) Initial scene with robot viewpoint and
+objects. (b) Objects are bounded by dedicated Boxels. (c) Occlusion regions are calcu
+lated and defined as new Boxels. (d) Remaining free space is recursively partitioned
+into Free Space Boxels.
+
+The generation process is as follows:
+
+Object-Centric Bounding: When an object (e.g., objk) is detected, a dedicated Boxel is
+generated to be a tight bounding box around its perceived pose. This uses the object’s
+known 3D model to define the volume. This isolates known objects into distinct spatial
+regions. This is done by generating a cuboid that fully contains the object’s 3D model.
+
+Occlusion-Aware Subdivision: For each object-bounding Boxel, the space occluded
+by it (from the robot’s current or potential viewpoints) is calculated and designated as
+a new, distinct Boxel. This is critical as it explicitly represents currently unobservable
+regions, making them first-class citizens for information-gathering actions.
+
+Recursive Partitioning: The remaining free space is then recursively partitioned. If a
+new partition is observed to be empty, subdivision stops. If new objects are found within
+a partition, the process repeats: bound the biggest object and define its occluded space.
+This continues until a minimum Boxel size is reached or no new objects are detected.
+
+This adaptive, object-centric approach contrasts with octrees and uniform voxel grids by fo
+cusing discretization effort on task-relevant areas—the objects themselves and the occluded
+spaces they create. Each generated Boxel is assigned a unique ID and has associated geometric
+data, accessible to the planner via PDDL fluents.
+
+13
+
+4 Approach
+
+4.3 Semantic POD-TAMP Model Definition
+
+We formalize our Semantic POD-TAMP system using a model taken from the work of Bonet
+and Geffner [4]. The model is a tuple:
+
+M = ⟨S, S0, SG, A, f, O⟩
+
+where:
+
+• S (States): A finite set of abstract states. Each state is a consistent assignment of truth
+values to a set of atomic propositions AP built from K-literals (see Chapter 2). These
+propositions are grounded in the Boxel representation, e.g., K(InBoxel(objk, Boxelj)).
+• S0 (Initial States): The set of possible initial abstract states, representing the initial
+belief b0.
+• SG (Goal States): The set of goal states to be reached with certainty, specified by a logical
+formula over AP (e.g., K(holding(target_obj))).
+• A (Actions): A set of abstract actions defined as PDDLStream action schemas that oper
+ate on the belief state, such as ‘sense_Boxel_for_object‘ or ‘pick_object_from_known_Boxel‘.
+• f (Transition Function): A deterministic state-transition function s' = f(a, s) that
+computes the successor abstract state based on an action’s effects on the K-literals.
+• O (Sensor Model): An observation function that maps a belief state and an action to an
+abstract observation (e.g., ‘found_target‘, ‘not_found_target‘), which is used to update
+the belief state.
+
+The planning problem is to find a sequence of actions from A that drives the belief state,
+initially b0 = S0, to a belief state bg where all possible states are goal states (i.e., bg ⊆ SG).
+
+4.4 PDDLStream Integration
+
+To illustrate how this model can be implemented, we can define a set of PDDL-like fluents and
+PDDLStream-style actions that operate on the belief state over Boxels. This is not a complete
+implementation, but it should give an idea of how the model can be used.
+
+4.4.1 PDDL Fluents for Belief Representation
+
+The agent’s knowledge is represented directly in the PDDL state using K-literals. Uncertainty
+is implicitly handled by the absence of knowledge.
+
+1 (:predicates
+2 ; --- Boxel Descriptors ---
+3 (semantic_zone ?b - Boxel_id) ; Predicate for all defined Boxels
+4
+5 ; --- Object Location Knowledge (K-literals) ---
+6 (obj_in_Boxel ?o - object ?b - Boxel_id)
+
+14
+
+4 Approach
+
+7 ; K(InBoxel(?o, ?b)): Known that ?o is in ?b.
+8 (obj_not_in_Boxel ?o - object ?b - Boxel_id)
+9 ; K(not InBoxel(?o, ?b)): Known that ?o is NOT in ?b.
+10 ; "Possibly in ?b" would mean that (not (obj_not_in_Boxel ?o ?b)) is true, i.e.
+we don't know for sure that ?o is not in ?b.
+11
+12 ; --- Other Knowledge State ---
+13 (obj_pose_known ?o - object) ; K(HasExactPose(?o))
+14 (handempty) ; K(IsEmpty(hand))
+15 (holding ?o - object) ; K(IsHolding(?o))
+16 ; ... other robot and world state predicates
+17 )
+
+Listing 1: PDDL Fluents for K-literal Belief over Boxels
+
+4.4.2 Example PDDLStream Action: Sensing a Boxel
+
+Information gathering is a central part of the framework. The following action allows the robot
+to sense a specific Boxel to determine if a target object is present.
+
+1 (:action sense_Boxel_for_object
+2 :parameters
+3 (?obj - object
+4 ?Boxel_target - Boxel_id ; The Boxel to check
+5 ?q_sense - robot_config ; Sensing configuration
+6 ?obs_status - observation ; Stream output: found / not_found
+7 )
+8 :precondition
+9 (and
+10 ; Only sense if location is uncertain for this Boxel
+11 (not (obj_in_Boxel ?obj ?Boxel_target))
+12 (not (obj_not_in_Boxel ?obj ?Boxel_target))
+13 ; PDDLStream calls to find a sensing pose and get the outcome
+14 (stream_find_sensing_config ?Boxel_target ?q_sense)
+15 (stream_get_sensing_outcome ?obj ?Boxel_target ?q_sense ?obs_status)
+16 )
+17 :effect
+18 (and
+19 ; Case 1: Object was found in the target Boxel
+20 (when (= ?obs_status found)
+21 (and
+22 (obj_in_Boxel ?obj ?Boxel_target)
+23 (obj_pose_known ?obj)
+24 ; We can now infer it's not in any other Boxel.
+25 ; This inference is handled by the POD planner's belief update.
+26 )
+27 )
+28 ; Case 2: Object was not found in the target Boxel
+29 (when (= ?obs_status not_found)
+
+15
+
+5 Evaluation Plan
+
+30 (and
+31 (obj_not_in_Boxel ?obj ?Boxel_target)
+32 )
+33 )
+34 )
+35 )
+
+Listing 2: PDDLStream Sensing Action with Belief Update
+
+The associated streams (‘stream_find_sensing_config‘, ‘stream_get_sensing_outcome‘) inter
+face with the robot’s motion planners and perception system to ground this symbolic action
+in the continuous world. Manipulation actions like ‘pick‘ would similarly be defined, with
+preconditions requiring the object’s pose to be known (i.e., ‘(obj_pose_known ?obj)‘ is true).
+
+5 Evaluation Plan
+
+To validate our proposed framework, we will conduct a series of experiments in a simulated
+robotic manipulation environment.
+
+5.1 Experimental Setup
+
+• Environment: We will use a physics-based simulation environment, such as PyBullet,
+with a multi-degree-of-freedom robotic manipulator (e.g., a Franka Emika Panda arm).
+• Tasks: The primary evaluation task will be the ”hidden object” scenario, where the robot
+must find and manipulate a target object occluded by other objects. This task is designed
+to explicitly require strategic information-gathering actions. We will vary the number of
+occluders and the complexity of the scene to test scalability.
+• Perception: We will assume access to a perception system that can detect known objects
+and estimate their poses from simulated sensor data. This can be implemented via a
+stream that interfaces with a library like Bayes3D [11] or a mock perception oracle that
+provides pose estimates with simulated uncertainty.
+
+5.2 Evaluation Metrics
+
+To facilitate direct comparison with state-of-the-art approaches, we plan to adopt evaluation
+metrics similar to those used for TAMPURA [5]. Performance will be measured based on:
+
+• Success Rate: The percentage of problem instances successfully solved within a given
+time limit.
+• Planning Time: The wall-clock time required for the planner to find a solution. This
+will be a key metric for evaluating the tractability of our approach.
+
+16
+
+5 Evaluation Plan
+
+• Plan Quality / Cost: The length or cost of the executed plan (e.g., number of actions,
+total path length of the end-effector). This helps assess the efficiency of the generated
+plans.
+• Scalability: We will analyze how the above metrics change as the problem complex
+ity increases (e.g., by increasing the number of objects, occluders, or the size of the
+workspace).
+
+5.3 Baselines for Comparison
+
+The performance of our adaptive Boxel-based POD-TAMP framework will be compared against
+several baselines to highlight the specific contributions of our approach:
+
+Uniform Voxelization: A version of our planner that uses a fine-grained, uniform
+voxel grid to represent spatial belief, instead of adaptive Boxels. This will directly test the
+scalability benefits of our adaptive approach.
+
+Fixed Semantic Regions: A baseline using a fixed, pre-defined set of Critical Regions
+(inspired by [20]), to evaluate the advantages of our dynamic, object-centric region
+generation.
+
+POMDP-based TAMP (Conceptual/Simplified): If feasible, we will compare against
+a simplified implementation or published results of a POMDP-based TAMP system like
+TAMPURA [5] on a similar task. This will help contextualize the trade-offs between our
+deterministic action approach and a fully probabilistic one.
+
+The goal of this evaluation is to empirically demonstrate whether our proposed framework
+offers a scalable and effective solution for TAMP under partial observability, particularly for
+tasks that require reasoning about occlusions and information gathering.
+
+5.4 conclusion
+
+This paper presented a novel approach to Task and Motion Planning under partial observability
+by integrating a semantic spatial abstraction, termed Boxels, with a Partially Observable Deter
+ministic planning framework. The core of our methodology is the adaptive semantic discretiza
+tion of the workspace, which provides a scalable and task-relevant representation of spatial
+uncertainty. By modeling belief states over these Boxels, our system allows a PDDLStream
+based TAMP framework to reason effectively about object locations and occlusions.
+
+The proposed Semantic POD-TAMP model formalizes this integration, enabling the planner to
+generate and execute plans that seamlessly combine information-gathering and manipulation
+actions. The use of K-literals to represent knowledge within the PDDL state allows for a direct
+and conceptually simple integration with existing POD planners. As demonstrated, this enables
+the robot to reason about what it knows and where uncertainty lies, and to take actions to
+resolve that uncertainty in a targeted manner.
+
+17
+
+5 Evaluation Plan
+
+The expected contribution of this research is a scalable and robust framework for TAMP in
+partially known environments. By moving away from exhaustive state-space representations
+and leveraging a semantically meaningful abstraction, this work paves the way for more
+autonomous and capable robotic systems that can operate effectively in the complexities of the
+real world. Future work will focus on extending the variety of semantic information used for
+discretization and exploring more complex, multi-robot planning scenarios.
+
+18
+
+List of References
+
+List of References
+
+[1] C. Aeronautiques, A. Howe, C. Knoblock, I. D. McDermott, A. Ram, M. Veloso, D. Weld,
+D. W. Sri, A. Barrett, D. Christianson, et al., “Pddl| the planning domain definition
+language,” Technical Report, Tech. Rep., 1998.
+[2] A. Albore, H. Palacios, and H. Geffner, “A translation-based approach to contingent
+planning.,” in IJCAI, vol. 9, 2009, pp. 1623–1628.
+[3] B. Bonet, H. Geffner, et al., “Planning under partial observability by classical replan
+ning: Theory and experiments,” in IJCAI Proceedings-International Joint Conference on
+Artificial Intelligence, Citeseer, vol. 22, 2011, p. 1936.
+[4] B. Bonet and H. Geffner, “Flexible and scalable partially observable planning with linear
+translations,” in Proceedings of the AAAI Conference on Artificial Intelligence, vol. 28,
+2014.
+[5] A. Curtis, G. Matheos, N. Gothoskar, V. Mansinghka, J. Tenenbaum, T. Lozano-Pérez,
+and L. P. Kaelbling, “Partially observable task and motion planning with uncertainty
+and risk awareness,” arXiv preprint arXiv:2403.10454, 2024.
+[6] R. E. Fikes and N. J. Nilsson, “Strips: A new approach to the application of theorem
+proving to problem solving,” Artificial intelligence, vol. 2, no. 3-4, pp. 189–208, 1971.
+[7] C. R. Garrett, R. Chitnis, R. Holladay, B. Kim, T. Silver, L. P. Kaelbling, and T. Lozano
+Pérez, “Integrated task and motion planning,” Annual review of control, robotics, and
+autonomous systems, vol. 4, no. 1, pp. 265–293, 2021.
+[8] C. R. Garrett, T. Lozano-Pérez, and L. P. Kaelbling, PDDLStream: Integrating symbolic
+planners and blackbox samplers via optimistic adaptive planning, arXiv:1802.08705. Also
+in Proc. of ICAPS 2020, 2018. arXiv: 1802.08705.
+[9] H. Geffner and B. Bonet, A concise introduction to models and methods for automated
+planning. Morgan & Claypool Publishers, 2013.
+[10] M. Ghallab, D. Nau, and P. Traverso, Automated Planning: theory and practice. Elsevier,
+2004.
+[11] N. Gothoskar, M. Ghavami, E. Li, A. Curtis, M. Noseworthy, K. Chung, B. Patton, W. T.
+Freeman, J. B. Tenenbaum, M. Klukas, V. K. Mansinghka, et al., Bayes3D: Fast learning
+and inference in structured generative models of 3d objects and scenes, arXiv:2312.08715,
+2023. arXiv: 2312.08715.
+[12] D. Hadfield-Menell, E. Groshev, R. Chitnis, and P. Abbeel, “Modular task and motion
+planning in belief space,” in 2015 IEEE/RSJ International Conference on Intelligent Robots
+and Systems (IROS), IEEE, 2015, pp. 4991–4998.
+[13] T. Hofmann and H. Geffner, “Learning generalized policies for fully observable non
+deterministic planning domains,” arXiv preprint arXiv:2404.02499, 2024.
+
+19
+
+List of References
+
+[14] A. Hornung, K. M. Wurm, M. Bennewitz, C. Stachniss, and W. Burgard, “Octomap: An
+efficient probabilistic 3d mapping framework based on octrees,” Autonomous robots,
+vol. 34, pp. 189–206, 2013.
+[15] L. P. Kaelbling, M. L. Littman, and A. R. Cassandra, “Planning and acting in partially
+observable stochastic domains,” Artificial intelligence, vol. 101, no. 1-2, pp. 99–134, 1998.
+[16] Y. Ma, Y. Yuan, S. Wu, and H. Yuan, “A task and motion planning framework for partially
+observable household manipulation scenes,” Advanced Intelligent Systems, p. 2 400 897,
+2025.
+[17] T. Pan, R. Shome, and L. E. Kavraki, “Task and motion planning for execution in the
+real,” IEEE Transactions on Robotics, 2024.
+[18] G. Riegler, A. Osman Ulusoy, and A. Geiger, “Octnet: Learning deep 3d representations
+at high resolutions,” in Proceedings of the IEEE conference on computer vision and pattern
+recognition, 2017, pp. 3577–3586.
+[19] M. S. Saleem, R. Veerapaneni, and M. Likhachev, “A pomdp-based hierarchical planning
+framework for manipulation under pose uncertainty,” arXiv preprint arXiv:2409.18774,
+2024.
+[20] N. Shah and S. Srivastava, “Using deep learning to bootstrap abstractions for hierarchical
+robot planning,” in Proc. of the 21st International Conference on Autonomous Agents and
+Multiagent Systems (AAMAS ’22), 2022, pp. 1183–1191.
+[21] L. Zhao, W. McClinton, A. Curtis, N. Kumar, T. Silver, L. P. Kaelbling, and L. L. Wong,
+“Seeing is believing: Belief-space planning with foundation models as uncertainty esti
+mators,” arXiv preprint arXiv:2504.03245, 2025.
+
+20

@@ -1,0 +1,19 @@
+Week 1:
+
+1. Set up a PyBullet system on some machine
+2. Run the Tampura tests without wasting too much time (skipped)
+3. Set up 3D objects and Scene
+4. Set up d-rgp Camera and successfully receive point clouds (DONE)
+
+Week 2:
+
+1. Match the point clouds to the 3D objects
+2. Generate bounding boxels
+
+Week 3:
+1. Calcualte the occlusion regions
+2. Discretize the entire working space
+
+Week 4:
+1. Save the data in pddl friendly way
+2. start phase 2
