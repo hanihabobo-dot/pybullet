@@ -47,6 +47,7 @@ class Boxel:
     extent: np.ndarray  # [x_half, y_half, z_half] half-dimensions (distance from center to edge)
     object_name: Optional[str] = None  # Name of the object this boxel bounds (if any)
     is_occluded: bool = False  # Belief state: Is this boxel currently known to be occluded?
+    is_shadow: bool = False  # Is this a shadow/occlusion region cast by another object?
 
 
 @dataclass
@@ -140,6 +141,9 @@ class BoxelTestEnv:
         # Debug items (lines, text) to clear on reset or update
         self.debug_items = []
         
+        # Track visual bodies for shadows (ghost objects)
+        self.shadow_bodies = []
+        
         # Initialize the scene
         self._setup_scene()
         
@@ -189,6 +193,7 @@ class BoxelTestEnv:
         # PyBullet table URDF has surface at approximately 0.8m height from its base
         # Since we lowered the table by table_z_offset, adjust surface height accordingly
         table_surface_height = 0.8 + table_z_offset  # Height of table surface from ground (0.5m)
+        self.table_surface_height = table_surface_height
         
         self.objects["table"] = ObjectInfo(
             object_id=table_id,
@@ -317,10 +322,12 @@ class BoxelTestEnv:
     
     def generate_boxels(self, visible_objects: List[str]) -> List[Boxel]:
         """
-        Generate Semantic Boxels for the currently visible objects.
+        Generate Semantic Boxels for the currently visible objects and their occlusion shadows.
         
         This corresponds to the "Abstraction" step in the POD-TAMP pipeline.
         It converts continuous object poses/meshes into discrete semantic regions (Boxels).
+        
+        It also calculates "Shadow Boxels" (Occlusion Regions) for visible objects.
         
         Args:
             visible_objects (List[str]): A list of object names (e.g. ['occluder_1', 'target_4'])
@@ -328,7 +335,7 @@ class BoxelTestEnv:
             
         Returns:
             List[Boxel]: A list of Boxel objects representing the semantic abstraction 
-                         of the visible scene.
+                         of the visible scene AND the unknown occluded regions.
         """
         boxels = []
         for obj_name in visible_objects:
@@ -337,10 +344,9 @@ class BoxelTestEnv:
                 
             obj_info = self.objects[obj_name]
             
-            # For simplicity, we assume objects are roughly axis-aligned or we use their AABB.
-            # In a real scenario, we might use the object's oriented bounding box (OBB)
-            # or the AABB of the oriented object.
-            # PyBullet provides AABB in world coordinates:
+            # Retrieve the Axis-Aligned Bounding Box (AABB) from PyBullet
+            # aabb_min: [min_x, min_y, min_z]
+            # aabb_max: [max_x, max_y, max_z]
             aabb_min, aabb_max = p.getAABB(obj_info.object_id)
             
             aabb_min = np.array(aabb_min)
@@ -350,15 +356,113 @@ class BoxelTestEnv:
             center = (aabb_min + aabb_max) / 2.0
             extent = (aabb_max - aabb_min) / 2.0  # Half-extents
             
-            boxel = Boxel(
+            # Create the Object Boxel
+            obj_boxel = Boxel(
                 center=center,
                 extent=extent,
                 object_name=obj_name,
-                is_occluded=False
+                is_occluded=False,
+                is_shadow=False
             )
-            boxels.append(boxel)
+            boxels.append(obj_boxel)
+            
+            # Create the Shadow Boxel (Occlusion Region)
+            # This represents the volume BEHIND the object relative to the camera
+            shadow_boxel = self.calculate_shadow_boxel(obj_boxel)
+            if shadow_boxel:
+                boxels.append(shadow_boxel)
             
         return boxels
+
+    def calculate_shadow_boxel(self, obj_boxel: Boxel) -> Optional[Boxel]:
+        """
+        Calculate the Shadow Boxel cast by an object from the camera's perspective.
+        
+        This implements the "Occlusion-Aware Subdivision" step.
+        The shadow is the volume obstructed by the object. Here, we approximate it
+        as an AABB extending from the object away from the camera.
+        
+        The length of the shadow is determined by projecting the object's position
+        onto the table surface along the camera ray. This ensures the shadow size
+        is consistent with the camera's perspective (shorter when looking down,
+        longer when looking from the side).
+        
+        Args:
+            obj_boxel: The visible object's Boxel
+            
+        Returns:
+            Boxel representing the shadow volume, or None if invalid
+        """
+        # Direction from camera to object center
+        cam_pos = self.camera_position
+        obj_pos = obj_boxel.center
+        direction = obj_pos - cam_pos
+        direction = direction / np.linalg.norm(direction)
+        
+        # 1. Calculate Shadow Tip (Start)
+        # This is the point on the "back" of the object where the shadow begins.
+        # We approximate this as: Object Center + (Extent projected along view direction)
+        shadow_start = obj_pos + direction * np.linalg.norm(obj_boxel.extent)
+        
+        # 2. Calculate Shadow End (Projection to Table)
+        # We project the object's center ray onto the table surface.
+        # Plane equation: Z = table_surface_height
+        # Ray equation: P(t) = cam_pos + t * direction
+        # Solve for t: cam_pos.z + t * direction.z = table_surface_height
+        # t = (table_surface_height - cam_pos.z) / direction.z
+        
+        # Check if looking parallel or up (no table intersection in forward direction)
+        if direction[2] >= -0.01:
+            # Fallback: Fixed max length
+            shadow_length = 0.5
+            shadow_end = shadow_start + direction * shadow_length
+        else:
+            t = (self.table_surface_height - cam_pos[2]) / direction[2]
+            
+            # Check if intersection is behind camera (t < 0) - shouldn't happen if camera above
+            if t <= 0:
+                 shadow_length = 0.5
+                 shadow_end = shadow_start + direction * shadow_length
+            else:
+                # Intersection point on table
+                projected_point = cam_pos + direction * t
+                
+                # Verify projected point is actually "behind" the start point
+                # (Distance from camera to projection must be > distance to start)
+                dist_to_start = np.linalg.norm(shadow_start - cam_pos)
+                dist_to_proj = np.linalg.norm(projected_point - cam_pos)
+                
+                if dist_to_proj <= dist_to_start:
+                    # Projection is inside or in front of object (looking straight down)
+                    # Create a minimal shadow boxel
+                    shadow_end = shadow_start + direction * 0.01 
+                else:
+                    shadow_end = projected_point
+                    
+                    # Clamp maximum length to avoid infinite shadows
+                    max_shadow_len = 1.0 # Max 1 meter shadow
+                    actual_len = np.linalg.norm(shadow_end - shadow_start)
+                    if actual_len > max_shadow_len:
+                        shadow_end = shadow_start + direction * max_shadow_len
+
+        # 3. Construct Shadow Boxel (AABB)
+        # The shadow volume is the bounding box of the start and end points
+        # expanded by the object's extents (swept volume approximation)
+        
+        min_point = np.minimum(shadow_start - obj_boxel.extent, shadow_end - obj_boxel.extent)
+        max_point = np.maximum(shadow_start + obj_boxel.extent, shadow_end + obj_boxel.extent)
+        
+        shadow_center = (min_point + max_point) / 2.0
+        shadow_extent = (max_point - min_point) / 2.0
+        
+        # Create shadow boxel
+        return Boxel(
+            center=shadow_center,
+            extent=shadow_extent,
+            object_name=f"shadow_of_{obj_boxel.object_name}",
+            is_occluded=True, # It IS an occluded region
+            is_shadow=True
+        )
 
     def draw_boxels(self, boxels: List[Boxel], duration: float = 0):
         """
@@ -373,39 +477,31 @@ class BoxelTestEnv:
                               0 = forever (until manually removed).
                               0.1 = good for dynamic updates in a loop.
         """
-        # Clear previous debug items if any (though p.removeAllUserDebugItems clears everything)
-        # Here we just draw new ones. In a loop, you might want to manage IDs.
-        # For simplicity, we'll let them persist for a short duration in the loop.
+        # Remove any existing shadow bodies from previous frame
+        for body_id in self.shadow_bodies:
+            p.removeBody(body_id)
+        self.shadow_bodies = []
         
         for boxel in boxels:
-            # Calculate corners of the boxel
+            # --- Draw Wireframe (for all boxels) ---
             c = boxel.center
             e = boxel.extent
             
-            # 8 corners
-            # 0: -x -y -z
-            # 1: +x -y -z
-            # 2: -x +y -z
-            # 3: +x +y -z
-            # 4: -x -y +z
-            # 5: +x -y +z
-            # 6: -x +y +z
-            # 7: +x +y +z
-            
+            # Define the 8 corners of the box relative to center
             corners = [
-                c + np.array([-e[0], -e[1], -e[2]]),
-                c + np.array([e[0], -e[1], -e[2]]),
-                c + np.array([-e[0], e[1], -e[2]]),
-                c + np.array([e[0], e[1], -e[2]]),
-                c + np.array([-e[0], -e[1], e[2]]),
-                c + np.array([e[0], -e[1], e[2]]),
-                c + np.array([-e[0], e[1], e[2]]),
-                c + np.array([e[0], e[1], e[2]])
+                c + np.array([-e[0], -e[1], -e[2]]), # 0: Bottom-Left-Back
+                c + np.array([e[0], -e[1], -e[2]]),  # 1: Bottom-Right-Back
+                c + np.array([-e[0], e[1], -e[2]]),  # 2: Top-Left-Back
+                c + np.array([e[0], e[1], -e[2]]),   # 3: Top-Right-Back
+                c + np.array([-e[0], -e[1], e[2]]),  # 4: Bottom-Left-Front
+                c + np.array([e[0], -e[1], e[2]]),   # 5: Bottom-Right-Front
+                c + np.array([-e[0], e[1], e[2]]),   # 6: Top-Left-Front
+                c + np.array([e[0], e[1], e[2]])     # 7: Top-Right-Front
             ]
             
-            # Edges connecting corners (indices)
+            # Define connections between corners to draw a box
             edges = [
-                (0, 1), (0, 2), (0, 4), # From corner 0
+                (0, 1), (0, 2), (0, 4), # Edges from corner 0
                 (1, 3), (1, 5),         # From corner 1
                 (2, 3), (2, 6),         # From corner 2
                 (3, 7),                 # From corner 3
@@ -417,21 +513,48 @@ class BoxelTestEnv:
             # Semantic Color Coding:
             # Red   = Occluder (Obstacle)
             # Blue  = Target (Goal)
+            # Gray  = Shadow (Unknown/Occluded Region)
             # Green = Other
-            color = [0, 1, 0] # Green for generic
-            if boxel.object_name and boxel.object_name.startswith("occluder"):
+            
+            if boxel.is_shadow:
+                color = [0.5, 0.5, 0.5] # Gray for shadows
+            elif boxel.object_name and boxel.object_name.startswith("occluder"):
                 color = [1, 0, 0] # Red for occluders
             elif boxel.object_name and boxel.object_name.startswith("target"):
                 color = [0, 0, 1] # Blue for targets
+            else:
+                color = [0, 1, 0] # Green for others
                 
+            # Draw the lines
             for start_idx, end_idx in edges:
                 p.addUserDebugLine(
                     lineFromXYZ=corners[start_idx],
                     lineToXYZ=corners[end_idx],
                     lineColorRGB=color,
-                    lineWidth=2.0,
-                    lifeTime=duration
+                    lineWidth=1.0 if boxel.is_shadow else 2.0, # Thinner lines for shadows
+                    lifeTime=duration  # Crucial parameter for animation
                 )
+            
+            # --- Draw Filled Phantom (for shadow boxels only) ---
+            if boxel.is_shadow:
+                # Create a visual-only body (phantom)
+                # Create visual shape (box)
+                visual_shape_id = p.createVisualShape(
+                    shapeType=p.GEOM_BOX,
+                    halfExtents=e,
+                    rgbaColor=[0.5, 0.5, 0.5, 0.3], # Semi-transparent gray
+                    specularColor=[0, 0, 0] # No specular
+                )
+                
+                # Create multi-body (visual only, no collision)
+                shadow_body_id = p.createMultiBody(
+                    baseMass=0, # Static (no mass)
+                    baseVisualShapeIndex=visual_shape_id,
+                    basePosition=c,
+                    baseOrientation=[0, 0, 0, 1] # Aligned with world
+                )
+                
+                self.shadow_bodies.append(shadow_body_id)
     
     def get_camera_observation(self) -> CameraObservation:
         """
@@ -441,7 +564,7 @@ class BoxelTestEnv:
         1. Renders RGB and depth images from the camera
         2. Generates a point cloud from the depth image
         3. Uses the oracle to detect visible objects
-        4. Generates Boxels for visible objects
+        4. Generates Boxels for visible objects AND their shadows
         5. Returns all observation data
         
         Returns:
@@ -493,7 +616,7 @@ class BoxelTestEnv:
         # Use oracle to detect visible objects
         visible_objects, object_poses = self.oracle_detect_objects()
         
-        # Generate Boxels for visible objects
+        # Generate Boxels for visible objects and their shadows
         boxels = self.generate_boxels(visible_objects)
         
         return CameraObservation(
@@ -851,15 +974,14 @@ def main():
     print("(Close the PyBullet window or press Ctrl+C to exit)")
     
     try:
-        # We'll draw the boxels continuously
+        # Draw boxels once (static visualization)
+        # duration=0 means lines persist forever (until cleared)
         boxels = obs.boxels
+        if boxels:
+            env.draw_boxels(boxels, duration=0)
         
-        for step in range(240 * 100):  # 5 seconds at 240Hz
+        for step in range(240 * 10):  # 10 seconds at 240Hz
             env.step_simulation()
-            
-            # Visualize Boxels (duration=0.1s so they persist between steps but update)
-            if boxels:
-                env.draw_boxels(boxels, duration=0.1)
             
             # Update camera view every 10 steps
             # Focus on table center (where objects are) rather than robot

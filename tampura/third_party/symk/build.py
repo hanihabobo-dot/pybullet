@@ -25,8 +25,17 @@ if os.name == "posix":
         pass
     CMAKE_GENERATOR = "Unix Makefiles"
 elif os.name == "nt":
-    MAKE = "nmake"
-    CMAKE_GENERATOR = "NMake Makefiles"
+    # Try to detect Visual Studio version and use appropriate generator
+    # Visual Studio generators don't require nmake
+    import shutil
+    if shutil.which("nmake"):
+        MAKE = "nmake"
+        CMAKE_GENERATOR = "NMake Makefiles"
+    else:
+        # Use Visual Studio generator (doesn't require nmake)
+        # Try to detect VS version, default to VS 2019
+        MAKE = "cmake"  # Will use --build instead of make
+        CMAKE_GENERATOR = "Visual Studio 16 2019"
 else:
     print("Unsupported OS: " + os.name)
     sys.exit(1)
@@ -117,9 +126,31 @@ def build(config_name, cmake_parameters, make_parameters):
         else:
             raise
 
-    try_run([CMAKE, "-G", CMAKE_GENERATOR] + cmake_parameters + [rel_src_path],
+    # For Visual Studio generators, remove CMAKE_BUILD_TYPE and extract config
+    vs_config = None
+    filtered_cmake_params = []
+    if CMAKE_GENERATOR.startswith("Visual Studio"):
+        for param in cmake_parameters:
+            if param.startswith("-DCMAKE_BUILD_TYPE="):
+                # Extract config name (Release, Debug, etc.)
+                vs_config = param.split("=", 1)[1]
+            else:
+                filtered_cmake_params.append(param)
+        # Default to Release if not specified
+        if vs_config is None:
+            vs_config = "Release"
+        cmake_params_to_use = filtered_cmake_params
+    else:
+        cmake_params_to_use = cmake_parameters
+
+    try_run([CMAKE, "-G", CMAKE_GENERATOR] + cmake_params_to_use + [rel_src_path],
             cwd=build_path)
-    try_run([MAKE] + make_parameters, cwd=build_path)
+    # Visual Studio generator uses cmake --build instead of make/nmake
+    if CMAKE_GENERATOR.startswith("Visual Studio"):
+        build_cmd = [CMAKE, "--build", ".", "--config", vs_config] + make_parameters
+        try_run(build_cmd, cwd=build_path)
+    else:
+        try_run([MAKE] + make_parameters, cwd=build_path)
 
     print("Built configuration {config_name} successfully.".format(**locals()))
 

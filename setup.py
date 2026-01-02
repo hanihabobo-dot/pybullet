@@ -54,7 +54,13 @@ class BuildExt(_build_ext):
 
 # Dummy Extension – forces setuptools to execute build_ext even though the
 # Python package itself has no C/C++ extensions.
-dummy_ext = Extension(f"{PKG_NAME}._dummy", sources=[])
+_dummy_c = Path(__file__).parent / PKG_NAME / "_dummy.c"
+# Use relative path for setuptools compatibility
+_dummy_c_rel = str(_dummy_c.relative_to(Path(__file__).parent)) if _dummy_c.exists() else None
+dummy_ext = Extension(
+    f"{PKG_NAME}._dummy",
+    sources=[_dummy_c_rel] if _dummy_c_rel else []
+)
 
 setup(
     name=PKG_NAME,
