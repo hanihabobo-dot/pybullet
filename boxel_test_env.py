@@ -48,6 +48,35 @@ class Boxel:
     object_name: Optional[str] = None  # Name of the object this boxel bounds (if any)
     is_occluded: bool = False  # Belief state: Is this boxel currently known to be occluded?
     is_shadow: bool = False  # Is this a shadow/occlusion region cast by another object?
+    is_free: bool = False  # Is this boxel representing known free space?
+    is_candidate: bool = False # Is this a candidate node currently being processed?
+
+
+class OctreeNode:
+    """Helper class for Octree spatial subdivision."""
+    def __init__(self, center: np.ndarray, extent: np.ndarray):
+        self.center = center
+        self.extent = extent
+        self.children: List['OctreeNode'] = []
+        self.is_leaf = True
+        self.state = 'FREE'  # 'FREE', 'OCCUPIED', 'MIXED'
+
+    @property
+    def min_bound(self):
+        return self.center - self.extent
+
+    @property
+    def max_bound(self):
+        return self.center + self.extent
+
+    def intersect(self, other_min: np.ndarray, other_max: np.ndarray) -> bool:
+        """Check AABB intersection."""
+        return np.all(self.min_bound <= other_max) and np.all(self.max_bound >= other_min)
+
+    def contains(self, other_min: np.ndarray, other_max: np.ndarray) -> bool:
+        """Check if this node fully contains the other AABB."""
+        return np.all(self.min_bound <= other_min) and np.all(self.max_bound >= other_max)
+
 
 
 @dataclass
@@ -190,9 +219,9 @@ class BoxelTestEnv:
         )
         
         # Get table dimensions (approximate - table surface is typically at z ~ 0.8)
-        # PyBullet table URDF has surface at approximately 0.8m height from its base
+        # PyBullet table URDF has surface at approximately 0.625m height from its base (empirically determined)
         # Since we lowered the table by table_z_offset, adjust surface height accordingly
-        table_surface_height = 0.8 + table_z_offset  # Height of table surface from ground (0.5m)
+        table_surface_height = 0.625 + table_z_offset  # Height of table surface from ground (~0.325m)
         self.table_surface_height = table_surface_height
         
         self.objects["table"] = ObjectInfo(
@@ -464,6 +493,108 @@ class BoxelTestEnv:
             is_shadow=True
         )
 
+    def generate_free_space(self, known_boxels: List[Boxel], visualize: bool = False) -> List[Boxel]:
+        """
+        Discretize the free space using an Octree (Breadth-First Search).
+        
+        Args:
+            known_boxels: List of Object and Shadow Boxels
+            visualize: If True, animates the generation process (1s per depth layer)
+            
+        Returns:
+            List of Boxels representing the free space
+        """
+        # Define Workspace Bounds (Volume above table)
+        ws_min = np.array([0.0, -0.5, self.table_surface_height])
+        ws_max = np.array([1.0, 0.5, self.table_surface_height + 0.5])
+        
+        root_center = (ws_min + ws_max) / 2.0
+        root_extent = (ws_max - ws_min) / 2.0
+        
+        root = OctreeNode(root_center, root_extent)
+        free_boxels = []
+        min_size = 0.05 # 5cm minimum resolution
+        
+        # Helper to get bounds of a boxel
+        def get_bounds(b: Boxel):
+            return b.center - b.extent, b.center + b.extent
+        
+        # Pre-compute bounds for known boxels
+        known_bounds = [get_bounds(b) for b in known_boxels]
+        
+        # BFS Queue (List of OctreeNodes)
+        current_layer = [root]
+        
+        while current_layer:
+            next_layer = []
+            
+            for node in current_layer:
+                # Check intersection with any known boxel
+                node_min = node.min_bound
+                node_max = node.max_bound
+                
+                is_mixed = False
+                
+                for b_min, b_max in known_bounds:
+                    if (np.all(node_max >= b_min) and np.all(node_min <= b_max)):
+                        is_mixed = True
+                        break
+                
+                if not is_mixed:
+                    # FREE
+                    node.state = 'FREE'
+                    free_boxels.append(Boxel(
+                        center=node.center,
+                        extent=node.extent,
+                        object_name="free_space",
+                        is_occluded=False,
+                        is_shadow=False,
+                        is_free=True
+                    ))
+                    continue # Stop processing this branch
+                
+                # If Mixed/Occupied, check size
+                max_dim = np.max(node.extent * 2)
+                if max_dim <= min_size:
+                    node.state = 'OCCUPIED'
+                    continue # Stop (too small)
+                
+                # Split (Mixed and big enough)
+                node.is_leaf = False
+                node.state = 'MIXED'
+                
+                offsets = [
+                    [-1, -1, -1], [-1, -1, 1], [-1, 1, -1], [-1, 1, 1],
+                    [1, -1, -1], [1, -1, 1], [1, 1, -1], [1, 1, 1]
+                ]
+                child_extent = node.extent / 2.0
+                
+                for off in offsets:
+                    child_center = node.center + np.array(off) * child_extent
+                    child = OctreeNode(child_center, child_extent)
+                    node.children.append(child)
+                    next_layer.append(child)
+            
+            # Visualization Step (End of Layer)
+            if visualize:
+                # Draw Known Boxels + Already Found Free Boxels + Next Layer Candidates
+                vis_list = known_boxels + free_boxels
+                
+                # Convert next layer nodes to temp boxels for visualization
+                candidate_boxels = [
+                    Boxel(n.center, n.extent, is_free=True, is_candidate=True) for n in next_layer
+                ]
+                # We can tint candidates differently if we update draw_boxels, 
+                # but for now they will appear as Free (Cyan) which looks like "refining"
+                
+                self.draw_boxels(vis_list + candidate_boxels, duration=0)
+                time.sleep(1.0) # 1 second per step
+            
+            # Move to next layer
+            current_layer = next_layer
+
+        return free_boxels
+
     def draw_boxels(self, boxels: List[Boxel], duration: float = 0):
         """
         Visualize Semantic Boxels in the PyBullet GUI using debug lines.
@@ -481,6 +612,11 @@ class BoxelTestEnv:
         for body_id in self.shadow_bodies:
             p.removeBody(body_id)
         self.shadow_bodies = []
+        
+        # Remove any existing debug lines from previous frame (to prevent accumulation)
+        for item_id in self.debug_items:
+            p.removeUserDebugItem(item_id)
+        self.debug_items = []
         
         for boxel in boxels:
             # --- Draw Wireframe (for all boxels) ---
@@ -511,13 +647,19 @@ class BoxelTestEnv:
             ]
             
             # Semantic Color Coding:
-            # Red   = Occluder (Obstacle)
-            # Blue  = Target (Goal)
-            # Gray  = Shadow (Unknown/Occluded Region)
-            # Green = Other
+            # Red    = Occluder (Obstacle)
+            # Blue   = Target (Goal)
+            # Gray   = Shadow (Unknown/Occluded Region)
+            # Cyan   = Free Space
+            # Yellow = Candidate (Processing)
+            # Green  = Other
             
-            if boxel.is_shadow:
+            if boxel.is_candidate:
+                color = [1, 1, 0] # Yellow for processing candidates
+            elif boxel.is_shadow:
                 color = [0.5, 0.5, 0.5] # Gray for shadows
+            elif boxel.is_free:
+                color = [0, 1, 1] # Cyan for free space
             elif boxel.object_name and boxel.object_name.startswith("occluder"):
                 color = [1, 0, 0] # Red for occluders
             elif boxel.object_name and boxel.object_name.startswith("target"):
@@ -526,14 +668,18 @@ class BoxelTestEnv:
                 color = [0, 1, 0] # Green for others
                 
             # Draw the lines
+            # Free space lines should be thin
+            is_thin = boxel.is_shadow or boxel.is_free or boxel.is_candidate
+            
             for start_idx, end_idx in edges:
-                p.addUserDebugLine(
+                line_id = p.addUserDebugLine(
                     lineFromXYZ=corners[start_idx],
                     lineToXYZ=corners[end_idx],
                     lineColorRGB=color,
-                    lineWidth=1.0 if boxel.is_shadow else 2.0, # Thinner lines for shadows
-                    lifeTime=duration  # Crucial parameter for animation
+                    lineWidth=1.0 if is_thin else 2.0, 
+                    lifeTime=duration
                 )
+                self.debug_items.append(line_id)
             
             # --- Draw Filled Phantom (for shadow boxels only) ---
             if boxel.is_shadow:
@@ -970,32 +1116,60 @@ def main():
         save_point_cloud_to_ply(target_pc, "target_1_point_cloud.ply")
     
     # Run simulation for visualization
-    print("\nRunning simulation for 5 seconds...")
+    print("\nRunning visualization sequence...")
     print("(Close the PyBullet window or press Ctrl+C to exit)")
     
     try:
-        # Draw boxels once (static visualization)
-        # duration=0 means lines persist forever (until cleared)
-        boxels = obs.boxels
-        if boxels:
-            env.draw_boxels(boxels, duration=0)
+        # Separate Objects and Shadows
+        all_known = obs.boxels
+        obj_boxels = [b for b in all_known if not b.is_shadow]
+        shadow_boxels = [b for b in all_known if b.is_shadow]
         
-        for step in range(240 * 10):  # 10 seconds at 240Hz
+        # Set camera to view the table clearly
+        table_center = np.array([0.5, 0.0, env.table_surface_height])
+        p.resetDebugVisualizerCamera(
+            cameraDistance=1.5,
+            cameraYaw=45,
+            cameraPitch=-30,
+            cameraTargetPosition=table_center
+        )
+        
+        # Phase 1: Show Objects (1 second)
+        print("Phase 1: Objects")
+        env.draw_boxels(obj_boxels, duration=0)
+        # Step simulation to keep GUI responsive
+        for _ in range(240): 
             env.step_simulation()
+            time.sleep(1.0/240.0)
             
-            # Update camera view every 10 steps
-            # Focus on table center (where objects are) rather than robot
-            if step % 10 == 0:
-                # Focus on table center at table surface height
-                table_center = np.array([0.5, 0.0, 0.5])  # Lowered table surface height
-                p.resetDebugVisualizerCamera(
-                    cameraDistance=1.5,
-                    cameraYaw=45,
-                    cameraPitch=-30,
-                    cameraTargetPosition=table_center
-                )
+        # Phase 2: Show Shadows (1 second)
+        print("Phase 2: Shadows")
+        env.draw_boxels(all_known, duration=0)
+        for _ in range(240):
+            env.step_simulation()
+            time.sleep(1.0/240.0)
             
-            time.sleep(1.0 / 240.0)
+        # Phase 3: Generate Free Space (Animated 1s per step)
+        print("Phase 3: Free Space Discretization")
+        # generate_free_space handles the drawing and sleeping internally if visualize=True
+        free_boxels = env.generate_free_space(all_known, visualize=True)
+        
+        # Combine all for final view
+        final_boxels = all_known + free_boxels
+        env.draw_boxels(final_boxels, duration=0)
+        
+        # Phase 4: Wait 3 seconds
+        print("Phase 4: Hold Result")
+        for _ in range(240 * 3):
+            env.step_simulation()
+            time.sleep(1.0/240.0)
+            
+        # Phase 5: Keep window open
+        print("Visualization complete. Keeping window open.")
+        while True:
+            env.step_simulation()
+            time.sleep(1.0/240.0)
+            
     except KeyboardInterrupt:
         print("\nSimulation interrupted by user.")
     
