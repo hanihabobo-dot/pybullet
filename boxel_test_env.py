@@ -35,6 +35,21 @@ class ObjectInfo:
 
 
 @dataclass
+class Boxel:
+    """
+    Semantic Boxel: A task-relevant cuboid for belief representation.
+    
+    In this implementation, Boxels are axis-aligned bounding boxes (AABBs) 
+    that bound objects or regions of interest. This abstraction allows the 
+    planner to reason about "regions" rather than precise object meshes.
+    """
+    center: np.ndarray  # [x, y, z] center coordinates of the box in world frame
+    extent: np.ndarray  # [x_half, y_half, z_half] half-dimensions (distance from center to edge)
+    object_name: Optional[str] = None  # Name of the object this boxel bounds (if any)
+    is_occluded: bool = False  # Belief state: Is this boxel currently known to be occluded?
+
+
+@dataclass
 class CameraObservation:
     """Data structure for camera observations."""
     rgb_image: np.ndarray  # RGB image (H, W, 3)
@@ -42,6 +57,7 @@ class CameraObservation:
     point_cloud: np.ndarray  # Point cloud (N, 3) in world coordinates
     visible_objects: List[str]  # List of object names that are visible
     object_poses: Dict[str, Tuple[np.ndarray, np.ndarray]]  # Dict mapping object names to (position, orientation)
+    boxels: List[Boxel] = None  # List of Semantic Boxels generated from the observation
 
 
 class BoxelTestEnv:
@@ -120,6 +136,9 @@ class BoxelTestEnv:
         
         # Store object information
         self.objects: Dict[str, ObjectInfo] = {}
+        
+        # Debug items (lines, text) to clear on reset or update
+        self.debug_items = []
         
         # Initialize the scene
         self._setup_scene()
@@ -296,6 +315,124 @@ class BoxelTestEnv:
         for _ in range(10):
             p.stepSimulation()
     
+    def generate_boxels(self, visible_objects: List[str]) -> List[Boxel]:
+        """
+        Generate Semantic Boxels for the currently visible objects.
+        
+        This corresponds to the "Abstraction" step in the POD-TAMP pipeline.
+        It converts continuous object poses/meshes into discrete semantic regions (Boxels).
+        
+        Args:
+            visible_objects (List[str]): A list of object names (e.g. ['occluder_1', 'target_4'])
+                                         that are currently detected by the perception system.
+            
+        Returns:
+            List[Boxel]: A list of Boxel objects representing the semantic abstraction 
+                         of the visible scene.
+        """
+        boxels = []
+        for obj_name in visible_objects:
+            if obj_name not in self.objects:
+                continue
+                
+            obj_info = self.objects[obj_name]
+            
+            # For simplicity, we assume objects are roughly axis-aligned or we use their AABB.
+            # In a real scenario, we might use the object's oriented bounding box (OBB)
+            # or the AABB of the oriented object.
+            # PyBullet provides AABB in world coordinates:
+            aabb_min, aabb_max = p.getAABB(obj_info.object_id)
+            
+            aabb_min = np.array(aabb_min)
+            aabb_max = np.array(aabb_max)
+            
+            # Calculate geometric properties
+            center = (aabb_min + aabb_max) / 2.0
+            extent = (aabb_max - aabb_min) / 2.0  # Half-extents
+            
+            boxel = Boxel(
+                center=center,
+                extent=extent,
+                object_name=obj_name,
+                is_occluded=False
+            )
+            boxels.append(boxel)
+            
+        return boxels
+
+    def draw_boxels(self, boxels: List[Boxel], duration: float = 0):
+        """
+        Visualize Semantic Boxels in the PyBullet GUI using debug lines.
+        
+        This overlay allows us to verify that the semantic abstraction matches
+        the physical reality.
+        
+        Args:
+            boxels (List[Boxel]): The list of Boxel objects to visualize.
+            duration (float): How long the lines should remain visible in seconds.
+                              0 = forever (until manually removed).
+                              0.1 = good for dynamic updates in a loop.
+        """
+        # Clear previous debug items if any (though p.removeAllUserDebugItems clears everything)
+        # Here we just draw new ones. In a loop, you might want to manage IDs.
+        # For simplicity, we'll let them persist for a short duration in the loop.
+        
+        for boxel in boxels:
+            # Calculate corners of the boxel
+            c = boxel.center
+            e = boxel.extent
+            
+            # 8 corners
+            # 0: -x -y -z
+            # 1: +x -y -z
+            # 2: -x +y -z
+            # 3: +x +y -z
+            # 4: -x -y +z
+            # 5: +x -y +z
+            # 6: -x +y +z
+            # 7: +x +y +z
+            
+            corners = [
+                c + np.array([-e[0], -e[1], -e[2]]),
+                c + np.array([e[0], -e[1], -e[2]]),
+                c + np.array([-e[0], e[1], -e[2]]),
+                c + np.array([e[0], e[1], -e[2]]),
+                c + np.array([-e[0], -e[1], e[2]]),
+                c + np.array([e[0], -e[1], e[2]]),
+                c + np.array([-e[0], e[1], e[2]]),
+                c + np.array([e[0], e[1], e[2]])
+            ]
+            
+            # Edges connecting corners (indices)
+            edges = [
+                (0, 1), (0, 2), (0, 4), # From corner 0
+                (1, 3), (1, 5),         # From corner 1
+                (2, 3), (2, 6),         # From corner 2
+                (3, 7),                 # From corner 3
+                (4, 5), (4, 6),         # From corner 4
+                (5, 7),                 # From corner 5
+                (6, 7)                  # From corner 6
+            ]
+            
+            # Semantic Color Coding:
+            # Red   = Occluder (Obstacle)
+            # Blue  = Target (Goal)
+            # Green = Other
+            color = [0, 1, 0] # Green for generic
+            if boxel.object_name and boxel.object_name.startswith("occluder"):
+                color = [1, 0, 0] # Red for occluders
+            elif boxel.object_name and boxel.object_name.startswith("target"):
+                color = [0, 0, 1] # Blue for targets
+                
+            for start_idx, end_idx in edges:
+                p.addUserDebugLine(
+                    lineFromXYZ=corners[start_idx],
+                    lineToXYZ=corners[end_idx],
+                    lineColorRGB=color,
+                    lineWidth=2.0,
+                    lifeTime=duration
+                )
+    
     def get_camera_observation(self) -> CameraObservation:
         """
         Capture an observation from the fixed camera.
@@ -304,7 +441,8 @@ class BoxelTestEnv:
         1. Renders RGB and depth images from the camera
         2. Generates a point cloud from the depth image
         3. Uses the oracle to detect visible objects
-        4. Returns all observation data
+        4. Generates Boxels for visible objects
+        5. Returns all observation data
         
         Returns:
             CameraObservation containing RGB, depth, point cloud, and object information
@@ -355,12 +493,16 @@ class BoxelTestEnv:
         # Use oracle to detect visible objects
         visible_objects, object_poses = self.oracle_detect_objects()
         
+        # Generate Boxels for visible objects
+        boxels = self.generate_boxels(visible_objects)
+        
         return CameraObservation(
             rgb_image=rgb_image,
             depth_image=depth_image,
             point_cloud=point_cloud,
             visible_objects=visible_objects,
-            object_poses=object_poses
+            object_poses=object_poses,
+            boxels=boxels
         )
     
     def _depth_buffer_to_meters(self, depth_buffer: np.ndarray) -> np.ndarray:
@@ -682,6 +824,7 @@ def main():
     print(f"  Point cloud shape: {obs.point_cloud.shape}")
     print(f"  Visible objects: {obs.visible_objects}")
     print(f"  Total objects detected: {len(obs.object_poses)}")
+    print(f"  Boxels generated: {len(obs.boxels) if obs.boxels else 0}")
     
     # Save the scene point cloud
     save_point_cloud_to_ply(obs.point_cloud, "scene_point_cloud.ply")
@@ -708,8 +851,15 @@ def main():
     print("(Close the PyBullet window or press Ctrl+C to exit)")
     
     try:
+        # We'll draw the boxels continuously
+        boxels = obs.boxels
+        
         for step in range(240 * 100):  # 5 seconds at 240Hz
             env.step_simulation()
+            
+            # Visualize Boxels (duration=0.1s so they persist between steps but update)
+            if boxels:
+                env.draw_boxels(boxels, duration=0.1)
             
             # Update camera view every 10 steps
             # Focus on table center (where objects are) rather than robot
