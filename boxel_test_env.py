@@ -432,9 +432,35 @@ class BoxelTestEnv:
         direction = direction / np.linalg.norm(direction)
         
         # 1. Calculate Shadow Tip (Start)
-        # This is the point on the "back" of the object where the shadow begins.
-        # We approximate this as: Object Center + (Extent projected along view direction)
-        shadow_start = obj_pos + direction * np.linalg.norm(obj_boxel.extent)
+        # We need to find the start position such that the Shadow Boxel (AABB)
+        # just touches the Object Boxel (AABB) without overlapping.
+        # We calculate the distance 'k' along the ray needed to separate the two AABBs
+        # on at least one axis. We want the minimum 'k' that achieves separation.
+        # k_i = 2 * extent[i] / abs(direction[i])
+        
+        k_values = []
+        for i in range(3):
+            if abs(direction[i]) > 1e-6:
+                k = 2.0 * obj_boxel.extent[i] / abs(direction[i])
+                k_values.append(k)
+            else:
+                k_values.append(float('inf'))
+        
+        # We assume the ray exits the AABB, so we take the minimum valid distance
+        # to place the shadow start right against the object face.
+        # However, we actually want the center of the shadow start boxel.
+        # Logic: Center_Shadow = Center_Obj + k * Dir
+        # Boundary_Shadow = Center_Shadow - Extent = Center_Obj + k*Dir - Extent
+        # We want Boundary_Shadow >= Boundary_Obj_Max (on axis i)
+        # Center_Obj + k*Dir - Extent >= Center_Obj + Extent
+        # k*Dir >= 2*Extent
+        
+        k_opt = min(k_values)
+        
+        # Add a tiny epsilon to ensure numerical non-overlap
+        k_opt *= 1.01 
+        
+        shadow_start = obj_pos + direction * k_opt
         
         # 2. Calculate Shadow End (Projection to Table)
         # We project the object's center ray onto the table surface.
