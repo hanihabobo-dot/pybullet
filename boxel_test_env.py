@@ -170,6 +170,9 @@ class BoxelTestEnv:
         # Debug items (lines, text) to clear on reset or update
         self.debug_items = []
         
+        # Track candidate debug items separately (yellow lines that get replaced each iteration)
+        self.candidate_debug_items = []
+        
         # Track visual bodies for shadows (ghost objects)
         self.shadow_bodies = []
         
@@ -525,6 +528,9 @@ class BoxelTestEnv:
         # BFS Queue (List of OctreeNodes)
         current_layer = [root]
         
+        # Track which free boxels we've already drawn (to avoid redrawing)
+        drawn_free_boxels = set()
+        
         while current_layer:
             next_layer = []
             
@@ -543,14 +549,48 @@ class BoxelTestEnv:
                 if not is_mixed:
                     # FREE
                     node.state = 'FREE'
-                    free_boxels.append(Boxel(
+                    new_boxel = Boxel(
                         center=node.center,
                         extent=node.extent,
                         object_name="free_space",
                         is_occluded=False,
                         is_shadow=False,
                         is_free=True
-                    ))
+                    )
+                    free_boxels.append(new_boxel)
+                    
+                    # Track this boxel for visualization (only draw if new)
+                    boxel_key = (tuple(node.center), tuple(node.extent))
+                    if visualize and boxel_key not in drawn_free_boxels:
+                        drawn_free_boxels.add(boxel_key)
+                        # Draw this new free boxel immediately (cyan)
+                        c = node.center
+                        e = node.extent
+                        corners = [
+                            c + np.array([-e[0], -e[1], -e[2]]),
+                            c + np.array([e[0], -e[1], -e[2]]),
+                            c + np.array([-e[0], e[1], -e[2]]),
+                            c + np.array([e[0], e[1], -e[2]]),
+                            c + np.array([-e[0], -e[1], e[2]]),
+                            c + np.array([e[0], -e[1], e[2]]),
+                            c + np.array([-e[0], e[1], e[2]]),
+                            c + np.array([e[0], e[1], e[2]])
+                        ]
+                        edges = [
+                            (0, 1), (0, 2), (0, 4), (1, 3), (1, 5),
+                            (2, 3), (2, 6), (3, 7), (4, 5), (4, 6),
+                            (5, 7), (6, 7)
+                        ]
+                        for start_idx, end_idx in edges:
+                            line_id = p.addUserDebugLine(
+                                lineFromXYZ=corners[start_idx],
+                                lineToXYZ=corners[end_idx],
+                                lineColorRGB=[0, 1, 1],  # Cyan
+                                lineWidth=1.0,
+                                lifeTime=0
+                            )
+                            self.debug_items.append(line_id)
+                    
                     continue # Stop processing this branch
                 
                 # If Mixed/Occupied, check size
@@ -577,17 +617,45 @@ class BoxelTestEnv:
             
             # Visualization Step (End of Layer)
             if visualize:
-                # Draw Known Boxels + Already Found Free Boxels + Next Layer Candidates
-                vis_list = known_boxels + free_boxels
+                # Strategy: 
+                # 1. Clear only previous yellow candidates (they change each iteration)
+                # 2. Free boxels are drawn immediately when created (above), so they persist
+                # 3. Draw new yellow candidates for next layer
                 
-                # Convert next layer nodes to temp boxels for visualization
-                candidate_boxels = [
-                    Boxel(n.center, n.extent, is_free=True, is_candidate=True) for n in next_layer
-                ]
-                # We can tint candidates differently if we update draw_boxels, 
-                # but for now they will appear as Free (Cyan) which looks like "refining"
+                # Clear previous yellow candidates
+                for item_id in self.candidate_debug_items:
+                    p.removeUserDebugItem(item_id)
+                self.candidate_debug_items = []
                 
-                self.draw_boxels(vis_list + candidate_boxels, duration=0)
+                # Draw current candidates (yellow) - store IDs separately so we can clear them next iteration
+                for node in next_layer:
+                    c = node.center
+                    e = node.extent
+                    corners = [
+                        c + np.array([-e[0], -e[1], -e[2]]),
+                        c + np.array([e[0], -e[1], -e[2]]),
+                        c + np.array([-e[0], e[1], -e[2]]),
+                        c + np.array([e[0], e[1], -e[2]]),
+                        c + np.array([-e[0], -e[1], e[2]]),
+                        c + np.array([e[0], -e[1], e[2]]),
+                        c + np.array([-e[0], e[1], e[2]]),
+                        c + np.array([e[0], e[1], e[2]])
+                    ]
+                    edges = [
+                        (0, 1), (0, 2), (0, 4), (1, 3), (1, 5),
+                        (2, 3), (2, 6), (3, 7), (4, 5), (4, 6),
+                        (5, 7), (6, 7)
+                    ]
+                    for start_idx, end_idx in edges:
+                        line_id = p.addUserDebugLine(
+                            lineFromXYZ=corners[start_idx],
+                            lineToXYZ=corners[end_idx],
+                            lineColorRGB=[1, 1, 0],  # Yellow
+                            lineWidth=1.0,
+                            lifeTime=0
+                        )
+                        self.candidate_debug_items.append(line_id)  # Track separately
+                
                 time.sleep(1.0) # 1 second per step
             
             # Move to next layer
@@ -595,7 +663,24 @@ class BoxelTestEnv:
 
         return free_boxels
 
-    def draw_boxels(self, boxels: List[Boxel], duration: float = 0):
+    def clear_all_debug_items(self):
+        """Clear all debug lines and shadow bodies."""
+        # Remove any existing shadow bodies
+        for body_id in self.shadow_bodies:
+            p.removeBody(body_id)
+        self.shadow_bodies = []
+        
+        # Remove any existing debug lines
+        for item_id in self.debug_items:
+            p.removeUserDebugItem(item_id)
+        self.debug_items = []
+        
+        # Remove candidate debug items
+        for item_id in self.candidate_debug_items:
+            p.removeUserDebugItem(item_id)
+        self.candidate_debug_items = []
+    
+    def draw_boxels(self, boxels: List[Boxel], duration: float = 0, clear_previous: bool = True):
         """
         Visualize Semantic Boxels in the PyBullet GUI using debug lines.
         
@@ -607,16 +692,19 @@ class BoxelTestEnv:
             duration (float): How long the lines should remain visible in seconds.
                               0 = forever (until manually removed).
                               0.1 = good for dynamic updates in a loop.
+            clear_previous (bool): If True, clears all previous debug items before drawing.
+                                  If False, accumulates (useful for animated sequences).
         """
         # Remove any existing shadow bodies from previous frame
         for body_id in self.shadow_bodies:
             p.removeBody(body_id)
         self.shadow_bodies = []
         
-        # Remove any existing debug lines from previous frame (to prevent accumulation)
-        for item_id in self.debug_items:
-            p.removeUserDebugItem(item_id)
-        self.debug_items = []
+        # Optionally remove existing debug lines (default: yes, for clean updates)
+        if clear_previous:
+            for item_id in self.debug_items:
+                p.removeUserDebugItem(item_id)
+            self.debug_items = []
         
         for boxel in boxels:
             # --- Draw Wireframe (for all boxels) ---
@@ -1151,12 +1239,15 @@ def main():
             
         # Phase 3: Generate Free Space (Animated 1s per step)
         print("Phase 3: Free Space Discretization")
+        # Clear everything before starting Phase 3
+        env.clear_all_debug_items()
+        # Draw known boxels once at the start
+        env.draw_boxels(all_known, duration=0, clear_previous=True)
         # generate_free_space handles the drawing and sleeping internally if visualize=True
+        # It will accumulate cyan boxels and update yellow candidates
         free_boxels = env.generate_free_space(all_known, visualize=True)
         
-        # Combine all for final view
-        final_boxels = all_known + free_boxels
-        env.draw_boxels(final_boxels, duration=0)
+        # Final view is already drawn (no need to redraw - it's already accumulated)
         
         # Phase 4: Wait 3 seconds
         print("Phase 4: Hold Result")
