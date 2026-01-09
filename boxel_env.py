@@ -82,6 +82,8 @@ class BoxelTestEnv:
             self.client_id = p.connect(p.GUI, options=f"--width={window_width} --height={window_height}")
             # Disable mouse picking so left-click rotates camera instead of grabbing objects
             p.configureDebugVisualizer(p.COV_ENABLE_MOUSE_PICKING, 0)
+            # Disable segmentation mask preview window
+            p.configureDebugVisualizer(p.COV_ENABLE_SEGMENTATION_MARK_PREVIEW, 0)
         else:
             self.client_id = p.connect(p.DIRECT)
         
