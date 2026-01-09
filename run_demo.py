@@ -87,7 +87,7 @@ def main():
         print("=== END DEBUG ===\n")
         
         # Timing constants
-        PHASE_WAIT_SECONDS = 0  # Set to 0 for fast, 1.0 for normal
+        PHASE_WAIT_SECONDS = 1  # Set to 0 for fast, 1.0 for normal
         FINAL_HOLD_SECONDS = 60  # Increased for keyboard navigation
         ENABLE_FREE_SPACE = True
         
@@ -129,7 +129,16 @@ def main():
         env.draw_boxels(all_known, duration=0, clear_previous=True)
         if ENABLE_FREE_SPACE:
             free_boxels = env.generate_free_space(all_known, visualize=False)
+            print(f"  Generated {len(free_boxels)} free space boxels")
             env.draw_boxels(all_known + free_boxels, duration=0, clear_previous=True)
+        
+        # Phase 3.5: Merge Free Space Cells
+        print("Phase 3.5: Merging Free Space Cells")
+        if ENABLE_FREE_SPACE and free_boxels:
+            merged_free_boxels = env.merge_free_space(free_boxels)
+            print(f"  Merged: {len(free_boxels)} -> {len(merged_free_boxels)} boxels")
+            env.draw_boxels(all_known + merged_free_boxels, duration=0, clear_previous=True)
+            free_boxels = merged_free_boxels  # Use merged boxels going forward
         
         # Phase 4: Hold Result
         print("Phase 4: Hold Result")

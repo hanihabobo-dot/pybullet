@@ -14,6 +14,7 @@ from boxel_types import ObjectInfo, Boxel, CameraObservation
 from shadow_calculator import ShadowCalculator
 from free_space import FreeSpaceGenerator
 from visualization import BoxelVisualizer
+from cell_merger import CellMerger
 
 
 class BoxelTestEnv:
@@ -102,6 +103,7 @@ class BoxelTestEnv:
         # Initialize helper components
         self.shadow_calculator = ShadowCalculator(self.camera_position, self.table_surface_height)
         self.free_space_generator = FreeSpaceGenerator(self.table_surface_height)
+        self.cell_merger = CellMerger()
         self.visualizer = BoxelVisualizer()
         
         # Initialize debug camera state for keyboard navigation
@@ -257,6 +259,22 @@ class BoxelTestEnv:
             List of free space boxels
         """
         return self.free_space_generator.generate(known_boxels, visualize)
+    
+    def merge_free_space(self, free_boxels: List[Boxel], max_iterations: int = 100) -> List[Boxel]:
+        """
+        Merge adjacent free space boxels into larger convex regions.
+        
+        This reduces the total number of free space boxels by combining
+        adjacent cells that share a common face and have compatible dimensions.
+        
+        Args:
+            free_boxels: List of free space boxels to merge
+            max_iterations: Maximum number of merge passes
+            
+        Returns:
+            List of merged free space boxels (fewer, larger boxes)
+        """
+        return self.cell_merger.merge_free_space(free_boxels, max_iterations)
     
     def draw_boxels(self, boxels: List[Boxel], duration: float = 0, clear_previous: bool = True):
         """Draw boxels in the PyBullet GUI."""
