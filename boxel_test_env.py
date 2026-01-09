@@ -370,6 +370,9 @@ class BoxelTestEnv:
                          of the visible scene AND the unknown occluded regions.
         """
         boxels = []
+        
+        # 1. First Pass: Generate all "Solid" Object Boxels
+        solid_boxels = []
         for obj_name in visible_objects:
             if obj_name not in self.objects:
                 continue
@@ -377,8 +380,6 @@ class BoxelTestEnv:
             obj_info = self.objects[obj_name]
             
             # Retrieve the Axis-Aligned Bounding Box (AABB) from PyBullet
-            # aabb_min: [min_x, min_y, min_z]
-            # aabb_max: [max_x, max_y, max_z]
             aabb_min, aabb_max = p.getAABB(obj_info.object_id)
             
             aabb_min = np.array(aabb_min)
@@ -396,131 +397,425 @@ class BoxelTestEnv:
                 is_occluded=False,
                 is_shadow=False
             )
-            boxels.append(obj_boxel)
+            solid_boxels.append(obj_boxel)
             
-            # Create the Shadow Boxel (Occlusion Region)
-            # This represents the volume BEHIND the object relative to the camera
-            shadow_boxel = self.calculate_shadow_boxel(obj_boxel)
-            if shadow_boxel:
-                boxels.append(shadow_boxel)
+        boxels.extend(solid_boxels)
+
+        # 2. Second Pass: Generate Shadow Boxels (considering other objects as obstacles)
+        for obj_boxel in solid_boxels:
+            # Get potential obstacles (all solid boxels except the one casting the shadow)
+            obstacles = [b for b in solid_boxels if b.object_name != obj_boxel.object_name]
+            
+            # Calculate shadow(s)
+            shadow_parts = self.calculate_shadow_boxel(obj_boxel, obstacles)
+            boxels.extend(shadow_parts)
             
         return boxels
 
-    def calculate_shadow_boxel(self, obj_boxel: Boxel) -> Optional[Boxel]:
+    def calculate_shadow_boxel(self, obj_boxel: Boxel, obstacles: List[Boxel]) -> List[Boxel]:
         """
-        Calculate the Shadow Boxel cast by an object from the camera's perspective.
+        Calculate the Shadow Boxel(s) cast by an object, accounting for ray casting and obstacles.
         
-        This implements the "Occlusion-Aware Subdivision" step.
-        The shadow is the volume obstructed by the object. Here, we approximate it
-        as an AABB extending from the object away from the camera.
-        
-        The length of the shadow is determined by projecting the object's position
-        onto the table surface along the camera ray. This ensures the shadow size
-        is consistent with the camera's perspective (shorter when looking down,
-        longer when looking from the side).
+        1. Ray Casting: Uses PyBullet rayTestBatch to find shadow extent against table/world.
+        2. Splitting: Breaks shadow boxels if they intersect with other objects.
+        3. Height Constraint: Shadow height is an overestimate (at least as tall as object).
         
         Args:
-            obj_boxel: The visible object's Boxel
+            obj_boxel: The visible object casting the shadow.
+            obstacles: List of other solid boxels that might block the shadow.
             
         Returns:
-            Boxel representing the shadow volume, or None if invalid
+            List[Boxel]: One or more boxels representing the shadow volume.
         """
-        # Direction from camera to object center
         cam_pos = self.camera_position
-        obj_pos = obj_boxel.center
-        direction = obj_pos - cam_pos
-        direction = direction / np.linalg.norm(direction)
+        obj_center = obj_boxel.center
+        obj_extent = obj_boxel.extent
         
-        # 1. Calculate Shadow Tip (Start)
-        # We need to find the start position such that the Shadow Boxel (AABB)
-        # just touches the Object Boxel (AABB) without overlapping.
-        # We calculate the distance 'k' along the ray needed to separate the two AABBs
-        # on at least one axis. We want the minimum 'k' that achieves separation.
-        # k_i = 2 * extent[i] / abs(direction[i])
+        # --- Step 1: Determine Shadow Start (Back Face) ---
+        # Find the "back" face of the object relative to the camera.
+        # Only use the 4 corners of the back face to cast rays.
+        # This prevents the shadow from extending into areas that ARE visible.
         
-        k_values = []
-        for i in range(3):
-            if abs(direction[i]) > 1e-6:
-                k = 2.0 * obj_boxel.extent[i] / abs(direction[i])
-                k_values.append(k)
-            else:
-                k_values.append(float('inf'))
+        # Direction from camera to object center
+        cam_to_obj = obj_center - cam_pos
+        cam_to_obj_norm = cam_to_obj / np.linalg.norm(cam_to_obj)
         
-        # We assume the ray exits the AABB, so we take the minimum valid distance
-        # to place the shadow start right against the object face.
-        # However, we actually want the center of the shadow start boxel.
-        # Logic: Center_Shadow = Center_Obj + k * Dir
-        # Boundary_Shadow = Center_Shadow - Extent = Center_Obj + k*Dir - Extent
-        # We want Boundary_Shadow >= Boundary_Obj_Max (on axis i)
-        # Center_Obj + k*Dir - Extent >= Center_Obj + Extent
-        # k*Dir >= 2*Extent
+        # For each axis, determine if the "back" side is + or - 
+        # If camera is looking in +X direction, back face is at +X (max X)
+        # If camera is looking in -X direction, back face is at -X (min X)
+        back_signs = np.sign(cam_to_obj_norm)  # [sign_x, sign_y, sign_z]
         
-        k_opt = min(k_values)
+        # Generate only the 4 "back" corners
+        # A corner is on the back if its offset aligns with back_signs on the dominant axes
+        # Actually, we want corners where the offset matches the sign for EACH axis
+        # But that only gives us 1 corner (the furthest corner).
         
-        # Add a tiny epsilon to ensure numerical non-overlap
-        k_opt *= 1.01 
+        # Better approach: Use the 4 corners of the dominant back FACE.
+        # The dominant axis is where |cam_to_obj| is largest.
+        # Actually for proper shadow, we should use silhouette corners.
         
-        shadow_start = obj_pos + direction * k_opt
+        # Simplified: Use corners that are "behind" the object center from camera's view.
+        # A corner is "behind" if (corner - obj_center) dot cam_to_obj > 0
         
-        # 2. Calculate Shadow End (Projection to Table)
-        # We project the object's center ray onto the table surface.
-        # Plane equation: Z = table_surface_height
-        # Ray equation: P(t) = cam_pos + t * direction
-        # Solve for t: cam_pos.z + t * direction.z = table_surface_height
-        # t = (table_surface_height - cam_pos.z) / direction.z
+        all_corners = [
+            obj_center + np.array([-obj_extent[0], -obj_extent[1], -obj_extent[2]]),
+            obj_center + np.array([ obj_extent[0], -obj_extent[1], -obj_extent[2]]),
+            obj_center + np.array([-obj_extent[0],  obj_extent[1], -obj_extent[2]]),
+            obj_center + np.array([ obj_extent[0],  obj_extent[1], -obj_extent[2]]),
+            obj_center + np.array([-obj_extent[0], -obj_extent[1],  obj_extent[2]]),
+            obj_center + np.array([ obj_extent[0], -obj_extent[1],  obj_extent[2]]),
+            obj_center + np.array([-obj_extent[0],  obj_extent[1],  obj_extent[2]]),
+            obj_center + np.array([ obj_extent[0],  obj_extent[1],  obj_extent[2]])
+        ]
         
-        # Check if looking parallel or up (no table intersection in forward direction)
-        if direction[2] >= -0.01:
-            # Fallback: Fixed max length
-            shadow_length = 0.5
-            shadow_end = shadow_start + direction * shadow_length
-        else:
-            t = (self.table_surface_height - cam_pos[2]) / direction[2]
+        # Filter to only back corners (corners that are away from camera relative to center)
+        back_corners = []
+        for corner in all_corners:
+            offset = corner - obj_center
+            # Dot product: positive means corner is in the direction camera is looking
+            dot = np.dot(offset, cam_to_obj_norm)
+            if dot > 0:  # Corner is on the "back" side
+                back_corners.append(corner)
+        
+        # If we somehow got no back corners (shouldn't happen), fall back to all
+        if len(back_corners) == 0:
+            back_corners = all_corners
             
-            # Check if intersection is behind camera (t < 0) - shouldn't happen if camera above
-            if t <= 0:
-                 shadow_length = 0.5
-                 shadow_end = shadow_start + direction * shadow_length
+        corners = back_corners
+        
+        # Construct rays from camera through back corners
+        ray_starts = [cam_pos] * len(corners)
+        
+        # Extend rays far enough to hit table/background
+        max_dist = 5.0 # meters
+        ray_ends = []
+        for corner in corners:
+            direction = corner - cam_pos
+            direction = direction / np.linalg.norm(direction)
+            # Start the ray AT the corner and shoot outward.
+            ray_target = corner + direction * max_dist
+            ray_ends.append(ray_target)
+            
+        # Batch Ray Test (starting from back corners outward)
+        results = p.rayTestBatch(corners, ray_ends)
+        
+        # Define table bounds (based on scene setup)
+        # Table is at [0.5, 0.0] with size ~1.0x1.0
+        table_x_min = 0.0
+        table_x_max = 1.0
+        table_y_min = -0.5
+        table_y_max = 0.5
+        table_z = self.table_surface_height
+        
+        hit_points = []
+        for i, res in enumerate(results):
+            # res: objectUid, linkIndex, hitFraction, hitPosition, hitNormal
+            hit_obj_id = res[0]
+            if hit_obj_id != -1:
+                hit_pt = np.array(res[3])
+                # Even for hits, clamp to table bounds to be safe
+                hit_pt[0] = np.clip(hit_pt[0], table_x_min, table_x_max)
+                hit_pt[1] = np.clip(hit_pt[1], table_y_min, table_y_max)
+                hit_pt[2] = max(hit_pt[2], table_z)
+                hit_points.append(hit_pt)
             else:
-                # Intersection point on table
-                projected_point = cam_pos + direction * t
+                # No hit (ray went off table or into sky).
+                # Project ray to table plane and clamp to table boundaries.
                 
-                # Verify projected point is actually "behind" the start point
-                # (Distance from camera to projection must be > distance to start)
-                dist_to_start = np.linalg.norm(shadow_start - cam_pos)
-                dist_to_proj = np.linalg.norm(projected_point - cam_pos)
+                start = corners[i]
+                direction = ray_ends[i] - start
+                direction = direction / np.linalg.norm(direction)
                 
-                if dist_to_proj <= dist_to_start:
-                    # Projection is inside or in front of object (looking straight down)
-                    # Create a minimal shadow boxel
-                    shadow_end = shadow_start + direction * 0.01 
+                # Intersect with Table Plane (Z = table_z)
+                # Ray: P(t) = start + t * dir
+                # start.z + t * dir.z = table_z  =>  t = (table_z - start.z) / dir.z
+                
+                if abs(direction[2]) > 1e-6 and direction[2] < 0:
+                    # Ray is going downward towards table
+                    t = (table_z - start[2]) / direction[2]
+                    if t > 0:
+                        pt_on_plane = start + direction * t
+                    else:
+                        # Intersection behind start, use start projected down
+                        pt_on_plane = np.array([start[0], start[1], table_z])
                 else:
-                    shadow_end = projected_point
-                    
-                    # Clamp maximum length to avoid infinite shadows
-                    max_shadow_len = 1.0 # Max 1 meter shadow
-                    actual_len = np.linalg.norm(shadow_end - shadow_start)
-                    if actual_len > max_shadow_len:
-                        shadow_end = shadow_start + direction * max_shadow_len
-
-        # 3. Construct Shadow Boxel (AABB)
-        # The shadow volume is the bounding box of the start and end points
-        # expanded by the object's extents (swept volume approximation)
+                    # Ray is going up or parallel - just project start point down
+                    pt_on_plane = np.array([start[0], start[1], table_z])
+                
+                # Clamp to Table Bounds (X and Y)
+                clamped_pt = pt_on_plane.copy()
+                clamped_pt[0] = np.clip(clamped_pt[0], table_x_min, table_x_max)
+                clamped_pt[1] = np.clip(clamped_pt[1], table_y_min, table_y_max)
+                clamped_pt[2] = table_z
+                
+                hit_points.append(clamped_pt)
         
-        min_point = np.minimum(shadow_start - obj_boxel.extent, shadow_end - obj_boxel.extent)
-        max_point = np.maximum(shadow_start + obj_boxel.extent, shadow_end + obj_boxel.extent)
+        # --- Step 2: Construct Initial Shadow AABB ---
+        # The shadow volume is bounded by the Object's back face (approx as corners)
+        # and the Hit Points.
+        # But we want the shadow to START at the object back.
+        # A simple AABB approximation is the bounding box of (Object Corners U Hit Points)
+        # BUT adjusted so it doesn't include the object itself (as much as possible).
         
-        shadow_center = (min_point + max_point) / 2.0
-        shadow_extent = (max_point - min_point) / 2.0
+        # Actually, the problem states: "shadow should not include the object itself. 
+        # it should start from the backspace of the bounding boxel."
         
-        # Create shadow boxel
-        return Boxel(
-            center=shadow_center,
-            extent=shadow_extent,
+        # Let's compute the bounding box of the HIT points first.
+        # Then extend it back towards the object, but stop AT the object.
+        
+        # To ensure we don't include the object:
+        # We can form a box from min(hit_points) to max(hit_points)
+        # And union it with the object's "back" face.
+        
+        # Simplest approach satisfying "overestimate height":
+        # 1. Get bounds of hit points
+        h_min = np.min(hit_points, axis=0)
+        h_max = np.max(hit_points, axis=0)
+        
+        # Force shadow bottom to be at least table surface height
+        h_min[2] = max(h_min[2], self.table_surface_height)
+        
+        # 2. Get bounds of object (start)
+        o_min = obj_center - obj_extent
+        o_max = obj_center + obj_extent
+        
+        # 3. Combine. The shadow generally extends from Object to Hits.
+        # Direction of shadow is roughly Hit_Center - Obj_Center.
+        
+        # For AABB representation, we essentially union the two sets of points,
+        # but then we trim the part that overlaps the object.
+        # However, AABBs can't represent arbitrary frustums.
+        # We will make an AABB that covers the hits and touches the object.
+        
+        full_min = np.minimum(o_min, h_min)
+        full_max = np.maximum(o_max, h_max)
+        
+        # Clamp shadow bounds to table boundaries
+        full_min[0] = max(full_min[0], table_x_min)
+        full_min[1] = max(full_min[1], table_y_min)
+        full_min[2] = max(full_min[2], table_z)
+        full_max[0] = min(full_max[0], table_x_max)
+        full_max[1] = min(full_max[1], table_y_max)
+        
+        # Enforce Height Overestimate (Constraint 4)
+        # "height should be an overestimate... at least as high as the original object"
+        full_max[2] = max(full_max[2], o_max[2])
+        
+        # Now, "subtract" the object from this full box.
+        # Since we are using AABBs, we can't perfectly subtract.
+        # But usually the shadow is "behind".
+        # We can find the dominant axis of the shadow direction and chop off the object part.
+        
+        shadow_dir = np.mean(hit_points, axis=0) - obj_center
+        dom_axis = np.argmax(np.abs(shadow_dir))
+        
+        # Copy full bounds
+        s_min = full_min.copy()
+        s_max = full_max.copy()
+        
+        # Trim start based on dominant direction
+        if shadow_dir[dom_axis] > 0:
+            # Shadow is in +Axis direction (e.g. +X)
+            # So shadow starts at Object Max X
+            s_min[dom_axis] = max(s_min[dom_axis], o_max[dom_axis])
+        else:
+            # Shadow is in -Axis direction
+            # So shadow ends at Object Min X
+            s_max[dom_axis] = min(s_max[dom_axis], o_min[dom_axis])
+            
+        # Initial Shadow Boxel
+        s_center = (s_min + s_max) / 2.0
+        s_extent = (s_max - s_min) / 2.0
+        
+        initial_shadow = Boxel(
+            center=s_center,
+            extent=s_extent,
             object_name=f"shadow_of_{obj_boxel.object_name}",
-            is_occluded=True, # It IS an occluded region
+            is_occluded=True,
             is_shadow=True
         )
+        
+        # --- Step 3: Handle Obstacles (Splitting) ---
+        active_shadows = [initial_shadow]
+        
+        for obstacle in obstacles:
+            next_active = []
+            for shadow in active_shadows:
+                # Check intersection
+                if self._check_aabb_intersection(shadow, obstacle):
+                    # Subtract/Split
+                    fragments = self._subtract_aabb(shadow, obstacle, shadow_dir)
+                    next_active.extend(fragments)
+                else:
+                    next_active.append(shadow)
+            active_shadows = next_active
+            
+        return active_shadows
+
+    def _check_aabb_intersection(self, b1: Boxel, b2: Boxel) -> bool:
+        min1 = b1.center - b1.extent
+        max1 = b1.center + b1.extent
+        min2 = b2.center - b2.extent
+        max2 = b2.center + b2.extent
+        
+        return (np.all(min1 <= max2) and np.all(max1 >= min2))
+
+    def _subtract_aabb(self, shadow: Boxel, obstacle: Boxel, direction: np.ndarray) -> List[Boxel]:
+        """
+        Subtract obstacle from shadow, keeping parts 'before' the obstacle
+        and 'around' it, but discarding parts 'behind' or 'inside'.
+        
+        Strategy: Split shadow into up to 6 fragments based on obstacle planes.
+        """
+        s_min = shadow.center - shadow.extent
+        s_max = shadow.center + shadow.extent
+        o_min = obstacle.center - obstacle.extent
+        o_max = obstacle.center + obstacle.extent
+        
+        fragments = []
+        
+        # Determine "Front" of obstacle relative to shadow direction
+        # If shadow moves +X, front is Min X. If -X, front is Max X.
+        # We want to keep the shadow segment that is "Upstream" (closer to light source)
+        
+        # We can generate potential fragments by slicing the shadow AABB
+        # against the 6 planes of the obstacle AABB.
+        
+        # 1. Left of Obstacle (Min X)
+        if s_min[0] < o_min[0]:
+            # Create fragment [s_min.x, o_min.x] x [s_y] x [s_z]
+            new_max = s_max.copy()
+            new_max[0] = o_min[0]
+            fragments.append(self._create_boxel_from_bounds(s_min, new_max, shadow))
+            # Shrink remaining shadow to start at o_min[0]
+            s_min[0] = max(s_min[0], o_min[0])
+            
+        # 2. Right of Obstacle (Max X)
+        if s_max[0] > o_max[0]:
+            # Create fragment [o_max.x, s_max.x]
+            new_min = s_min.copy()
+            new_min[0] = o_max[0]
+            fragments.append(self._create_boxel_from_bounds(new_min, s_max, shadow))
+            # Shrink remaining
+            s_max[0] = min(s_max[0], o_max[0])
+            
+        # 3. Front of Obstacle (Min Y)
+        if s_min[1] < o_min[1]:
+            new_max = s_max.copy()
+            new_max[1] = o_min[1]
+            fragments.append(self._create_boxel_from_bounds(s_min, new_max, shadow))
+            s_min[1] = max(s_min[1], o_min[1])
+            
+        # 4. Back of Obstacle (Max Y)
+        if s_max[1] > o_max[1]:
+            new_min = s_min.copy()
+            new_min[1] = o_max[1]
+            fragments.append(self._create_boxel_from_bounds(new_min, s_max, shadow))
+            s_max[1] = min(s_max[1], o_max[1])
+            
+        # 5. Bottom of Obstacle (Min Z)
+        if s_min[2] < o_min[2]:
+            new_max = s_max.copy()
+            new_max[2] = o_min[2]
+            fragments.append(self._create_boxel_from_bounds(s_min, new_max, shadow))
+            s_min[2] = max(s_min[2], o_min[2])
+            
+        # 6. Top of Obstacle (Max Z)
+        if s_max[2] > o_max[2]:
+            new_min = s_min.copy()
+            new_min[2] = o_max[2]
+            fragments.append(self._create_boxel_from_bounds(new_min, s_max, shadow))
+            s_max[2] = min(s_max[2], o_max[2])
+            
+        # The remaining part (s_min to s_max) is effectively INSIDE the obstacle 
+        # (intersection core).
+        # We generally discard this core because the shadow stops AT the surface.
+        
+        # However, we must filter these fragments. 
+        # Some are "side" shadows (passing by), some are "upstream" (before hitting).
+        # We keep all "side" fragments.
+        # The "downstream" fragments (shadow continuing AFTER obstacle) should be removed
+        # because the obstacle blocks the light.
+        
+        filtered_fragments = []
+        for frag in fragments:
+            if not self._is_downstream(frag, obstacle, direction):
+                filtered_fragments.append(frag)
+                
+        return filtered_fragments
+
+    def _create_boxel_from_bounds(self, min_pt, max_pt, template_boxel):
+        center = (min_pt + max_pt) / 2.0
+        extent = (max_pt - min_pt) / 2.0
+        # Sanity check for negative dimensions
+        if np.any(extent <= 0):
+            return None # Should not happen with logic above but safe to ignore
+            
+        return Boxel(
+            center=center,
+            extent=extent,
+            object_name=template_boxel.object_name,
+            is_occluded=True,
+            is_shadow=True
+        )
+
+    def _is_downstream(self, frag: Boxel, obstacle: Boxel, direction: np.ndarray) -> bool:
+        """
+        Check if a fragment is 'behind' the obstacle relative to light direction.
+        Actually, simplified logic:
+        We decomposed the intersection. The fragments generated are the parts of the 
+        shadow that are *outside* the obstacle.
+        We want to keep:
+        1. Parts *before* the obstacle (upstream).
+        2. Parts *beside* the obstacle (passing by).
+        We want to discard:
+        3. Parts *after* the obstacle (downstream) - because the obstacle blocks the light 
+           so the shadow shouldn't exist there? 
+           Wait, if the original big shadow volume represents the "potential shadow" 
+           of Object A, and Object B is inside that volume:
+           - The shadow exists UP TO Object B.
+           - The shadow DOES NOT exist INSIDE Object B.
+           - The shadow DOES NOT exist BEHIND Object B (because B is now casting its own shadow,
+             or simply because A's shadow is blocked by B's surface).
+             
+        So essentially, we just want to remove the volume "Behind" B.
+        
+        But the `_subtract_aabb` method above essentially carved out the core intersection.
+        The fragments returned are everything *except* the intersection.
+        This includes the "upstream", "downstream", and "sides".
+        
+        We need to identify which fragments are "downstream".
+        
+        A fragment is downstream if it is positioned further along the direction vector 
+        than the obstacle.
+        """
+        # Simple centroid check against obstacle centroid projected on direction
+        # Or check bounds.
+        
+        # Let's look at the dominant axis again.
+        dom_axis = np.argmax(np.abs(direction))
+        sign = np.sign(direction[dom_axis])
+        
+        f_center = frag.center[dom_axis]
+        o_center = obstacle.center[dom_axis]
+        
+        if sign > 0:
+            # Moving +X. Downstream means X > Obstacle X
+            # Use strict bound check: Fragment Min > Obstacle Max
+            f_min = frag.center[dom_axis] - frag.extent[dom_axis]
+            o_max = obstacle.center[dom_axis] + obstacle.extent[dom_axis]
+            if f_min >= o_max - 1e-4:
+                return True
+        else:
+            # Moving -X. Downstream means X < Obstacle X
+            # Fragment Max < Obstacle Min
+            f_max = frag.center[dom_axis] + frag.extent[dom_axis]
+            o_min = obstacle.center[dom_axis] - obstacle.extent[dom_axis]
+            if f_max <= o_min + 1e-4:
+                return True
+                
+        return False
+
 
     def generate_free_space(self, known_boxels: List[Boxel], visualize: bool = False) -> List[Boxel]:
         """
@@ -1264,14 +1559,14 @@ def main():
             time.sleep(1.0/240.0)
             
         # Phase 3: Generate Free Space (Animated 1s per step)
-        print("Phase 3: Free Space Discretization")
-        # Clear everything before starting Phase 3
-        env.clear_all_debug_items()
-        # Draw known boxels once at the start
-        env.draw_boxels(all_known, duration=0, clear_previous=True)
-        # generate_free_space handles the drawing and sleeping internally if visualize=True
-        # It will accumulate cyan boxels and update yellow candidates
-        free_boxels = env.generate_free_space(all_known, visualize=True)
+        # print("Phase 3: Free Space Discretization")
+        # # Clear everything before starting Phase 3
+        # env.clear_all_debug_items()
+        # # Draw known boxels once at the start
+        # env.draw_boxels(all_known, duration=0, clear_previous=True)
+        # # generate_free_space handles the drawing and sleeping internally if visualize=True
+        # # It will accumulate cyan boxels and update yellow candidates
+        # free_boxels = env.generate_free_space(all_known, visualize=True)
         
         # Final view is already drawn (no need to redraw - it's already accumulated)
         

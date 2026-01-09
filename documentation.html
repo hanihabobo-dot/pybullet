@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAMPura Environment Documentation (Detailed)</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --text-color: #e0e0e0;
+            --card-bg: #2d2d2d;
+            --accent-blue: #4dabf7;
+            --accent-green: #69db7c;
+            --accent-orange: #ffa94d;
+            --accent-purple: #da77f2;
+            --accent-red: #ff8787;
+            --code-bg: #1e1e1e;
+            --border-color: #404040;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 40px;
+        }
+
+        /* Collapsible Sections */
+        details {
+            background-color: var(--card-bg);
+            margin-bottom: 15px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+
+        details[open] {
+            border-color: var(--accent-blue);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        summary {
+            padding: 15px 20px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1.1em;
+            background-color: #333;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            user-select: none;
+        }
+
+        summary:hover {
+            background-color: #3d3d3d;
+        }
+
+        summary::after {
+            content: '+';
+            font-size: 1.5em;
+            color: var(--accent-blue);
+            transition: transform 0.3s;
+        }
+
+        details[open] summary::after {
+            transform: rotate(45deg);
+        }
+
+        .content {
+            padding: 20px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        /* Type Tags */
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-right: 10px;
+            font-weight: bold;
+            color: #1a1a1a;
+        }
+        .tag.class { background-color: var(--accent-purple); }
+        .tag.func { background-color: var(--accent-blue); }
+        .tag.struct { background-color: var(--accent-orange); }
+        .tag.logic { background-color: var(--accent-red); }
+
+        /* Code & Syntax */
+        code {
+            font-family: 'Consolas', 'Monaco', monospace;
+            background-color: rgba(255,255,255,0.1);
+            padding: 2px 5px;
+            border-radius: 3px;
+            color: var(--accent-green);
+        }
+
+        pre {
+            background-color: var(--code-bg);
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            border-left: 4px solid var(--accent-blue);
+        }
+
+        .line-ref {
+            color: #888;
+            font-size: 0.9em;
+            font-family: monospace;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        /* Math Blocks */
+        .math-block {
+            background: #252525;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: 'Times New Roman', serif;
+            font-style: italic;
+            border: 1px solid #444;
+            color: #fff;
+        }
+
+        /* Parameter Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        
+        th, td {
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th { color: var(--accent-blue); }
+        
+        /* Diagrams */
+        .diagram-container {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+            background: #222;
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        /* Visual Guide Colors */
+        .color-dot {
+            height: 12px;
+            width: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>TAMPura Environment</h1>
+    <p class="subtitle">Deep Technical Documentation for <code>boxel_test_env.py</code></p>
+
+    <!-- 1. DATA STRUCTURES -->
+    <details>
+        <summary>
+            <span><span class="tag struct">Struct</span> 1. Data Structures</span>
+        </summary>
+        <div class="content">
+            <h3><code>class Boxel</code></h3>
+            <span class="line-ref">Line ~37</span>
+            <p>The atomic unit of the world model. It is a <strong>Semantic Voxel</strong>.</p>
+            <ul>
+                <li><code>center</code> / <code>extent</code>: Defines the AABB geometry.</li>
+                <li><code>is_free</code>: Flag for empty space (Cyan).</li>
+                <li><code>is_shadow</code>: Flag for occlusion regions (Gray).</li>
+                <li><code>is_candidate</code>: Helper flag for visualization state (Yellow).</li>
+            </ul>
+        </div>
+    </details>
+
+    <!-- 2. ENVIRONMENT -->
+    <details>
+        <summary>
+            <span><span class="tag class">Class</span> 2. Environment Configuration</span>
+        </summary>
+        <div class="content">
+            <p><strong>Table Height Correction:</strong><br>
+            PyBullet assets often have offsets. Through debugging, we found the physical table surface is at <code>Z ≈ 0.325m</code>, not 0.5m. The code now explicitly calculates this to ensure objects sit ON the table, not float above it, and shadows project to the correct floor.</p>
+        </div>
+    </details>
+
+    <!-- 3. PERCEPTION & ORACLE -->
+    <details>
+        <summary>
+            <span><span class="tag func">Func</span> 3. Perception & Oracle</span>
+        </summary>
+        <div class="content">
+            <h3><code>get_camera_observation</code></h3>
+            <span class="line-ref">Line ~777 (updated)</span>
+            <p>The main entry point for getting data. It does <strong>not</strong> generate free space automatically anymore, allowing for the animated sequence in <code>main</code>.</p>
+            <ol>
+                <li>Captures RGB/Depth from PyBullet camera.</li>
+                <li>Converts Depth to Point Cloud (<code>_depth_to_point_cloud</code>).</li>
+                <li>Calls <code>oracle_detect_objects</code>.</li>
+                <li>Calls <code>generate_boxels</code> (Objects + Shadows).</li>
+            </ol>
+
+            <h3><code>oracle_detect_objects</code></h3>
+            <span class="line-ref">Line ~870</span>
+            <p>Bypasses computer vision for now. Gets exact poses using <code>p.getBasePositionAndOrientation</code>. Includes an optional ray-cast check to simulate occlusion.</p>
+        </div>
+    </details>
+
+    <!-- 4. SHADOW CALCULATION - DETAILED -->
+    <details open>
+        <summary>
+            <span><span class="tag logic">Logic</span> 4. Shadow Generation: Mathematics & Geometry</span>
+        </summary>
+        <div class="content">
+            <h3><code>calculate_shadow_boxel</code></h3>
+            <span class="line-ref">Line ~385</span>
+            <p>This function creates a Semantic Boxel representing the occluded volume behind an object. The logic solves two critical geometric problems: <strong>Separation</strong> (avoiding overlap) and <strong>Projection</strong> (limiting length).</p>
+
+            <h4>Problem 1: Axis-Aligned Separation (Avoiding Overlap)</h4>
+            <p>A naive approach (moving <code>radius</code> distance away) causes the shadow boxel (an AABB) to overlap the object boxel (also an AABB) by up to 50% when viewed diagonally. We need to find the exact shift vector to make them <em>just touch</em>.</p>
+            
+            <p><strong>The Math:</strong></p>
+            <div class="math-block">
+                Let C<sub>obj</sub> be the object center and E<sub>obj</sub> be its half-extent vector.<br>
+                Let D be the unit direction vector from Camera to Object.<br>
+                We want to find a scalar k such that the shadow start center C<sub>start</sub> = C<sub>obj</sub> + k * D places the shadow AABB just outside the object AABB.<br><br>
+                
+                For two AABBs to be disjoint, they must be separated along at least one axis (Separating Axis Theorem).<br>
+                For a specific axis <em>i</em> (x, y, or z), the condition to "clear" the object's extent is:<br>
+                |k * D<sub>i</sub>| ≥ 2 * E<sub>obj, i</sub><br><br>
+                
+                Thus, the minimum distance required to clear axis <em>i</em> is:<br>
+                k<sub>i</sub> = (2 * E<sub>obj, i</sub>) / |D<sub>i</sub>|<br><br>
+                
+                To minimize the gap between object and shadow, we choose the axis that is cleared <em>first</em>:<br>
+                k<sub>opt</sub> = min(k<sub>x</sub>, k<sub>y</sub>, k<sub>z</sub>)
+            </div>
+
+            <pre><code># Implementation (Line ~405):
+k_values = []
+for i in range(3):
+    if abs(direction[i]) > 1e-6:
+        # Distance to clear axis i
+        k = 2.0 * obj_boxel.extent[i] / abs(direction[i])
+        k_values.append(k)
+    else:
+        # Moving parallel to this face, infinite distance to clear it
+        k_values.append(float('inf'))
+
+# Pick the first exit point
+k_opt = min(k_values)
+shadow_start = obj_pos + direction * k_opt * 1.01 # 1% buffer</code></pre>
+
+            <h4>Problem 2: Perspective Projection (Limiting Length)</h4>
+            <p>Shadows shouldn't be infinite; they end where the sightline hits the table. We simulate this by projecting the object's center ray.</p>
+            
+            <p><strong>The Math:</strong></p>
+            <div class="math-block">
+                Ray Equation: P(t) = P<sub>cam</sub> + t * D<br>
+                Plane Equation: Z = H<sub>table</sub> (where H<sub>table</sub> ≈ 0.325m)<br><br>
+                
+                Substitute Ray Z into Plane Z:<br>
+                P<sub>cam, z</sub> + t * D<sub>z</sub> = H<sub>table</sub><br><br>
+                
+                Solve for t:<br>
+                t = (H<sub>table</sub> - P<sub>cam, z</sub>) / D<sub>z</sub>
+            </div>
+            
+            <p><strong>Result:</strong> <code>shadow_end = P(t)</code>. The Shadow Boxel is then constructed as the AABB bounding the swept volume from <code>shadow_start</code> to <code>shadow_end</code>.</p>
+        </div>
+    </details>
+
+    <!-- 5. OCTREE & FREE SPACE - DETAILED -->
+    <details open>
+        <summary>
+            <span><span class="tag logic">Logic</span> 5. Free Space Discretization: Octree Algorithm</span>
+        </summary>
+        <div class="content">
+            <h3><code>generate_free_space</code></h3>
+            <span class="line-ref">Line ~500</span>
+            <p>This function fills the empty "air" in the workspace with Boxels using a recursive spatial partitioning strategy (Octree), implemented iteratively via Breadth-First Search (BFS).</p>
+
+            <h4>Why Octree?</h4>
+            <p>We want large boxels for open spaces (efficient planning) and fine-grained boxels near obstacles (accurate collision avoidance). Octrees naturally provide this multi-resolution representation.</p>
+
+            <h4>The Algorithm (Step-by-Step):</h4>
+            <ol>
+                <li><strong>Initialization:</strong>
+                    <ul>
+                        <li>Define Workspace AABB: <code>ws_min</code> to <code>ws_max</code> (Z: 0.325m to 0.825m).</li>
+                        <li>Create <code>Root Node</code> covering the entire workspace.</li>
+                        <li>Initialize <code>Queue = [Root]</code>.</li>
+                    </ul>
+                </li>
+                <li><strong>BFS Loop (Layer by Layer):</strong>
+                    <ul>
+                        <li>For each <code>Node</code> in current layer:
+                            <ul>
+                                <li><strong>Intersection Test:</strong> Check if <code>Node.AABB</code> overlaps with ANY <code>Known Boxel</code> (Object or Shadow).</li>
+                                <li><strong style="color:var(--accent-green)">Case 1: No Intersection (FREE)</strong>
+                                    <br>The node represents completely empty space. Add it to <code>free_boxels</code> list. <strong>Stop recursing</strong> for this branch.
+                                </li>
+                                <li><strong style="color:var(--accent-red)">Case 2: Intersection & Small (OCCUPIED)</strong>
+                                    <br>The node hits an obstacle and is smaller than <code>min_size</code> (5cm). Mark as occupied. <strong>Discard</strong> (we only want free space).
+                                </li>
+                                <li><strong style="color:var(--accent-orange)">Case 3: Intersection & Large (MIXED)</strong>
+                                    <br>The node hits an obstacle but is large enough to contain gaps.
+                                    <br><strong>Action:</strong> Split into 8 equal child octants. Add children to <code>Next Layer Queue</code>.
+                                </li>
+                            </ul>
+                        </li>
+                        <li><strong>Visualization (If enabled):</strong> Draw newly found Free Boxels (Cyan) and next layer Candidates (Yellow). Wait 1s.</li>
+                    </ul>
+                </li>
+            </ol>
+
+            <h4>Intersection Logic Details</h4>
+            <pre><code># AABB vs AABB Intersection Test
+# Two boxes overlap if and only if they overlap on ALL 3 axes.
+def intersects(box_a, box_b):
+    return (box_a.max_x >= box_b.min_x and box_a.min_x <= box_b.max_x) and
+           (box_a.max_y >= box_b.min_y and box_a.min_y <= box_b.max_y) and
+           (box_a.max_z >= box_b.min_z and box_a.min_z <= box_b.max_z)</code></pre>
+           <p>In our code, we use vectorized NumPy comparisons for speed: <code>np.all(node_max >= b_min) and np.all(node_min <= b_max)</code>.</p>
+        </div>
+    </details>
+
+    <p style="text-align: center; margin-top: 50px; color: #666;">Generated for TAMPura Project | 2025</p>
+</div>
+
+</body>
+</html>
