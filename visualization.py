@@ -29,7 +29,8 @@ class BoxelVisualizer:
         self.debug_items = []
         self.shadow_bodies = []
     
-    def draw_boxels(self, boxels: List[Boxel], duration: float = 0, clear_previous: bool = True):
+    def draw_boxels(self, boxels: List[Boxel], duration: float = 0, clear_previous: bool = True,
+                    fill_opacity: float = 0.05):
         """
         Visualize Semantic Boxels in the PyBullet GUI using debug lines.
         
@@ -37,6 +38,7 @@ class BoxelVisualizer:
             boxels: List of Boxel objects to visualize
             duration: How long lines remain visible (0 = forever)
             clear_previous: If True, clears previous debug items before drawing
+            fill_opacity: Opacity for filled boxel phantoms (0.0 = invisible, 1.0 = solid)
         """
         # Remove existing shadow bodies
         for body_id in self.shadow_bodies:
@@ -93,9 +95,8 @@ class BoxelVisualizer:
                 )
                 self.debug_items.append(line_id)
             
-            # Draw filled phantom for shadow boxels
-            if boxel.is_shadow:
-                self._draw_shadow_phantom(c, e)
+            # Draw filled phantom for all boxels
+            self._draw_boxel_phantom(c, e, color, fill_opacity)
     
     def _get_boxel_color(self, boxel: Boxel) -> List[float]:
         """Get the color for a boxel based on its type."""
@@ -112,23 +113,23 @@ class BoxelVisualizer:
         else:
             return [0, 1, 0]  # Green
     
-    def _draw_shadow_phantom(self, center, extent):
-        """Draw a semi-transparent phantom object for shadow visualization."""
+    def _draw_boxel_phantom(self, center, extent, color, opacity):
+        """Draw a semi-transparent phantom object for boxel visualization."""
         visual_shape_id = p.createVisualShape(
             shapeType=p.GEOM_BOX,
             halfExtents=extent,
-            rgbaColor=[0.5, 0.5, 0.5, 0.3],
+            rgbaColor=[color[0], color[1], color[2], opacity],
             specularColor=[0, 0, 0]
         )
         
-        shadow_body_id = p.createMultiBody(
+        body_id = p.createMultiBody(
             baseMass=0,
             baseVisualShapeIndex=visual_shape_id,
             basePosition=center,
             baseOrientation=[0, 0, 0, 1]
         )
         
-        self.shadow_bodies.append(shadow_body_id)
+        self.shadow_bodies.append(body_id)
     
     def clear_all(self):
         """Clear all debug items and shadow bodies."""

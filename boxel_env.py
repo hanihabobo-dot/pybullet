@@ -276,9 +276,10 @@ class BoxelTestEnv:
         """
         return self.cell_merger.merge_free_space(free_boxels, max_iterations)
     
-    def draw_boxels(self, boxels: List[Boxel], duration: float = 0, clear_previous: bool = True):
+    def draw_boxels(self, boxels: List[Boxel], duration: float = 0, clear_previous: bool = True,
+                    fill_opacity: float = 0.05):
         """Draw boxels in the PyBullet GUI."""
-        self.visualizer.draw_boxels(boxels, duration, clear_previous)
+        self.visualizer.draw_boxels(boxels, duration, clear_previous, fill_opacity)
     
     def clear_all_debug_items(self):
         """Clear all debug visualization items."""

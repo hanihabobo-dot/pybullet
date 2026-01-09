@@ -87,7 +87,8 @@ def main():
         print("=== END DEBUG ===\n")
         
         # Timing constants
-        PHASE_WAIT_SECONDS = 1  # Set to 0 for fast, 1.0 for normal
+        PHASE_WAIT_SECONDS = 0  # Set to 0 for fast, 1.0 for normal
+        BOXEL_FILL_OPACITY = 0.1  # Opacity for filled boxels (0.0 = invisible, 1.0 = solid)
         FINAL_HOLD_SECONDS = 60  # Increased for keyboard navigation
         ENABLE_FREE_SPACE = True
         
@@ -109,7 +110,7 @@ def main():
         
         # Phase 1: Show Objects
         print("Phase 1: Objects")
-        env.draw_boxels(obj_boxels, duration=0)
+        env.draw_boxels(obj_boxels, duration=0, fill_opacity=BOXEL_FILL_OPACITY)
         for _ in range(int(240 * PHASE_WAIT_SECONDS)): 
             env.step_simulation()
             env.handle_keyboard_camera()
@@ -117,7 +118,7 @@ def main():
             
         # Phase 2: Show Shadows
         print("Phase 2: Shadows")
-        env.draw_boxels(all_known, duration=0)
+        env.draw_boxels(all_known, duration=0, fill_opacity=BOXEL_FILL_OPACITY)
         for _ in range(int(240 * PHASE_WAIT_SECONDS)):
             env.step_simulation()
             env.handle_keyboard_camera()
@@ -126,18 +127,18 @@ def main():
         # Phase 3: Generate Free Space
         print("Phase 3: Free Space Discretization")
         env.clear_all_debug_items()
-        env.draw_boxels(all_known, duration=0, clear_previous=True)
+        env.draw_boxels(all_known, duration=0, clear_previous=True, fill_opacity=BOXEL_FILL_OPACITY)
         if ENABLE_FREE_SPACE:
             free_boxels = env.generate_free_space(all_known, visualize=False)
             print(f"  Generated {len(free_boxels)} free space boxels")
-            env.draw_boxels(all_known + free_boxels, duration=0, clear_previous=True)
+            env.draw_boxels(all_known + free_boxels, duration=0, clear_previous=True, fill_opacity=BOXEL_FILL_OPACITY)
         
         # Phase 3.5: Merge Free Space Cells
         print("Phase 3.5: Merging Free Space Cells")
         if ENABLE_FREE_SPACE and free_boxels:
             merged_free_boxels = env.merge_free_space(free_boxels)
             print(f"  Merged: {len(free_boxels)} -> {len(merged_free_boxels)} boxels")
-            env.draw_boxels(all_known + merged_free_boxels, duration=0, clear_previous=True)
+            env.draw_boxels(all_known + merged_free_boxels, duration=0, clear_previous=True, fill_opacity=BOXEL_FILL_OPACITY)
             free_boxels = merged_free_boxels  # Use merged boxels going forward
         
         # Phase 4: Hold Result

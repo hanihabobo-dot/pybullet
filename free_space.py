@@ -27,7 +27,7 @@ class FreeSpaceGenerator:
         
         Args:
             table_surface_height: Z height of the table surface
-            min_resolution: Minimum boxel size in meters (default 5cm)
+            min_resolution: Minimum boxel size in meters (default 3cm)
         """
         self.table_surface_height = table_surface_height
         self.min_resolution = min_resolution
