@@ -80,6 +80,8 @@ class BoxelTestEnv:
         # Connect to PyBullet with window size options
         if gui:
             self.client_id = p.connect(p.GUI, options=f"--width={window_width} --height={window_height}")
+            # Disable mouse picking so left-click rotates camera instead of grabbing objects
+            p.configureDebugVisualizer(p.COV_ENABLE_MOUSE_PICKING, 0)
         else:
             self.client_id = p.connect(p.DIRECT)
         
@@ -99,6 +101,12 @@ class BoxelTestEnv:
         self.shadow_calculator = ShadowCalculator(self.camera_position, self.table_surface_height)
         self.free_space_generator = FreeSpaceGenerator(self.table_surface_height)
         self.visualizer = BoxelVisualizer()
+        
+        # Initialize debug camera state for keyboard navigation
+        self.debug_camera_distance = 1.5
+        self.debug_camera_yaw = 45.0
+        self.debug_camera_pitch = -30.0
+        self.debug_camera_target = np.array([0.5, 0.0, self.table_surface_height])
         
         print("Boxel Test Environment initialized successfully!")
         print(f"Camera position: {self.camera_position}")
@@ -387,6 +395,124 @@ class BoxelTestEnv:
             [2*(x*z - y*w), 2*(y*z + x*w), 1 - 2*(x**2 + y**2)]
         ])
     
+    def handle_keyboard_camera(self, move_speed: float = 0.02, rotate_speed: float = 1.0, zoom_speed: float = 0.05):
+        """
+        Handle keyboard input for camera navigation.
+        
+        Controls:
+            W/Up Arrow: Move camera target forward
+            S/Down Arrow: Move camera target backward  
+            A/Left Arrow: Move camera target left
+            D/Right Arrow: Move camera target right
+            Q: Move camera target up
+            E: Move camera target down
+            R: Zoom in
+            F: Zoom out
+        
+        Args:
+            move_speed: Speed of camera target movement
+            rotate_speed: Speed of camera rotation (not used currently)
+            zoom_speed: Speed of zoom in/out
+            
+        Returns:
+            True if any key was pressed, False otherwise
+        """
+        keys = p.getKeyboardEvents()
+        
+        if not keys:
+            return False
+        
+        # Get current camera view direction for relative movement
+        # PyBullet camera: yaw=0 looks from +Y toward -Y, yaw=90 looks from -X toward +X
+        yaw_rad = np.radians(self.debug_camera_yaw)
+        
+        # Forward direction (into the screen, away from camera)
+        forward = np.array([-np.sin(yaw_rad), np.cos(yaw_rad), 0])
+        # Right direction (perpendicular to forward in XY plane)
+        right = np.array([np.cos(yaw_rad), np.sin(yaw_rad), 0])
+        # Up direction
+        up = np.array([0, 0, 1])
+        
+        moved = False
+        
+        # W or Up Arrow - move forward
+        if keys.get(ord('w')) == p.KEY_IS_DOWN or keys.get(p.B3G_UP_ARROW) == p.KEY_IS_DOWN:
+            self.debug_camera_target += forward * move_speed
+            moved = True
+        
+        # S or Down Arrow - move backward
+        if keys.get(ord('s')) == p.KEY_IS_DOWN or keys.get(p.B3G_DOWN_ARROW) == p.KEY_IS_DOWN:
+            self.debug_camera_target -= forward * move_speed
+            moved = True
+        
+        # A or Left Arrow - move left
+        if keys.get(ord('a')) == p.KEY_IS_DOWN or keys.get(p.B3G_LEFT_ARROW) == p.KEY_IS_DOWN:
+            self.debug_camera_target -= right * move_speed
+            moved = True
+        
+        # D or Right Arrow - move right
+        if keys.get(ord('d')) == p.KEY_IS_DOWN or keys.get(p.B3G_RIGHT_ARROW) == p.KEY_IS_DOWN:
+            self.debug_camera_target += right * move_speed
+            moved = True
+        
+        # Q - move up
+        if keys.get(ord('q')) == p.KEY_IS_DOWN:
+            self.debug_camera_target += up * move_speed
+            moved = True
+        
+        # E - move down
+        if keys.get(ord('e')) == p.KEY_IS_DOWN:
+            self.debug_camera_target -= up * move_speed
+            moved = True
+        
+        # R - zoom in
+        if keys.get(ord('r')) == p.KEY_IS_DOWN:
+            self.debug_camera_distance = max(0.3, self.debug_camera_distance - zoom_speed)
+            moved = True
+        
+        # F - zoom out
+        if keys.get(ord('f')) == p.KEY_IS_DOWN:
+            self.debug_camera_distance = min(5.0, self.debug_camera_distance + zoom_speed)
+            moved = True
+        
+        # Update camera if any key was pressed
+        if moved:
+            p.resetDebugVisualizerCamera(
+                cameraDistance=self.debug_camera_distance,
+                cameraYaw=self.debug_camera_yaw,
+                cameraPitch=self.debug_camera_pitch,
+                cameraTargetPosition=self.debug_camera_target
+            )
+        
+        return moved
+    
+    def set_debug_camera(self, distance: float = None, yaw: float = None, 
+                         pitch: float = None, target: np.ndarray = None):
+        """
+        Set the debug camera view.
+        
+        Args:
+            distance: Distance from target
+            yaw: Horizontal rotation in degrees
+            pitch: Vertical rotation in degrees
+            target: Target position [x, y, z]
+        """
+        if distance is not None:
+            self.debug_camera_distance = distance
+        if yaw is not None:
+            self.debug_camera_yaw = yaw
+        if pitch is not None:
+            self.debug_camera_pitch = pitch
+        if target is not None:
+            self.debug_camera_target = np.array(target)
+        
+        p.resetDebugVisualizerCamera(
+            cameraDistance=self.debug_camera_distance,
+            cameraYaw=self.debug_camera_yaw,
+            cameraPitch=self.debug_camera_pitch,
+            cameraTargetPosition=self.debug_camera_target
+        )
+
     def step_simulation(self, num_steps: int = 1):
         """Step the simulation forward."""
         for _ in range(num_steps):

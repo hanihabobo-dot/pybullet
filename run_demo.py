@@ -88,21 +88,31 @@ def main():
         
         # Timing constants
         PHASE_WAIT_SECONDS = 0  # Set to 0 for fast, 1.0 for normal
-        FINAL_HOLD_SECONDS = 10
+        FINAL_HOLD_SECONDS = 60  # Increased for keyboard navigation
         ENABLE_FREE_SPACE = True
         
-        # Set camera view
-        table_center = np.array([0.5, 0.0, env.table_surface_height])
-        p.resetDebugVisualizerCamera(
-            cameraDistance=1.5, cameraYaw=45, cameraPitch=-30,
-            cameraTargetPosition=table_center
-        )
+        # Set camera view using the new method
+        env.set_debug_camera(distance=1.5, yaw=45, pitch=-30,
+                            target=np.array([0.5, 0.0, env.table_surface_height]))
+        
+        print("\n=== KEYBOARD CONTROLS ===")
+        print("  W/Up Arrow:    Move forward")
+        print("  S/Down Arrow:  Move backward")
+        print("  A/Left Arrow:  Move left")
+        print("  D/Right Arrow: Move right")
+        print("  Q:             Move up")
+        print("  E:             Move down")
+        print("  R:             Zoom in")
+        print("  F:             Zoom out")
+        print("  Mouse:         Ctrl+Left click to rotate")
+        print("=========================\n")
         
         # Phase 1: Show Objects
         print("Phase 1: Objects")
         env.draw_boxels(obj_boxels, duration=0)
         for _ in range(int(240 * PHASE_WAIT_SECONDS)): 
             env.step_simulation()
+            env.handle_keyboard_camera()
             time.sleep(1.0/240.0)
             
         # Phase 2: Show Shadows
@@ -110,6 +120,7 @@ def main():
         env.draw_boxels(all_known, duration=0)
         for _ in range(int(240 * PHASE_WAIT_SECONDS)):
             env.step_simulation()
+            env.handle_keyboard_camera()
             time.sleep(1.0/240.0)
             
         # Phase 3: Generate Free Space
@@ -124,12 +135,14 @@ def main():
         print("Phase 4: Hold Result")
         for _ in range(int(240 * PHASE_WAIT_SECONDS * 3)):
             env.step_simulation()
+            env.handle_keyboard_camera()
             time.sleep(1.0/240.0)
             
-        # Phase 5: Keep window open
-        print(f"Visualization complete. Keeping window open for {FINAL_HOLD_SECONDS} seconds...")
+        # Phase 5: Keep window open with keyboard navigation
+        print(f"Visualization complete. Use WASD/Arrow keys to navigate. Window stays open for {FINAL_HOLD_SECONDS} seconds...")
         for _ in range(int(240 * FINAL_HOLD_SECONDS)):
             env.step_simulation()
+            env.handle_keyboard_camera()
             time.sleep(1.0/240.0)
             
     except KeyboardInterrupt:
