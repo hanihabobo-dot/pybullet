@@ -21,7 +21,7 @@ class FreeSpaceGenerator:
     until reaching a minimum resolution.
     """
     
-    def __init__(self, table_surface_height: float, min_resolution: float = 0.05):
+    def __init__(self, table_surface_height: float, min_resolution: float = 0.035):
         """
         Initialize the free space generator.
         

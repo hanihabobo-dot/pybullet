@@ -88,7 +88,7 @@ def main():
         
         # Timing constants
         PHASE_WAIT_SECONDS = 0  # Set to 0 for fast, 1.0 for normal
-        BOXEL_FILL_OPACITY = 0.1  # Opacity for filled boxels (0.0 = invisible, 1.0 = solid)
+        BOXEL_FILL_OPACITY = 0.07  # Opacity for filled boxels (0.0 = invisible, 1.0 = solid)
         FINAL_HOLD_SECONDS = 60  # Increased for keyboard navigation
         ENABLE_FREE_SPACE = True
         

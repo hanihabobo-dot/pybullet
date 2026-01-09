@@ -55,8 +55,21 @@ class CellMerger:
             current_boxels = merged_boxels
             print(f"  Merge iteration {iteration + 1}: {num_merges} merges, {len(current_boxels)} boxels remaining")
         
-        print(f"  Merging complete: {len(free_boxels)} -> {len(current_boxels)} boxels")
-        return current_boxels
+        # Convert all remaining boxels to "merged" status (green, not cyan)
+        # This ensures any unmerged leftover boxels also become green
+        final_boxels = []
+        for boxel in current_boxels:
+            final_boxels.append(Boxel(
+                center=boxel.center,
+                extent=boxel.extent,
+                object_name="free_space_merged",
+                is_occluded=False,
+                is_shadow=False,
+                is_free=False  # Not cyan anymore - will render as green
+            ))
+        
+        print(f"  Merging complete: {len(free_boxels)} -> {len(final_boxels)} boxels")
+        return final_boxels
     
     def _merge_pass(self, boxels: List[Boxel]) -> Tuple[List[Boxel], int]:
         """
