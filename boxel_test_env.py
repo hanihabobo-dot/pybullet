@@ -739,7 +739,7 @@ class BoxelTestEnv:
         
         filtered_fragments = []
         for frag in fragments:
-            if not self._is_downstream(frag, obstacle, direction):
+            if frag is not None and not self._is_downstream(frag, obstacle, direction):
                 filtered_fragments.append(frag)
                 
         return filtered_fragments
@@ -747,9 +747,10 @@ class BoxelTestEnv:
     def _create_boxel_from_bounds(self, min_pt, max_pt, template_boxel):
         center = (min_pt + max_pt) / 2.0
         extent = (max_pt - min_pt) / 2.0
-        # Sanity check for negative dimensions
-        if np.any(extent <= 0):
-            return None # Should not happen with logic above but safe to ignore
+        # Sanity check for negative or very small dimensions (minimum 1mm)
+        MIN_EXTENT = 0.001  # 1mm minimum size
+        if np.any(extent <= 0) or np.any(extent < MIN_EXTENT):
+            return None  # Filter out degenerate/tiny boxels
             
         return Boxel(
             center=center,
@@ -1534,6 +1535,25 @@ def main():
         obj_boxels = [b for b in all_known if not b.is_shadow]
         shadow_boxels = [b for b in all_known if b.is_shadow]
         
+        # DEBUG: Print all boxels to find the weird blue line
+        print("\n=== DEBUG: All Generated Boxels ===")
+        for i, b in enumerate(all_known):
+            boxel_type = "SHADOW" if b.is_shadow else "OBJECT"
+            print(f"  [{i}] {boxel_type}: {b.object_name}")
+            print(f"       center: {b.center}")
+            print(f"       extent: {b.extent}")
+            # Flag suspicious boxels (very thin in any dimension)
+            if np.any(b.extent < 0.01):
+                print(f"       *** WARNING: Very thin boxel! ***")
+            if np.any(b.extent > 1.0):
+                print(f"       *** WARNING: Very large extent! ***")
+        print("=== END DEBUG ===\n")
+        
+        # Timing constants
+        PHASE_WAIT_SECONDS = 0  # Set to 0 for fast debug, 1.0 for normal viewing
+        FINAL_HOLD_SECONDS = 10  # How long to keep window open at end
+        ENABLE_FREE_SPACE = True  # Whether to run free space discretization
+        
         # Set camera to view the table clearly
         table_center = np.array([0.5, 0.0, env.table_surface_height])
         p.resetDebugVisualizerCamera(
@@ -1543,42 +1563,39 @@ def main():
             cameraTargetPosition=table_center
         )
         
-        # Phase 1: Show Objects (1 second)
+        # Phase 1: Show Objects
         print("Phase 1: Objects")
         env.draw_boxels(obj_boxels, duration=0)
-        # Step simulation to keep GUI responsive
-        for _ in range(240): 
+        for _ in range(int(240 * PHASE_WAIT_SECONDS)): 
             env.step_simulation()
             time.sleep(1.0/240.0)
             
-        # Phase 2: Show Shadows (1 second)
+        # Phase 2: Show Shadows
         print("Phase 2: Shadows")
         env.draw_boxels(all_known, duration=0)
-        for _ in range(240):
+        for _ in range(int(240 * PHASE_WAIT_SECONDS)):
             env.step_simulation()
             time.sleep(1.0/240.0)
             
-        # Phase 3: Generate Free Space (Animated 1s per step)
-        # print("Phase 3: Free Space Discretization")
-        # # Clear everything before starting Phase 3
-        # env.clear_all_debug_items()
-        # # Draw known boxels once at the start
-        # env.draw_boxels(all_known, duration=0, clear_previous=True)
-        # # generate_free_space handles the drawing and sleeping internally if visualize=True
-        # # It will accumulate cyan boxels and update yellow candidates
-        # free_boxels = env.generate_free_space(all_known, visualize=True)
+        # Phase 3: Generate Free Space
+        print("Phase 3: Free Space Discretization")
+        env.clear_all_debug_items()
+        env.draw_boxels(all_known, duration=0, clear_previous=True)
+        if ENABLE_FREE_SPACE:
+            # Run discretization (visualize=False for speed, we'll draw results after)
+            free_boxels = env.generate_free_space(all_known, visualize=False)
+            # Draw the final free space boxels
+            env.draw_boxels(all_known + free_boxels, duration=0, clear_previous=True)
         
-        # Final view is already drawn (no need to redraw - it's already accumulated)
-        
-        # Phase 4: Wait 3 seconds
+        # Phase 4: Hold Result
         print("Phase 4: Hold Result")
-        for _ in range(240 * 3):
+        for _ in range(int(240 * PHASE_WAIT_SECONDS * 3)):
             env.step_simulation()
             time.sleep(1.0/240.0)
             
-        # Phase 5: Keep window open
-        print("Visualization complete. Keeping window open.")
-        while True:
+        # Phase 5: Keep window open for FINAL_HOLD_SECONDS
+        print(f"Visualization complete. Keeping window open for {FINAL_HOLD_SECONDS} seconds...")
+        for _ in range(int(240 * FINAL_HOLD_SECONDS)):
             env.step_simulation()
             time.sleep(1.0/240.0)
             
