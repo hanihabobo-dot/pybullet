@@ -68,7 +68,7 @@ class BoxelData:
     # === REACHABILITY & MANIPULATION ===
     is_reachable: bool = True                   # Can robot gripper reach?
     is_observable: bool = True                  # Can camera see this boxel?
-    blocking_boxels: List[str] = field(default_factory=list)  # What blocks the view?
+    # Note: blocking_boxels removed - use created_by_boxel_id for shadows
     
     @property
     def center(self) -> np.ndarray:
@@ -111,7 +111,6 @@ class BoxelData:
             "last_observation_time": self.last_observation_time,
             "is_reachable": self.is_reachable,
             "is_observable": self.is_observable,
-            "blocking_boxels": self.blocking_boxels,
         }
     
     @classmethod
@@ -137,7 +136,6 @@ class BoxelData:
             last_observation_time=data.get("last_observation_time"),
             is_reachable=data.get("is_reachable", True),
             is_observable=data.get("is_observable", True),
-            blocking_boxels=data.get("blocking_boxels", []),
         )
 
 
@@ -395,6 +393,9 @@ def create_boxel_registry_from_boxels(boxels, table_surface_height: float) -> Bo
         min_corner = boxel.center - boxel.extent
         max_corner = boxel.center + boxel.extent
         
+        # observed = True for objects and free space (visible), False for shadows (occluded)
+        is_observed = (boxel_type != BoxelType.SHADOW)
+        
         boxel_data = BoxelData(
             id=boxel_id,
             boxel_type=boxel_type,
@@ -405,6 +406,7 @@ def create_boxel_registry_from_boxels(boxels, table_surface_height: float) -> Bo
             created_by_object=parent_object_name,  # For shadow boxels
             on_surface="table" if min_corner[2] <= table_surface_height + 0.01 else None,
             surface_z=table_surface_height,
+            observed=is_observed,  # Objects and free space are observed, shadows are not
         )
         
         registry.add_boxel(boxel_data)
