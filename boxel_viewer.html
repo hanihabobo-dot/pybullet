@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boxel Data Viewer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a2e; 
+            color: #eee;
+            overflow: hidden;
+        }
+        #container { width: 100vw; height: 100vh; }
+        
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.8);
+            padding: 20px;
+            border-radius: 12px;
+            max-width: 320px;
+            border: 1px solid #333;
+        }
+        
+        #controls h2 {
+            margin-bottom: 15px;
+            color: #4ecdc4;
+            font-size: 1.2em;
+        }
+        
+        .control-group {
+            margin-bottom: 15px;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+            color: #aaa;
+        }
+        
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .checkbox-item input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: #4ecdc4;
+        }
+        
+        .legend {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #333;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border: 1px solid #555;
+        }
+        
+        #stats {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            padding: 15px 20px;
+            border-radius: 12px;
+            border: 1px solid #333;
+        }
+        
+        #stats h3 {
+            color: #4ecdc4;
+            margin-bottom: 10px;
+        }
+        
+        #stats p {
+            margin: 5px 0;
+            font-size: 0.9em;
+        }
+        
+        #info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.8);
+            padding: 15px 20px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            max-width: 400px;
+            display: none;
+        }
+        
+        #info h3 {
+            color: #ff6b6b;
+            margin-bottom: 10px;
+        }
+        
+        #info pre {
+            font-size: 0.75em;
+            white-space: pre-wrap;
+            color: #ccc;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        input[type="range"] {
+            flex: 1;
+            accent-color: #4ecdc4;
+        }
+        
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            padding: 15px 20px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            font-size: 0.85em;
+        }
+        
+        #instructions h4 {
+            color: #4ecdc4;
+            margin-bottom: 8px;
+        }
+        
+        #instructions p {
+            margin: 3px 0;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+    
+    <div id="controls">
+        <h2>🔲 Boxel Viewer</h2>
+        
+        <div class="control-group">
+            <label>Show Boxel Types:</label>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="showObjects" checked>
+                    <label for="showObjects">Objects</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="showShadows" checked>
+                    <label for="showShadows">Shadows</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="showFreeSpace" checked>
+                    <label for="showFreeSpace">Free Space</label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <label>Object Opacity: <span id="objectOpacityValue">0.5</span></label>
+            <div class="slider-container">
+                <input type="range" id="objectOpacity" min="0" max="1" step="0.05" value="0.5">
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <label>Shadow Opacity: <span id="shadowOpacityValue">0.3</span></label>
+            <div class="slider-container">
+                <input type="range" id="shadowOpacity" min="0" max="1" step="0.05" value="0.3">
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <label>Free Space Opacity: <span id="freeSpaceOpacityValue">0.2</span></label>
+            <div class="slider-container">
+                <input type="range" id="freeSpaceOpacity" min="0" max="1" step="0.05" value="0.2">
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <div class="checkbox-item">
+                <input type="checkbox" id="showEdges" checked>
+                <label for="showEdges">Show Edges</label>
+            </div>
+            <div class="checkbox-item">
+                <input type="checkbox" id="showNeighborLines">
+                <label for="showNeighborLines">Show Neighbor Connections</label>
+            </div>
+        </div>
+        
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: #ff4444;"></div>
+                <span>Object (Occluder)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #4444ff;"></div>
+                <span>Object (Non-occluder)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #888888;"></div>
+                <span>Shadow</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #00ff88;"></div>
+                <span>Free Space</span>
+            </div>
+        </div>
+    </div>
+    
+    <div id="stats">
+        <h3>📊 Statistics</h3>
+        <p>Total: <span id="totalCount">-</span></p>
+        <p>Objects: <span id="objectCount">-</span></p>
+        <p>Shadows: <span id="shadowCount">-</span></p>
+        <p>Free Space: <span id="freeCount">-</span></p>
+    </div>
+    
+    <div id="info">
+        <h3>Selected Boxel</h3>
+        <pre id="infoContent"></pre>
+    </div>
+    
+    <div id="instructions">
+        <h4>🎮 Controls</h4>
+        <p>Left Click + Drag: Rotate</p>
+        <p>Right Click + Drag: Pan</p>
+        <p>Scroll: Zoom</p>
+        <p>Click Boxel: Show Details</p>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <script>
+        let scene, camera, renderer, controls;
+        let boxelMeshes = [];
+        let edgeMeshes = [];
+        let neighborLines = [];
+        let boxelData = null;
+        
+        // Colors matching PyBullet visualization
+        const COLORS = {
+            object_occluder: 0xff4444,    // Red
+            object_non_occluder: 0x4444ff, // Blue
+            shadow: 0x888888,              // Gray
+            free_space: 0x00ff88           // Green
+        };
+        
+        async function init() {
+            // Scene setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a2e);
+            
+            // Camera - match PyBullet's view
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 100);
+            camera.position.set(0.5, -1.5, 1.2);
+            camera.lookAt(0.5, 0, 0.4);
+            
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.getElementById('container').appendChild(renderer.domElement);
+            
+            // Controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.target.set(0.5, 0, 0.4);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, -1, 2);
+            scene.add(directionalLight);
+            
+            // Grid (table surface)
+            const gridHelper = new THREE.GridHelper(2, 20, 0x444444, 0x333333);
+            gridHelper.position.set(0.5, 0, 0.325);
+            gridHelper.rotation.x = Math.PI / 2;
+            scene.add(gridHelper);
+            
+            // Axes helper
+            const axesHelper = new THREE.AxesHelper(0.3);
+            axesHelper.position.set(0, 0, 0.325);
+            scene.add(axesHelper);
+            
+            // Load boxel data
+            await loadBoxelData();
+            
+            // Setup event listeners
+            setupEventListeners();
+            
+            // Start animation
+            animate();
+        }
+        
+        async function loadBoxelData() {
+            try {
+                const response = await fetch('boxel_data.json');
+                boxelData = await response.json();
+                
+                // Update stats
+                document.getElementById('totalCount').textContent = boxelData.summary.total;
+                document.getElementById('objectCount').textContent = boxelData.summary.objects;
+                document.getElementById('shadowCount').textContent = boxelData.summary.shadows;
+                document.getElementById('freeCount').textContent = boxelData.summary.free_space;
+                
+                createBoxelMeshes();
+            } catch (error) {
+                console.error('Error loading boxel_data.json:', error);
+                alert('Error loading boxel_data.json. Make sure the file exists in the same directory.');
+            }
+        }
+        
+        function getBoxelColor(boxel) {
+            if (boxel.boxel_type === 'object') {
+                return boxel.is_occluder ? COLORS.object_occluder : COLORS.object_non_occluder;
+            } else if (boxel.boxel_type === 'shadow') {
+                return COLORS.shadow;
+            } else {
+                return COLORS.free_space;
+            }
+        }
+        
+        function getOpacityForBoxel(boxel) {
+            if (boxel.boxel_type === 'object') {
+                return parseFloat(document.getElementById('objectOpacity').value);
+            } else if (boxel.boxel_type === 'shadow') {
+                return parseFloat(document.getElementById('shadowOpacity').value);
+            } else {
+                return parseFloat(document.getElementById('freeSpaceOpacity').value);
+            }
+        }
+        
+        function createBoxelMeshes() {
+            // Clear existing meshes
+            boxelMeshes.forEach(m => scene.remove(m.mesh));
+            edgeMeshes.forEach(m => scene.remove(m));
+            neighborLines.forEach(l => scene.remove(l));
+            boxelMeshes = [];
+            edgeMeshes = [];
+            neighborLines = [];
+            
+            const showEdges = document.getElementById('showEdges').checked;
+            
+            boxelData.boxels.forEach(boxel => {
+                const color = getBoxelColor(boxel);
+                const opacity = getOpacityForBoxel(boxel);
+                
+                // Create geometry
+                const geometry = new THREE.BoxGeometry(
+                    boxel.extent[0] * 2,
+                    boxel.extent[1] * 2,
+                    boxel.extent[2] * 2
+                );
+                
+                // Create material
+                const material = new THREE.MeshPhongMaterial({
+                    color: color,
+                    transparent: true,
+                    opacity: opacity,
+                    side: THREE.DoubleSide
+                });
+                
+                // Create mesh
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(boxel.center[0], boxel.center[1], boxel.center[2]);
+                mesh.userData = boxel;
+                
+                scene.add(mesh);
+                boxelMeshes.push({ mesh, boxel, visible: true });
+                
+                // Create edges
+                if (showEdges) {
+                    const edgesGeometry = new THREE.EdgesGeometry(geometry);
+                    const edgesMaterial = new THREE.LineBasicMaterial({ 
+                        color: color,
+                        transparent: true,
+                        opacity: Math.min(opacity + 0.3, 1)
+                    });
+                    const edges = new THREE.LineSegments(edgesGeometry, edgesMaterial);
+                    edges.position.copy(mesh.position);
+                    scene.add(edges);
+                    edgeMeshes.push(edges);
+                }
+            });
+            
+            updateVisibility();
+            updateNeighborLines();
+        }
+        
+        function updateNeighborLines() {
+            // Remove existing lines
+            neighborLines.forEach(l => scene.remove(l));
+            neighborLines = [];
+            
+            if (!document.getElementById('showNeighborLines').checked) return;
+            
+            const boxelMap = {};
+            boxelData.boxels.forEach(b => boxelMap[b.id] = b);
+            
+            const material = new THREE.LineBasicMaterial({ 
+                color: 0xffff00,
+                transparent: true,
+                opacity: 0.3
+            });
+            
+            boxelData.boxels.forEach(boxel => {
+                const from = new THREE.Vector3(boxel.center[0], boxel.center[1], boxel.center[2]);
+                
+                Object.values(boxel.neighbor_ids).forEach(neighborIds => {
+                    neighborIds.forEach(neighborId => {
+                        const neighbor = boxelMap[neighborId];
+                        if (neighbor && boxel.id < neighborId) { // Avoid duplicate lines
+                            const to = new THREE.Vector3(neighbor.center[0], neighbor.center[1], neighbor.center[2]);
+                            const geometry = new THREE.BufferGeometry().setFromPoints([from, to]);
+                            const line = new THREE.Line(geometry, material);
+                            scene.add(line);
+                            neighborLines.push(line);
+                        }
+                    });
+                });
+            });
+        }
+        
+        function updateVisibility() {
+            const showObjects = document.getElementById('showObjects').checked;
+            const showShadows = document.getElementById('showShadows').checked;
+            const showFreeSpace = document.getElementById('showFreeSpace').checked;
+            
+            boxelMeshes.forEach(({ mesh, boxel }, i) => {
+                let visible = false;
+                if (boxel.boxel_type === 'object') visible = showObjects;
+                else if (boxel.boxel_type === 'shadow') visible = showShadows;
+                else visible = showFreeSpace;
+                
+                mesh.visible = visible;
+                if (edgeMeshes[i]) edgeMeshes[i].visible = visible;
+            });
+        }
+        
+        function updateOpacity() {
+            const objectOpacity = parseFloat(document.getElementById('objectOpacity').value);
+            const shadowOpacity = parseFloat(document.getElementById('shadowOpacity').value);
+            const freeSpaceOpacity = parseFloat(document.getElementById('freeSpaceOpacity').value);
+            
+            document.getElementById('objectOpacityValue').textContent = objectOpacity.toFixed(2);
+            document.getElementById('shadowOpacityValue').textContent = shadowOpacity.toFixed(2);
+            document.getElementById('freeSpaceOpacityValue').textContent = freeSpaceOpacity.toFixed(2);
+            
+            boxelMeshes.forEach(({ mesh, boxel }, i) => {
+                const opacity = getOpacityForBoxel(boxel);
+                mesh.material.opacity = opacity;
+                
+                if (edgeMeshes[i]) {
+                    edgeMeshes[i].material.opacity = Math.min(opacity + 0.3, 1);
+                }
+            });
+        }
+        
+        function setupEventListeners() {
+            document.getElementById('showObjects').addEventListener('change', updateVisibility);
+            document.getElementById('showShadows').addEventListener('change', updateVisibility);
+            document.getElementById('showFreeSpace').addEventListener('change', updateVisibility);
+            document.getElementById('objectOpacity').addEventListener('input', updateOpacity);
+            document.getElementById('shadowOpacity').addEventListener('input', updateOpacity);
+            document.getElementById('freeSpaceOpacity').addEventListener('input', updateOpacity);
+            document.getElementById('showEdges').addEventListener('change', createBoxelMeshes);
+            document.getElementById('showNeighborLines').addEventListener('change', updateNeighborLines);
+            
+            // Raycaster for clicking
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2();
+            
+            renderer.domElement.addEventListener('click', (event) => {
+                mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+                
+                raycaster.setFromCamera(mouse, camera);
+                const visibleMeshes = boxelMeshes.filter(m => m.mesh.visible).map(m => m.mesh);
+                const intersects = raycaster.intersectObjects(visibleMeshes);
+                
+                const infoPanel = document.getElementById('info');
+                const infoContent = document.getElementById('infoContent');
+                
+                if (intersects.length > 0) {
+                    const boxel = intersects[0].object.userData;
+                    infoPanel.style.display = 'block';
+                    infoContent.textContent = JSON.stringify(boxel, null, 2);
+                } else {
+                    infoPanel.style.display = 'none';
+                }
+            });
+            
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        
+        init();
+    </script>
+</body>
+</html>
