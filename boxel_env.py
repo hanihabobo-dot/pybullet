@@ -222,7 +222,7 @@ class BoxelTestEnv:
         boxels = []
         solid_boxels = []
         
-        # Generate object boxels
+        # Generate object boxels (initially not marked as occluders)
         for obj_name in visible_objects:
             if obj_name not in self.objects:
                 continue
@@ -234,16 +234,22 @@ class BoxelTestEnv:
             extent = (np.array(aabb_max) - np.array(aabb_min)) / 2.0
             
             obj_boxel = Boxel(center=center, extent=extent, object_name=obj_name,
-                             is_occluded=False, is_shadow=False)
+                             is_occluded=False, is_shadow=False, is_occluder=False)
             solid_boxels.append(obj_boxel)
-            
-        boxels.extend(solid_boxels)
 
-        # Generate shadow boxels
+        # Generate shadow boxels and mark objects as occluders if they cast shadows
         for obj_boxel in solid_boxels:
             obstacles = [b for b in solid_boxels if b.object_name != obj_boxel.object_name]
             shadow_parts = self.shadow_calculator.calculate_shadow_boxel(obj_boxel, obstacles)
+            
+            # If this object casts any shadows, mark it as an occluder
+            if shadow_parts:
+                obj_boxel.is_occluder = True
+            
             boxels.extend(shadow_parts)
+        
+        # Add all object boxels (now with correct is_occluder status)
+        boxels.extend(solid_boxels)
             
         return boxels
     

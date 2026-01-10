@@ -41,6 +41,7 @@ class Boxel:
     is_shadow: bool = False  # Is this a shadow/occlusion region cast by another object?
     is_free: bool = False  # Is this boxel representing known free space?
     is_candidate: bool = False  # Is this a candidate node currently being processed?
+    is_occluder: bool = False  # Does this object boxel cast shadows (occlude other regions)?
 
 
 class OctreeNode:

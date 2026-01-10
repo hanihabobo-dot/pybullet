@@ -101,17 +101,19 @@ class BoxelVisualizer:
     def _get_boxel_color(self, boxel: Boxel) -> List[float]:
         """Get the color for a boxel based on its type."""
         if boxel.is_candidate:
-            return [1, 1, 0]  # Yellow
+            return [1, 1, 0]  # Yellow - being processed
         elif boxel.is_shadow:
-            return [0.5, 0.5, 0.5]  # Gray
+            return [0.5, 0.5, 0.5]  # Gray - shadow/occluded region
         elif boxel.is_free:
-            return [0, 1, 1]  # Cyan
-        elif boxel.object_name and boxel.object_name.startswith("occluder"):
-            return [1, 0, 0]  # Red
-        elif boxel.object_name and boxel.object_name.startswith("target"):
-            return [0, 0, 1]  # Blue
+            return [0, 1, 1]  # Cyan - free space (before merge)
+        elif boxel.object_name and boxel.object_name.startswith("free_space"):
+            return [0, 1, 0]  # Green - merged free space
+        elif boxel.is_occluder:
+            return [1, 0, 0]  # Red - object that casts shadows (occluding something)
+        elif boxel.object_name:
+            return [0, 0, 1]  # Blue - object that doesn't occlude anything
         else:
-            return [0, 1, 0]  # Green
+            return [0, 1, 0]  # Green - fallback
     
     def _draw_boxel_phantom(self, center, extent, color, opacity):
         """Draw a semi-transparent phantom object for boxel visualization."""
