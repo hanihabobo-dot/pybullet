@@ -1,0 +1,2756 @@
+{
+  "boxels": [
+    {
+      "id": "shadow_000",
+      "boxel_type": "shadow",
+      "min_corner": [
+        0.26597110172824134,
+        0.2754533563428925,
+        0.32499999999999996
+      ],
+      "max_corner": [
+        0.7338967268523997,
+        0.5,
+        0.47499022805002267
+      ],
+      "center": [
+        0.4999339142903205,
+        0.38772667817144624,
+        0.3999951140250113
+      ],
+      "extent": [
+        0.23396281256207918,
+        0.11227332182855376,
+        0.07499511402501136
+      ],
+      "volume": 0.015759642540604787,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": "obj_006",
+      "created_by_object": "occluder_1",
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "shadow_001",
+      "boxel_type": "shadow",
+      "min_corner": [
+        0.5751843559555676,
+        -0.02454428908939149,
+        0.325
+      ],
+      "max_corner": [
+        0.791961795018761,
+        0.49237099615469665,
+        0.47499039172442853
+      ],
+      "center": [
+        0.6835730754871643,
+        0.23391335353265258,
+        0.39999519586221427
+      ],
+      "extent": [
+        0.10838871953159668,
+        0.25845764262204407,
+        0.07499519586221426
+      ],
+      "volume": 0.016807259101362354,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": "obj_007",
+      "created_by_object": "occluder_2",
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "shadow_002",
+      "boxel_type": "shadow",
+      "min_corner": [
+        0.5247655649782359,
+        -0.02454428908939149,
+        0.325
+      ],
+      "max_corner": [
+        0.5751843559555676,
+        0.12503820013479194,
+        0.47499039172442853
+      ],
+      "center": [
+        0.5499749604669018,
+        0.050246955522700226,
+        0.39999519586221427
+      ],
+      "extent": [
+        0.025209395488665853,
+        0.07479124461209172,
+        0.07499519586221426
+      ],
+      "volume": 0.0011311927753217418,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": "obj_007",
+      "created_by_object": "occluder_2",
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "shadow_003",
+      "boxel_type": "shadow",
+      "min_corner": [
+        0.2083405093964319,
+        -0.1253885386068173,
+        0.32500000000000007
+      ],
+      "max_corner": [
+        0.42477315852881925,
+        0.3243038104411791,
+        0.47499026893525
+      ],
+      "center": [
+        0.3165568339626256,
+        0.0994576359171809,
+        0.399995134467625
+      ],
+      "extent": [
+        0.10821632456619368,
+        0.22484617452399822,
+        0.07499513446762496
+      ],
+      "volume": 0.01459826885374824,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": "obj_008",
+      "created_by_object": "occluder_3",
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "shadow_004",
+      "boxel_type": "shadow",
+      "min_corner": [
+        0.42477315852881925,
+        -0.1253885386068173,
+        0.32500000000000007
+      ],
+      "max_corner": [
+        0.47499976013297407,
+        0.12503820013479194,
+        0.47499026893525
+      ],
+      "center": [
+        0.44988645933089666,
+        -0.00017516923601268442,
+        0.399995134467625
+      ],
+      "extent": [
+        0.02511330080207741,
+        0.12521336937080463,
+        0.07499513446762496
+      ],
+      "volume": 0.0018865902075201819,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": "obj_008",
+      "created_by_object": "occluder_3",
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "shadow_005",
+      "boxel_type": "shadow",
+      "min_corner": [
+        0.6751845576762774,
+        -0.16749168072874132,
+        0.32499999999999996
+      ],
+      "max_corner": [
+        0.8108869706090838,
+        0.00401321041053776,
+        0.40499163862542753
+      ],
+      "center": [
+        0.7430357641426806,
+        -0.08173923515910178,
+        0.36499581931271374
+      ],
+      "extent": [
+        0.06785120646640319,
+        0.08575244556963954,
+        0.03999581931271379
+      ],
+      "volume": 0.0018616956050726103,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": "obj_009",
+      "created_by_object": "target_4",
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "obj_006",
+      "boxel_type": "object",
+      "min_corner": [
+        0.42477315852881925,
+        0.12503820013479194,
+        0.3249861848844837
+      ],
+      "max_corner": [
+        0.5751843559555677,
+        0.2754533563428925,
+        0.47499022805002267
+      ],
+      "center": [
+        0.4999787572421935,
+        0.2002457782388422,
+        0.3999882064672532
+      ],
+      "extent": [
+        0.07520559871337423,
+        0.07520757810405027,
+        0.07500202158276947
+      ],
+      "volume": 0.003393710036536294,
+      "object_name": "occluder_1",
+      "is_occluder": true,
+      "shadow_boxel_ids": [
+        "shadow_000"
+      ],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "obj_007",
+      "boxel_type": "object",
+      "min_corner": [
+        0.524765564978236,
+        -0.1749661248031882,
+        0.3249872341501347
+      ],
+      "max_corner": [
+        0.6751845576762775,
+        -0.02454428908939152,
+        0.47499039172442853
+      ],
+      "center": [
+        0.5999750613272568,
+        -0.09975520694628986,
+        0.3999888129372816
+      ],
+      "extent": [
+        0.07520949634902074,
+        0.07521091785689835,
+        0.07500157878714692
+      ],
+      "volume": 0.0033940165954053645,
+      "object_name": "occluder_2",
+      "is_occluder": true,
+      "shadow_boxel_ids": [
+        "shadow_001",
+        "shadow_002"
+      ],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "obj_008",
+      "boxel_type": "object",
+      "min_corner": [
+        0.3249967372181577,
+        -0.2753963494727035,
+        0.3249854647916719
+      ],
+      "max_corner": [
+        0.47499976013297407,
+        -0.1253885386068173,
+        0.47499026893525
+      ],
+      "center": [
+        0.3999982486755659,
+        -0.20039244403976042,
+        0.39998786686346094
+      ],
+      "extent": [
+        0.07500151145740819,
+        0.07500390543294311,
+        0.07500240207178904
+      ],
+      "volume": 0.0033753518646452213,
+      "object_name": "occluder_3",
+      "is_occluder": true,
+      "shadow_boxel_ids": [
+        "shadow_003",
+        "shadow_004"
+      ],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "obj_009",
+      "boxel_type": "object",
+      "min_corner": [
+        0.6558353432111277,
+        -0.25624570518078926,
+        0.32497124077454087
+      ],
+      "max_corner": [
+        0.744571348725575,
+        -0.16749168072874132,
+        0.40499163862542753
+      ],
+      "center": [
+        0.7002033459683513,
+        -0.2118686929547653,
+        0.3649814396999842
+      ],
+      "extent": [
+        0.044368002757223635,
+        0.04437701222602397,
+        0.04001019892544333
+      ],
+      "volume": 0.0006302148551538868,
+      "object_name": "target_4",
+      "is_occluder": true,
+      "shadow_boxel_ids": [
+        "shadow_005"
+      ],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_010",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.0,
+        -0.5,
+        0.575
+      ],
+      "max_corner": [
+        1.0,
+        0.5,
+        0.825
+      ],
+      "center": [
+        0.5,
+        0.0,
+        0.7
+      ],
+      "extent": [
+        0.5,
+        0.5,
+        0.125
+      ],
+      "volume": 0.25,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_011",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.0,
+        -0.5,
+        0.32499999999999996
+      ],
+      "max_corner": [
+        0.25,
+        -0.25,
+        0.575
+      ],
+      "center": [
+        0.125,
+        -0.375,
+        0.44999999999999996
+      ],
+      "extent": [
+        0.125,
+        0.125,
+        0.125
+      ],
+      "volume": 0.015625,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_012",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.5,
+        -0.5,
+        0.44999999999999996
+      ],
+      "max_corner": [
+        1.0,
+        -0.25,
+        0.575
+      ],
+      "center": [
+        0.75,
+        -0.375,
+        0.5125
+      ],
+      "extent": [
+        0.25,
+        0.125,
+        0.0625
+      ],
+      "volume": 0.015625,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_013",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.75,
+        -0.5,
+        0.32499999999999996
+      ],
+      "max_corner": [
+        1.0,
+        -0.25,
+        0.44999999999999996
+      ],
+      "center": [
+        0.875,
+        -0.375,
+        0.38749999999999996
+      ],
+      "extent": [
+        0.125,
+        0.125,
+        0.0625
+      ],
+      "volume": 0.0078125,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_014",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.0,
+        -0.25,
+        0.32499999999999996
+      ],
+      "max_corner": [
+        0.125,
+        0.5,
+        0.575
+      ],
+      "center": [
+        0.0625,
+        0.125,
+        0.44999999999999996
+      ],
+      "extent": [
+        0.0625,
+        0.375,
+        0.125
+      ],
+      "volume": 0.0234375,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_015",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.125,
+        -0.25,
+        0.5125
+      ],
+      "max_corner": [
+        0.625,
+        0.5,
+        0.575
+      ],
+      "center": [
+        0.375,
+        0.125,
+        0.54375
+      ],
+      "extent": [
+        0.25,
+        0.375,
+        0.03125
+      ],
+      "volume": 0.0234375,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_016",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.25,
+        -0.5,
+        0.32499999999999996
+      ],
+      "max_corner": [
+        0.5,
+        -0.375,
+        0.575
+      ],
+      "center": [
+        0.375,
+        -0.4375,
+        0.44999999999999996
+      ],
+      "extent": [
+        0.125,
+        0.0625,
+        0.125
+      ],
+      "volume": 0.0078125,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_017",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.25,
+        -0.375,
+        0.5125
+      ],
+      "max_corner": [
+        0.5,
+        -0.25,
+        0.575
+      ],
+      "center": [
+        0.375,
+        -0.3125,
+        0.54375
+      ],
+      "extent": [
+        0.125,
+        0.0625,
+        0.03125
+      ],
+      "volume": 0.001953125,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_018",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.125,
+        0.375,
+        0.32499999999999996
+      ],
+      "max_corner": [
+        0.25,
+        0.5,
+        0.5125
+      ],
+      "center": [
+        0.1875,
+        0.4375,
+        0.41874999999999996
+      ],
+      "extent": [
+        0.0625,
+        0.0625,
+        0.09375
+      ],
+      "volume": 0.0029296875,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_019",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.5,
+        -0.5,
+        0.32499999999999996
+      ],
+      "max_corner": [
+        0.625,
+        -0.1875,
+        0.44999999999999996
+      ],
+      "center": [
+        0.5625,
+        -0.34375,
+        0.38749999999999996
+      ],
+      "extent": [
+        0.0625,
+        0.15625,
+        0.0625
+      ],
+      "volume": 0.0048828125,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_020",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.625,
+        -0.5,
+        0.32499999999999996
+      ],
+      "max_corner": [
+        0.75,
+        -0.3125,
+        0.44999999999999996
+      ],
+      "center": [
+        0.6875,
+        -0.40625,
+        0.38749999999999996
+      ],
+      "extent": [
+        0.0625,
+        0.09375,
+        0.0625
+      ],
+      "volume": 0.0029296875,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_021",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.625,
+        -0.25,
+        0.48124999999999996
+      ],
+      "max_corner": [
+        0.75,
+        0.25,
+        0.575
+      ],
+      "center": [
+        0.6875,
+        0.0,
+        0.528125
+      ],
+      "extent": [
+        0.0625,
+        0.25,
+        0.046875
+      ],
+      "volume": 0.005859375,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_022",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.875,
+        -0.25,
+        0.32499999999999996
+      ],
+      "max_corner": [
+        1.0,
+        0.5,
+        0.44999999999999996
+      ],
+      "center": [
+        0.9375,
+        0.125,
+        0.38749999999999996
+      ],
+      "extent": [
+        0.0625,
+        0.375,
+        0.0625
+      ],
+      "volume": 0.01171875,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_023",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.75,
+        -0.25,
+        0.44999999999999996
+      ],
+      "max_corner": [
+        1.0,
+        -0.125,
+        0.575
+      ],
+      "center": [
+        0.875,
+        -0.1875,
+        0.5125
+      ],
+      "extent": [
+        0.125,
+        0.0625,
+        0.0625
+      ],
+      "volume": 0.00390625,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_024",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.75,
+        -0.125,
+        0.5125
+      ],
+      "max_corner": [
+        1.0,
+        0.25,
+        0.575
+      ],
+      "center": [
+        0.875,
+        0.0625,
+        0.54375
+      ],
+      "extent": [
+        0.125,
+        0.1875,
+        0.03125
+      ],
+      "volume": 0.005859375,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_025",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.875,
+        -0.125,
+        0.44999999999999996
+      ],
+      "max_corner": [
+        1.0,
+        0.5,
+        0.5125
+      ],
+      "center": [
+        0.9375,
+        0.1875,
+        0.48124999999999996
+      ],
+      "extent": [
+        0.0625,
+        0.3125,
+        0.03125
+      ],
+      "volume": 0.0048828125,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_026",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.625,
+        0.25,
+        0.5125
+      ],
+      "max_corner": [
+        1.0,
+        0.5,
+        0.575
+      ],
+      "center": [
+        0.8125,
+        0.375,
+        0.54375
+      ],
+      "extent": [
+        0.1875,
+        0.125,
+        0.03125
+      ],
+      "volume": 0.005859375,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_027",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.125,
+        -0.25,
+        0.32499999999999996
+      ],
+      "max_corner": [
+        0.1875,
+        0.375,
+        0.5125
+      ],
+      "center": [
+        0.15625,
+        0.0625,
+        0.41874999999999996
+      ],
+      "extent": [
+        0.03125,
+        0.3125,
+        0.09375
+      ],
+      "volume": 0.00732421875,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_028",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.1875,
+        -0.25,
+        0.32499999999999996
+      ],
+      "max_corner": [
+        0.3125,
+        -0.1875,
+        0.5125
+      ],
+      "center": [
+        0.25,
+        -0.21875,
+        0.41874999999999996
+      ],
+      "extent": [
+        0.0625,
+        0.03125,
+        0.09375
+      ],
+      "volume": 0.00146484375,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_029",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.1875,
+        -0.1875,
+        0.48124999999999996
+      ],
+      "max_corner": [
+        0.5,
+        -0.0625,
+        0.5125
+      ],
+      "center": [
+        0.34375,
+        -0.125,
+        0.49687499999999996
+      ],
+      "extent": [
+        0.15625,
+        0.0625,
+        0.015625
+      ],
+      "volume": 0.001220703125,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_030",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.1875,
+        -0.0625,
+        0.48124999999999996
+      ],
+      "max_corner": [
+        0.4375,
+        0.375,
+        0.5125
+      ],
+      "center": [
+        0.3125,
+        0.15625,
+        0.49687499999999996
+      ],
+      "extent": [
+        0.125,
+        0.21875,
+        0.015625
+      ],
+      "volume": 0.00341796875,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_031",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.25,
+        -0.375,
+        0.32499999999999996
+      ],
+      "max_corner": [
+        0.3125,
+        -0.25,
+        0.5125
+      ],
+      "center": [
+        0.28125,
+        -0.3125,
+        0.41874999999999996
+      ],
+      "extent": [
+        0.03125,
+        0.0625,
+        0.09375
+      ],
+      "volume": 0.00146484375,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_032",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.3125,
+        -0.375,
+        0.32499999999999996
+      ],
+      "max_corner": [
+        0.5,
+        -0.3125,
+        0.5125
+      ],
+      "center": [
+        0.40625,
+        -0.34375,
+        0.41874999999999996
+      ],
+      "extent": [
+        0.09375,
+        0.03125,
+        0.09375
+      ],
+      "volume": 0.002197265625,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_033",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.3125,
+        -0.3125,
+        0.48124999999999996
+      ],
+      "max_corner": [
+        0.5,
+        -0.1875,
+        0.5125
+      ],
+      "center": [
+        0.40625,
+        -0.25,
+        0.49687499999999996
+      ],
+      "extent": [
+        0.09375,
+        0.0625,
+        0.015625
+      ],
+      "volume": 0.000732421875,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_034",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.4375,
+        -0.0625,
+        0.48124999999999996
+      ],
+      "max_corner": [
+        0.5,
+        0.4375,
+        0.5125
+      ],
+      "center": [
+        0.46875,
+        0.1875,
+        0.49687499999999996
+      ],
+      "extent": [
+        0.03125,
+        0.25,
+        0.015625
+      ],
+      "volume": 0.0009765625,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_035",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.25,
+        0.375,
+        0.48124999999999996
+      ],
+      "max_corner": [
+        0.4375,
+        0.5,
+        0.5125
+      ],
+      "center": [
+        0.34375,
+        0.4375,
+        0.49687499999999996
+      ],
+      "extent": [
+        0.09375,
+        0.0625,
+        0.015625
+      ],
+      "volume": 0.000732421875,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_036",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.4375,
+        0.4375,
+        0.48124999999999996
+      ],
+      "max_corner": [
+        0.8125,
+        0.5,
+        0.5125
+      ],
+      "center": [
+        0.625,
+        0.46875,
+        0.49687499999999996
+      ],
+      "extent": [
+        0.1875,
+        0.03125,
+        0.015625
+      ],
+      "volume": 0.000732421875,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_037",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.625,
+        -0.3125,
+        0.41874999999999996
+      ],
+      "max_corner": [
+        0.75,
+        -0.25,
+        0.44999999999999996
+      ],
+      "center": [
+        0.6875,
+        -0.28125,
+        0.43437499999999996
+      ],
+      "extent": [
+        0.0625,
+        0.03125,
+        0.015625
+      ],
+      "volume": 0.000244140625,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_038",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.625,
+        -0.25,
+        0.41874999999999996
+      ],
+      "max_corner": [
+        0.75,
+        -0.1875,
+        0.48124999999999996
+      ],
+      "center": [
+        0.6875,
+        -0.21875,
+        0.44999999999999996
+      ],
+      "extent": [
+        0.0625,
+        0.03125,
+        0.03125
+      ],
+      "volume": 0.00048828125,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_039",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.6875,
+        -0.1875,
+        0.41874999999999996
+      ],
+      "max_corner": [
+        0.75,
+        -0.03125,
+        0.48124999999999996
+      ],
+      "center": [
+        0.71875,
+        -0.109375,
+        0.44999999999999996
+      ],
+      "extent": [
+        0.03125,
+        0.078125,
+        0.03125
+      ],
+      "volume": 0.0006103515625,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_040",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.5,
+        -0.25,
+        0.44999999999999996
+      ],
+      "max_corner": [
+        0.625,
+        -0.1875,
+        0.5125
+      ],
+      "center": [
+        0.5625,
+        -0.21875,
+        0.48124999999999996
+      ],
+      "extent": [
+        0.0625,
+        0.03125,
+        0.03125
+      ],
+      "volume": 0.00048828125,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_041",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.5,
+        -0.1875,
+        0.48124999999999996
+      ],
+      "max_corner": [
+        0.625,
+        0.25,
+        0.5125
+      ],
+      "center": [
+        0.5625,
+        0.03125,
+        0.49687499999999996
+      ],
+      "extent": [
+        0.0625,
+        0.21875,
+        0.015625
+      ],
+      "volume": 0.001708984375,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_042",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.75,
+        -0.25,
+        0.32499999999999996
+      ],
+      "max_corner": [
+        0.875,
+        -0.1875,
+        0.44999999999999996
+      ],
+      "center": [
+        0.8125,
+        -0.21875,
+        0.38749999999999996
+      ],
+      "extent": [
+        0.0625,
+        0.03125,
+        0.0625
+      ],
+      "volume": 0.0009765625,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_043",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.8125,
+        -0.1875,
+        0.32499999999999996
+      ],
+      "max_corner": [
+        0.875,
+        -0.0625,
+        0.41874999999999996
+      ],
+      "center": [
+        0.84375,
+        -0.125,
+        0.37187499999999996
+      ],
+      "extent": [
+        0.03125,
+        0.0625,
+        0.046875
+      ],
+      "volume": 0.000732421875,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_044",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.75,
+        -0.1875,
+        0.41874999999999996
+      ],
+      "max_corner": [
+        0.875,
+        -0.125,
+        0.44999999999999996
+      ],
+      "center": [
+        0.8125,
+        -0.15625,
+        0.43437499999999996
+      ],
+      "extent": [
+        0.0625,
+        0.03125,
+        0.015625
+      ],
+      "volume": 0.000244140625,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_045",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.8125,
+        -0.0625,
+        0.32499999999999996
+      ],
+      "max_corner": [
+        0.875,
+        0.5,
+        0.44999999999999996
+      ],
+      "center": [
+        0.84375,
+        0.21875,
+        0.38749999999999996
+      ],
+      "extent": [
+        0.03125,
+        0.28125,
+        0.0625
+      ],
+      "volume": 0.00439453125,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_046",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.75,
+        -0.125,
+        0.41874999999999996
+      ],
+      "max_corner": [
+        0.875,
+        -0.0625,
+        0.48124999999999996
+      ],
+      "center": [
+        0.8125,
+        -0.09375,
+        0.44999999999999996
+      ],
+      "extent": [
+        0.0625,
+        0.03125,
+        0.03125
+      ],
+      "volume": 0.00048828125,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_047",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.75,
+        -0.125,
+        0.48124999999999996
+      ],
+      "max_corner": [
+        0.875,
+        0.375,
+        0.5125
+      ],
+      "center": [
+        0.8125,
+        0.125,
+        0.49687499999999996
+      ],
+      "extent": [
+        0.0625,
+        0.25,
+        0.015625
+      ],
+      "volume": 0.001953125,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_048",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.8125,
+        -0.0625,
+        0.44999999999999996
+      ],
+      "max_corner": [
+        0.875,
+        0.4375,
+        0.48124999999999996
+      ],
+      "center": [
+        0.84375,
+        0.1875,
+        0.46562499999999996
+      ],
+      "extent": [
+        0.03125,
+        0.25,
+        0.015625
+      ],
+      "volume": 0.0009765625,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_049",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.5,
+        0.25,
+        0.48124999999999996
+      ],
+      "max_corner": [
+        0.75,
+        0.375,
+        0.5125
+      ],
+      "center": [
+        0.625,
+        0.3125,
+        0.49687499999999996
+      ],
+      "extent": [
+        0.125,
+        0.0625,
+        0.015625
+      ],
+      "volume": 0.0009765625,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_050",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.5,
+        0.375,
+        0.48124999999999996
+      ],
+      "max_corner": [
+        0.875,
+        0.4375,
+        0.5125
+      ],
+      "center": [
+        0.6875,
+        0.40625,
+        0.49687499999999996
+      ],
+      "extent": [
+        0.1875,
+        0.03125,
+        0.015625
+      ],
+      "volume": 0.000732421875,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_051",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.8125,
+        0.4375,
+        0.44999999999999996
+      ],
+      "max_corner": [
+        0.875,
+        0.5,
+        0.5125
+      ],
+      "center": [
+        0.84375,
+        0.46875,
+        0.48124999999999996
+      ],
+      "extent": [
+        0.03125,
+        0.03125,
+        0.03125
+      ],
+      "volume": 0.000244140625,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_052",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.1875,
+        -0.1875,
+        0.32499999999999996
+      ],
+      "max_corner": [
+        0.3125,
+        -0.15625,
+        0.48124999999999996
+      ],
+      "center": [
+        0.25,
+        -0.171875,
+        0.40312499999999996
+      ],
+      "extent": [
+        0.0625,
+        0.015625,
+        0.078125
+      ],
+      "volume": 0.0006103515625,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_053",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.3125,
+        -0.3125,
+        0.32499999999999996
+      ],
+      "max_corner": [
+        0.5,
+        -0.28125,
+        0.48124999999999996
+      ],
+      "center": [
+        0.40625,
+        -0.296875,
+        0.40312499999999996
+      ],
+      "extent": [
+        0.09375,
+        0.015625,
+        0.078125
+      ],
+      "volume": 0.00091552734375,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_054",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.1875,
+        0.34375,
+        0.32499999999999996
+      ],
+      "max_corner": [
+        0.25,
+        0.375,
+        0.48124999999999996
+      ],
+      "center": [
+        0.21875,
+        0.359375,
+        0.40312499999999996
+      ],
+      "extent": [
+        0.03125,
+        0.015625,
+        0.078125
+      ],
+      "volume": 0.00030517578125,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_055",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.625,
+        -0.3125,
+        0.32499999999999996
+      ],
+      "max_corner": [
+        0.75,
+        -0.28125,
+        0.41874999999999996
+      ],
+      "center": [
+        0.6875,
+        -0.296875,
+        0.37187499999999996
+      ],
+      "extent": [
+        0.0625,
+        0.015625,
+        0.046875
+      ],
+      "volume": 0.0003662109375,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    },
+    {
+      "id": "free_056",
+      "boxel_type": "free_space",
+      "min_corner": [
+        0.75,
+        -0.0625,
+        0.41874999999999996
+      ],
+      "max_corner": [
+        0.8125,
+        -0.03125,
+        0.48124999999999996
+      ],
+      "center": [
+        0.78125,
+        -0.046875,
+        0.44999999999999996
+      ],
+      "extent": [
+        0.03125,
+        0.015625,
+        0.03125
+      ],
+      "volume": 0.0001220703125,
+      "object_name": null,
+      "is_occluder": false,
+      "shadow_boxel_ids": [],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": null,
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": false,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true,
+      "blocking_boxels": []
+    }
+  ],
+  "summary": {
+    "total": 57,
+    "objects": 4,
+    "shadows": 6,
+    "free_space": 47
+  }
+}

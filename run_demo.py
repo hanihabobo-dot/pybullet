@@ -16,8 +16,14 @@ import time
 
 from boxel_env import BoxelTestEnv
 from visualization import save_point_cloud_to_ply
+from boxel_data import create_boxel_registry_from_boxels
 
-
+# Timing constants
+PHASE_WAIT_SECONDS = 0  # Set to 0 for fast, 1.0 for normal
+BOXEL_FILL_OPACITY = 0.05 # Opacity for filled boxels (0.0 = invisible, 1.0 = solid)
+FINAL_HOLD_SECONDS = 6  # Increased for keyboard navigation
+ENABLE_FREE_SPACE = True
+        
 def main():
     """Main demo function."""
     print("=" * 60)
@@ -86,11 +92,7 @@ def main():
                 print(f"       *** WARNING: Very large extent! ***")
         print("=== END DEBUG ===\n")
         
-        # Timing constants
-        PHASE_WAIT_SECONDS = 0  # Set to 0 for fast, 1.0 for normal
-        BOXEL_FILL_OPACITY = 0.05 # Opacity for filled boxels (0.0 = invisible, 1.0 = solid)
-        FINAL_HOLD_SECONDS = 600  # Increased for keyboard navigation
-        ENABLE_FREE_SPACE = True
+
         
         # Set camera view using the new method
         env.set_debug_camera(distance=1.5, yaw=45, pitch=-30,
@@ -141,14 +143,22 @@ def main():
             env.draw_boxels(all_known + merged_free_boxels, duration=0, clear_previous=True, fill_opacity=BOXEL_FILL_OPACITY)
             free_boxels = merged_free_boxels  # Use merged boxels going forward
         
-        # Phase 4: Hold Result
-        print("Phase 4: Hold Result")
+        # Phase 4: Save Boxel Data
+        print("Phase 4: Saving Boxel Data")
+        all_final_boxels = all_known + (free_boxels if ENABLE_FREE_SPACE else [])
+        registry = create_boxel_registry_from_boxels(all_final_boxels, env.table_surface_height)
+        registry.save_to_json("boxel_data.json")
+        registry.save_pddl_facts("boxel_facts.pddl")
+        print(f"  Saved {len(registry.boxels)} boxels to boxel_data.json and boxel_facts.pddl")
+        
+        # Phase 5: Hold Result
+        print("Phase 5: Hold Result")
         for _ in range(int(240 * PHASE_WAIT_SECONDS * 3)):
             env.step_simulation()
             env.handle_keyboard_camera()
             time.sleep(1.0/240.0)
             
-        # Phase 5: Keep window open with keyboard navigation
+        # Phase 6: Keep window open with keyboard navigation
         print(f"Visualization complete. Use WASD/Arrow keys to navigate. Window stays open for {FINAL_HOLD_SECONDS} seconds...")
         for _ in range(int(240 * FINAL_HOLD_SECONDS)):
             env.step_simulation()
