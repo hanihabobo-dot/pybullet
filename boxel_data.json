@@ -33,8 +33,17 @@
         "x_pos": [],
         "x_neg": [],
         "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "y_neg": [
+          "obj_006"
+        ],
+        "z_pos": [
+          "free_030",
+          "free_034",
+          "free_035",
+          "free_036",
+          "free_049",
+          "free_050"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -79,10 +88,24 @@
       "created_by_object": "occluder_2",
       "neighbor_ids": {
         "x_pos": [],
-        "x_neg": [],
+        "x_neg": [
+          "shadow_002",
+          "obj_006"
+        ],
         "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "y_neg": [
+          "obj_007",
+          "free_039",
+          "free_056"
+        ],
+        "z_pos": [
+          "free_021",
+          "free_036",
+          "free_041",
+          "free_047",
+          "free_049",
+          "free_050"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -126,11 +149,19 @@
       "created_by_boxel_id": "obj_007",
       "created_by_object": "occluder_2",
       "neighbor_ids": {
-        "x_pos": [],
+        "x_pos": [
+          "shadow_001"
+        ],
         "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "y_pos": [
+          "obj_006"
+        ],
+        "y_neg": [
+          "obj_007"
+        ],
+        "z_pos": [
+          "free_041"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -174,11 +205,19 @@
       "created_by_boxel_id": "obj_008",
       "created_by_object": "occluder_3",
       "neighbor_ids": {
-        "x_pos": [],
+        "x_pos": [
+          "shadow_004",
+          "obj_006"
+        ],
         "x_neg": [],
         "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "y_neg": [
+          "obj_008"
+        ],
+        "z_pos": [
+          "free_029",
+          "free_030"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -223,10 +262,20 @@
       "created_by_object": "occluder_3",
       "neighbor_ids": {
         "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "x_neg": [
+          "shadow_003"
+        ],
+        "y_pos": [
+          "obj_006"
+        ],
+        "y_neg": [
+          "obj_008"
+        ],
+        "z_pos": [
+          "free_029",
+          "free_030",
+          "free_034"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -270,10 +319,17 @@
       "created_by_boxel_id": "obj_009",
       "created_by_object": "target_4",
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
+        "x_pos": [
+          "free_043",
+          "free_045"
+        ],
+        "x_neg": [
+          "obj_007"
+        ],
         "y_pos": [],
-        "y_neg": [],
+        "y_neg": [
+          "obj_009"
+        ],
         "z_pos": [],
         "z_neg": []
       },
@@ -320,11 +376,25 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "x_pos": [
+          "shadow_001"
+        ],
+        "x_neg": [
+          "shadow_003"
+        ],
+        "y_pos": [
+          "shadow_000"
+        ],
+        "y_neg": [
+          "shadow_002",
+          "shadow_004"
+        ],
+        "z_pos": [
+          "free_030",
+          "free_034",
+          "free_041",
+          "free_049"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -371,11 +441,21 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
+        "x_pos": [
+          "shadow_005"
+        ],
         "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "y_pos": [
+          "shadow_001",
+          "shadow_002"
+        ],
+        "y_neg": [
+          "obj_009"
+        ],
+        "z_pos": [
+          "free_021",
+          "free_041"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -424,9 +504,17 @@
       "neighbor_ids": {
         "x_pos": [],
         "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "y_pos": [
+          "shadow_003",
+          "shadow_004"
+        ],
+        "y_neg": [
+          "free_053"
+        ],
+        "z_pos": [
+          "free_029",
+          "free_033"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -472,9 +560,14 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
+        "x_pos": [
+          "free_042"
+        ],
         "x_neg": [],
-        "y_pos": [],
+        "y_pos": [
+          "shadow_005",
+          "obj_007"
+        ],
         "y_neg": [],
         "z_pos": [],
         "z_neg": []
@@ -525,7 +618,18 @@
         "y_pos": [],
         "y_neg": [],
         "z_pos": [],
-        "z_neg": []
+        "z_neg": [
+          "free_011",
+          "free_012",
+          "free_014",
+          "free_015",
+          "free_016",
+          "free_017",
+          "free_021",
+          "free_023",
+          "free_024",
+          "free_026"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -568,11 +672,22 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
+        "x_pos": [
+          "free_016",
+          "free_017",
+          "free_031"
+        ],
         "x_neg": [],
-        "y_pos": [],
+        "y_pos": [
+          "free_014",
+          "free_015",
+          "free_027",
+          "free_028"
+        ],
         "y_neg": [],
-        "z_pos": [],
+        "z_pos": [
+          "free_010"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -617,11 +732,30 @@
       "created_by_object": null,
       "neighbor_ids": {
         "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
+        "x_neg": [
+          "free_016",
+          "free_017",
+          "free_032",
+          "free_033",
+          "free_053"
+        ],
+        "y_pos": [
+          "free_015",
+          "free_021",
+          "free_023",
+          "free_038",
+          "free_040"
+        ],
         "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "z_pos": [
+          "free_010"
+        ],
+        "z_neg": [
+          "free_013",
+          "free_019",
+          "free_020",
+          "free_037"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -665,10 +799,19 @@
       "created_by_object": null,
       "neighbor_ids": {
         "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
+        "x_neg": [
+          "free_020",
+          "free_037",
+          "free_055"
+        ],
+        "y_pos": [
+          "free_022",
+          "free_042"
+        ],
         "y_neg": [],
-        "z_pos": [],
+        "z_pos": [
+          "free_012"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -712,11 +855,19 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
+        "x_pos": [
+          "free_015",
+          "free_018",
+          "free_027"
+        ],
         "x_neg": [],
         "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "y_neg": [
+          "free_011"
+        ],
+        "z_pos": [
+          "free_010"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -760,12 +911,37 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
+        "x_pos": [
+          "free_021",
+          "free_026"
+        ],
+        "x_neg": [
+          "free_014"
+        ],
         "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "y_neg": [
+          "free_011",
+          "free_012",
+          "free_017"
+        ],
+        "z_pos": [
+          "free_010"
+        ],
+        "z_neg": [
+          "free_018",
+          "free_027",
+          "free_028",
+          "free_029",
+          "free_030",
+          "free_033",
+          "free_034",
+          "free_035",
+          "free_036",
+          "free_040",
+          "free_041",
+          "free_049",
+          "free_050"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -808,11 +984,22 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
+        "x_pos": [
+          "free_012",
+          "free_019"
+        ],
+        "x_neg": [
+          "free_011"
+        ],
+        "y_pos": [
+          "free_017",
+          "free_031",
+          "free_032"
+        ],
         "y_neg": [],
-        "z_pos": [],
+        "z_pos": [
+          "free_010"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -856,12 +1043,26 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "x_pos": [
+          "free_012"
+        ],
+        "x_neg": [
+          "free_011"
+        ],
+        "y_pos": [
+          "free_015"
+        ],
+        "y_neg": [
+          "free_016"
+        ],
+        "z_pos": [
+          "free_010"
+        ],
+        "z_neg": [
+          "free_031",
+          "free_032",
+          "free_033"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -904,11 +1105,21 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
+        "x_pos": [
+          "free_035"
+        ],
+        "x_neg": [
+          "free_014"
+        ],
         "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "y_neg": [
+          "free_027",
+          "free_030",
+          "free_054"
+        ],
+        "z_pos": [
+          "free_015"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -952,11 +1163,23 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
+        "x_pos": [
+          "free_020",
+          "free_037",
+          "free_038",
+          "free_055"
+        ],
+        "x_neg": [
+          "free_016",
+          "free_032",
+          "free_053"
+        ],
         "y_pos": [],
         "y_neg": [],
-        "z_pos": [],
+        "z_pos": [
+          "free_012",
+          "free_040"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -1000,11 +1223,20 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
+        "x_pos": [
+          "free_013"
+        ],
+        "x_neg": [
+          "free_019"
+        ],
+        "y_pos": [
+          "free_037",
+          "free_055"
+        ],
         "y_neg": [],
-        "z_pos": [],
+        "z_pos": [
+          "free_012"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -1048,12 +1280,32 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "x_pos": [
+          "free_023",
+          "free_024",
+          "free_047"
+        ],
+        "x_neg": [
+          "free_015",
+          "free_040",
+          "free_041"
+        ],
+        "y_pos": [
+          "free_026",
+          "free_049"
+        ],
+        "y_neg": [
+          "free_012"
+        ],
+        "z_pos": [
+          "free_010"
+        ],
+        "z_neg": [
+          "shadow_001",
+          "obj_007",
+          "free_038",
+          "free_039"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -1097,10 +1349,21 @@
       "created_by_object": null,
       "neighbor_ids": {
         "x_pos": [],
-        "x_neg": [],
+        "x_neg": [
+          "free_042",
+          "free_043",
+          "free_044",
+          "free_045",
+          "free_046"
+        ],
         "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "y_neg": [
+          "free_013"
+        ],
+        "z_pos": [
+          "free_023",
+          "free_025"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -1145,11 +1408,28 @@
       "created_by_object": null,
       "neighbor_ids": {
         "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "x_neg": [
+          "free_021",
+          "free_038",
+          "free_039"
+        ],
+        "y_pos": [
+          "free_024",
+          "free_025",
+          "free_046",
+          "free_047"
+        ],
+        "y_neg": [
+          "free_012"
+        ],
+        "z_pos": [
+          "free_010"
+        ],
+        "z_neg": [
+          "free_022",
+          "free_042",
+          "free_044"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -1193,11 +1473,22 @@
       "created_by_object": null,
       "neighbor_ids": {
         "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "x_neg": [
+          "free_021"
+        ],
+        "y_pos": [
+          "free_026"
+        ],
+        "y_neg": [
+          "free_023"
+        ],
+        "z_pos": [
+          "free_010"
+        ],
+        "z_neg": [
+          "free_025",
+          "free_047"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -1241,11 +1532,24 @@
       "created_by_object": null,
       "neighbor_ids": {
         "x_pos": [],
-        "x_neg": [],
+        "x_neg": [
+          "free_046",
+          "free_047",
+          "free_048",
+          "free_050",
+          "free_051"
+        ],
         "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "y_neg": [
+          "free_023"
+        ],
+        "z_pos": [
+          "free_024",
+          "free_026"
+        ],
+        "z_neg": [
+          "free_022"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -1289,11 +1593,25 @@
       "created_by_object": null,
       "neighbor_ids": {
         "x_pos": [],
-        "x_neg": [],
+        "x_neg": [
+          "free_015"
+        ],
         "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "y_neg": [
+          "free_021",
+          "free_024"
+        ],
+        "z_pos": [
+          "free_010"
+        ],
+        "z_neg": [
+          "free_025",
+          "free_036",
+          "free_047",
+          "free_049",
+          "free_050",
+          "free_051"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -1336,11 +1654,25 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "x_pos": [
+          "free_028",
+          "free_029",
+          "free_030",
+          "free_052",
+          "free_054"
+        ],
+        "x_neg": [
+          "free_014"
+        ],
+        "y_pos": [
+          "free_018"
+        ],
+        "y_neg": [
+          "free_011"
+        ],
+        "z_pos": [
+          "free_015"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -1384,11 +1716,23 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "x_pos": [
+          "free_033"
+        ],
+        "x_neg": [
+          "free_027"
+        ],
+        "y_pos": [
+          "free_029",
+          "free_052"
+        ],
+        "y_neg": [
+          "free_011",
+          "free_031"
+        ],
+        "z_pos": [
+          "free_015"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -1432,12 +1776,29 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "x_pos": [
+          "free_041"
+        ],
+        "x_neg": [
+          "free_027"
+        ],
+        "y_pos": [
+          "free_030",
+          "free_034"
+        ],
+        "y_neg": [
+          "free_028",
+          "free_033"
+        ],
+        "z_pos": [
+          "free_015"
+        ],
+        "z_neg": [
+          "shadow_003",
+          "shadow_004",
+          "obj_008",
+          "free_052"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -1480,12 +1841,29 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "x_pos": [
+          "free_034"
+        ],
+        "x_neg": [
+          "free_027"
+        ],
+        "y_pos": [
+          "free_018",
+          "free_035"
+        ],
+        "y_neg": [
+          "free_029"
+        ],
+        "z_pos": [
+          "free_015"
+        ],
+        "z_neg": [
+          "shadow_000",
+          "shadow_003",
+          "shadow_004",
+          "obj_006",
+          "free_054"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -1528,11 +1906,23 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "x_pos": [
+          "free_032",
+          "free_033",
+          "free_053"
+        ],
+        "x_neg": [
+          "free_011"
+        ],
+        "y_pos": [
+          "free_028"
+        ],
+        "y_neg": [
+          "free_016"
+        ],
+        "z_pos": [
+          "free_017"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -1576,11 +1966,23 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "x_pos": [
+          "free_012",
+          "free_019"
+        ],
+        "x_neg": [
+          "free_031"
+        ],
+        "y_pos": [
+          "free_033",
+          "free_053"
+        ],
+        "y_neg": [
+          "free_016"
+        ],
+        "z_pos": [
+          "free_017"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -1624,12 +2026,28 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "x_pos": [
+          "free_012",
+          "free_040"
+        ],
+        "x_neg": [
+          "free_028",
+          "free_031"
+        ],
+        "y_pos": [
+          "free_029"
+        ],
+        "y_neg": [
+          "free_032"
+        ],
+        "z_pos": [
+          "free_015",
+          "free_017"
+        ],
+        "z_neg": [
+          "obj_008",
+          "free_053"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -1672,12 +2090,29 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "x_pos": [
+          "free_041",
+          "free_049",
+          "free_050"
+        ],
+        "x_neg": [
+          "free_030",
+          "free_035"
+        ],
+        "y_pos": [
+          "free_036"
+        ],
+        "y_neg": [
+          "free_029"
+        ],
+        "z_pos": [
+          "free_015"
+        ],
+        "z_neg": [
+          "shadow_000",
+          "shadow_004",
+          "obj_006"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -1720,12 +2155,23 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
+        "x_pos": [
+          "free_034",
+          "free_036"
+        ],
+        "x_neg": [
+          "free_018"
+        ],
         "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "y_neg": [
+          "free_030"
+        ],
+        "z_pos": [
+          "free_015"
+        ],
+        "z_neg": [
+          "shadow_000"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -1768,12 +2214,25 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
+        "x_pos": [
+          "free_051"
+        ],
+        "x_neg": [
+          "free_035"
+        ],
         "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "y_neg": [
+          "free_034",
+          "free_050"
+        ],
+        "z_pos": [
+          "free_015",
+          "free_026"
+        ],
+        "z_neg": [
+          "shadow_000",
+          "shadow_001"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -1816,12 +2275,24 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "x_pos": [
+          "free_013"
+        ],
+        "x_neg": [
+          "free_019"
+        ],
+        "y_pos": [
+          "free_038"
+        ],
+        "y_neg": [
+          "free_020"
+        ],
+        "z_pos": [
+          "free_012"
+        ],
+        "z_neg": [
+          "free_055"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -1864,11 +2335,24 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "x_pos": [
+          "free_023",
+          "free_042"
+        ],
+        "x_neg": [
+          "free_019",
+          "free_040"
+        ],
+        "y_pos": [
+          "free_039"
+        ],
+        "y_neg": [
+          "free_012",
+          "free_037"
+        ],
+        "z_pos": [
+          "free_021"
+        ],
         "z_neg": []
       },
       "on_surface": null,
@@ -1912,11 +2396,22 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
+        "x_pos": [
+          "free_023",
+          "free_044",
+          "free_046",
+          "free_056"
+        ],
         "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "y_pos": [
+          "shadow_001"
+        ],
+        "y_neg": [
+          "free_038"
+        ],
+        "z_pos": [
+          "free_021"
+        ],
         "z_neg": []
       },
       "on_surface": null,
@@ -1960,12 +2455,25 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "x_pos": [
+          "free_021",
+          "free_038"
+        ],
+        "x_neg": [
+          "free_033"
+        ],
+        "y_pos": [
+          "free_041"
+        ],
+        "y_neg": [
+          "free_012"
+        ],
+        "z_pos": [
+          "free_015"
+        ],
+        "z_neg": [
+          "free_019"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -2008,12 +2516,28 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "x_pos": [
+          "free_021"
+        ],
+        "x_neg": [
+          "free_029",
+          "free_034"
+        ],
+        "y_pos": [
+          "free_049"
+        ],
+        "y_neg": [
+          "free_040"
+        ],
+        "z_pos": [
+          "free_015"
+        ],
+        "z_neg": [
+          "shadow_001",
+          "shadow_002",
+          "obj_006",
+          "obj_007"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -2056,11 +2580,23 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "x_pos": [
+          "free_022"
+        ],
+        "x_neg": [
+          "obj_009",
+          "free_038"
+        ],
+        "y_pos": [
+          "free_043",
+          "free_044"
+        ],
+        "y_neg": [
+          "free_013"
+        ],
+        "z_pos": [
+          "free_023"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -2104,11 +2640,22 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "x_pos": [
+          "free_022"
+        ],
+        "x_neg": [
+          "shadow_005"
+        ],
+        "y_pos": [
+          "free_045"
+        ],
+        "y_neg": [
+          "free_042"
+        ],
+        "z_pos": [
+          "free_044",
+          "free_046"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -2152,12 +2699,24 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "x_pos": [
+          "free_022"
+        ],
+        "x_neg": [
+          "free_039"
+        ],
+        "y_pos": [
+          "free_046"
+        ],
+        "y_neg": [
+          "free_042"
+        ],
+        "z_pos": [
+          "free_023"
+        ],
+        "z_neg": [
+          "free_043"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -2200,11 +2759,22 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
+        "x_pos": [
+          "free_022"
+        ],
+        "x_neg": [
+          "shadow_005",
+          "free_056"
+        ],
         "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "y_neg": [
+          "free_043",
+          "free_046"
+        ],
+        "z_pos": [
+          "free_048",
+          "free_051"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -2248,12 +2818,28 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "x_pos": [
+          "free_022",
+          "free_025"
+        ],
+        "x_neg": [
+          "free_039"
+        ],
+        "y_pos": [
+          "free_045",
+          "free_048",
+          "free_056"
+        ],
+        "y_neg": [
+          "free_023",
+          "free_044"
+        ],
+        "z_pos": [
+          "free_047"
+        ],
+        "z_neg": [
+          "free_043"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -2296,12 +2882,29 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "x_pos": [
+          "free_025"
+        ],
+        "x_neg": [
+          "free_021",
+          "free_049"
+        ],
+        "y_pos": [
+          "free_050"
+        ],
+        "y_neg": [
+          "free_023"
+        ],
+        "z_pos": [
+          "free_024",
+          "free_026"
+        ],
+        "z_neg": [
+          "shadow_001",
+          "free_046",
+          "free_048",
+          "free_056"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -2344,12 +2947,25 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "x_pos": [
+          "free_025"
+        ],
+        "x_neg": [
+          "free_056"
+        ],
+        "y_pos": [
+          "free_051"
+        ],
+        "y_neg": [
+          "free_046"
+        ],
+        "z_pos": [
+          "free_047",
+          "free_050"
+        ],
+        "z_neg": [
+          "free_045"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -2392,12 +3008,28 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "x_pos": [
+          "free_047"
+        ],
+        "x_neg": [
+          "free_034"
+        ],
+        "y_pos": [
+          "free_050"
+        ],
+        "y_neg": [
+          "free_021",
+          "free_041"
+        ],
+        "z_pos": [
+          "free_015",
+          "free_026"
+        ],
+        "z_neg": [
+          "shadow_000",
+          "shadow_001",
+          "obj_006"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -2440,12 +3072,29 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "x_pos": [
+          "free_025"
+        ],
+        "x_neg": [
+          "free_034"
+        ],
+        "y_pos": [
+          "free_036",
+          "free_051"
+        ],
+        "y_neg": [
+          "free_047",
+          "free_049"
+        ],
+        "z_pos": [
+          "free_015",
+          "free_026"
+        ],
+        "z_neg": [
+          "shadow_000",
+          "shadow_001",
+          "free_048"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -2488,12 +3137,23 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
+        "x_pos": [
+          "free_025"
+        ],
+        "x_neg": [
+          "free_036"
+        ],
         "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
+        "y_neg": [
+          "free_048",
+          "free_050"
+        ],
+        "z_pos": [
+          "free_026"
+        ],
+        "z_neg": [
+          "free_045"
+        ]
       },
       "on_surface": null,
       "surface_z": 0.325,
@@ -2537,10 +3197,16 @@
       "created_by_object": null,
       "neighbor_ids": {
         "x_pos": [],
-        "x_neg": [],
+        "x_neg": [
+          "free_027"
+        ],
         "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "y_neg": [
+          "free_028"
+        ],
+        "z_pos": [
+          "free_029"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -2584,11 +3250,22 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "x_pos": [
+          "free_012",
+          "free_019"
+        ],
+        "x_neg": [
+          "free_031"
+        ],
+        "y_pos": [
+          "obj_008"
+        ],
+        "y_neg": [
+          "free_032"
+        ],
+        "z_pos": [
+          "free_033"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -2633,10 +3310,16 @@
       "created_by_object": null,
       "neighbor_ids": {
         "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
+        "x_neg": [
+          "free_027"
+        ],
+        "y_pos": [
+          "free_018"
+        ],
         "y_neg": [],
-        "z_pos": [],
+        "z_pos": [
+          "free_030"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -2680,11 +3363,19 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
+        "x_pos": [
+          "free_013"
+        ],
+        "x_neg": [
+          "free_019"
+        ],
         "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "y_neg": [
+          "free_020"
+        ],
+        "z_pos": [
+          "free_037"
+        ],
         "z_neg": []
       },
       "on_surface": "table",
@@ -2728,11 +3419,22 @@
       "created_by_boxel_id": null,
       "created_by_object": null,
       "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [],
-        "y_neg": [],
-        "z_pos": [],
+        "x_pos": [
+          "free_045",
+          "free_048"
+        ],
+        "x_neg": [
+          "free_039"
+        ],
+        "y_pos": [
+          "shadow_001"
+        ],
+        "y_neg": [
+          "free_046"
+        ],
+        "z_pos": [
+          "free_047"
+        ],
         "z_neg": []
       },
       "on_surface": null,

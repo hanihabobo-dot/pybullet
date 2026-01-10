@@ -209,24 +209,32 @@ class BoxelRegistry:
                         boxel_b.neighbor_ids[opposite].append(boxel_a.id)
     
     def _check_adjacency(self, a: BoxelData, b: BoxelData, tol: float) -> Optional[str]:
-        """Check if two boxels are adjacent and return direction from a to b."""
+        """
+        Check if two boxels are adjacent (touching) and return direction from a to b.
+        
+        Uses a lenient check: boxels are neighbors if they touch on a face,
+        meaning they share an overlapping region on two axes and touch on the third.
+        """
         # Check each axis for adjacency
         for axis, (pos_dir, neg_dir) in enumerate([
             ("x_pos", "x_neg"), ("y_pos", "y_neg"), ("z_pos", "z_neg")
         ]):
             other_axes = [i for i in range(3) if i != axis]
             
-            # Check if aligned on other axes
-            aligned = all(
-                abs(a.min_corner[oa] - b.min_corner[oa]) < tol and
-                abs(a.max_corner[oa] - b.max_corner[oa]) < tol
-                for oa in other_axes
-            )
+            # Check if boxes OVERLAP on the other two axes (not exact alignment)
+            overlaps_on_other_axes = True
+            for oa in other_axes:
+                # Two ranges overlap if: max(a_min, b_min) < min(a_max, b_max)
+                overlap_min = max(a.min_corner[oa], b.min_corner[oa])
+                overlap_max = min(a.max_corner[oa], b.max_corner[oa])
+                if overlap_max - overlap_min < tol:  # No meaningful overlap
+                    overlaps_on_other_axes = False
+                    break
             
-            if not aligned:
+            if not overlaps_on_other_axes:
                 continue
             
-            # Check if adjacent along this axis
+            # Check if adjacent (touching) along this axis
             if abs(a.max_corner[axis] - b.min_corner[axis]) < tol:
                 return pos_dir  # b is in positive direction from a
             if abs(b.max_corner[axis] - a.min_corner[axis]) < tol:
