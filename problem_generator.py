@@ -119,6 +119,12 @@ class ProblemGenerator:
                 init.add(f"(obj_at_boxel_KIF {obj_name} {obj_boxel_id})")
                 # Note: NOT adding obj_at_boxel means we know it's NOT there
             
+            # Epistemic state for FREE SPACE boxels: we KNOW target is NOT there
+            # (free space was observed to be empty during octree discretization)
+            for boxel in self.registry.get_free_space_boxels():
+                init.add(f"(obj_at_boxel_KIF {obj_name} {boxel.id})")
+                # Note: NOT adding obj_at_boxel means we know it's NOT there
+            
             # Epistemic state for shadow boxels: we DON'T KNOW
             # Don't add KIF for shadows -> unknown
             # The planner must sense to discover
@@ -163,8 +169,9 @@ class ProblemGenerator:
             new_init.add(f"(obj_at_boxel {obj_name} {boxel_id})")
             new_init.add(f"(obj_pose_known {obj_name})")
             
-            # Infer: object is NOT in any other shadow boxel
+            # Infer: object is NOT in any other SHADOW boxel
             # (closed-world: object can only be in one place)
+            # Note: Object and free space boxels already have KIF=true from init
             for other_boxel in self.registry.get_shadow_boxels():
                 if other_boxel.id != boxel_id:
                     new_init.add(f"(obj_at_boxel_KIF {obj_name} {other_boxel.id})")
