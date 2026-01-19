@@ -36,7 +36,7 @@ Week 4: Data Export & Visualization
 [✅] PyBullet debug visualization (visualization.py)
 
 ================================================================================
-PHASE 2: PDDLSTREAM + KNOW-IF FLUENTS (Month 2) 🚧 IN PROGRESS
+PHASE 2: PDDLSTREAM + KNOW-IF FLUENTS (Month 2) ✅ CORE COMPLETE
 ================================================================================
 
 Approach: PDDLStream with Know-If fluents + Optimistic Planning + Replanning
@@ -49,97 +49,120 @@ KNOW-IF PATTERN:
   - K(in) = KIF ∧ in          = known to be IN boxel
   - K(¬in) = KIF ∧ ¬in        = known to NOT be in boxel
 
-Week 5: PDDLStream Domain with Know-If
---------------------------------------
+Week 5: PDDLStream Domain with Know-If ✅
+-----------------------------------------
 [✅] Create domain_boxel_tamp.pddl with:
     - Ground truth fluents: obj_at_boxel, at_config, holding
     - Know-If fluents: obj_at_boxel_KIF
+    - Derived predicates: know_obj_at_boxel, know_obj_not_at_boxel
     - Actions: sense_boxel (optimistic), move, pick, place
 [✅] Create problem_template.pddl showing problem structure
 [✅] Create stream declarations for geometric reasoning
-[ ] Install PDDLStream: pip install pddlstream
-[ ] Test domain syntax with PDDLStream validator
+[✅] Clone PDDLStream from GitHub (pddlstream_lib/)
+[✅] Create config.py for path management
 
-Week 6: Stream Implementations
-------------------------------
-[✅] Create streams.py with PDDLStream generators:
-    - sample_sensing_config: IK for viewing a boxel (MOCK)
+Week 6: Stream Implementations ✅
+---------------------------------
+[✅] Create streams.py with PDDLStream-compatible generators:
+    - sample_sensing_config: Robot configs to view a boxel (MOCK)
     - sample_grasp: Grasp poses for objects (MOCK)
-    - plan_motion: Linear interpolation (MOCK)
-    - compute_kin_solution: IK for pick (MOCK)
+    - sample_motion: Collision-free trajectories (MOCK)
+    - sample_kin_solution: IK for pick/place (MOCK)
 [ ] Integrate REAL PyBullet IK solver for Franka Panda
 [ ] Add collision checking to motion planning
-[ ] Test streams independently before integration
+[ ] Build FastDownward planner (requires CMake + C++ compiler)
 
-Week 7: Executor with Replanning
---------------------------------
-[✅] Create problem_generator.py: BoxelRegistry → PDDLStream problem
+Week 7: Executor with Replanning ✅
+-----------------------------------
+[✅] Create problem_generator.py: BoxelRegistry -> PDDLStream problem
+    - Correct epistemic initialization (shadows=UNKNOWN, free/obj=KNOWN NOT)
+    - Goal specification from target objects
 [✅] Create executor.py with BoxelExecutor:
     - Initialize state from BoxelRegistry
-    - Execute plan action-by-action
-    - On sense_boxel: perform real sensing, update state
+    - Execute plan action-by-action  
+    - On sense_boxel: query oracle, update belief state
     - If sensing mismatch: trigger replan with updated belief
-    - Propagate knowledge (found → not in other boxels)
+    - Propagate knowledge (found -> not in other boxels)
 [✅] Create test_pddl_integration.py for manual verification
-[✅] Test execution loop with mock planner/sensing
+[✅] Test execution loop with mock planner/oracle sensing
 
-Week 8: Hidden Object Demo
---------------------------
-[ ] Integrate with actual PDDLStream solver (not mock planner)
-[ ] Connect executor to PyBullet robot control
-[ ] Create hidden_object_scenario.py:
-    - Place target behind occluder (in shadow boxel)
+Week 8: Hidden Object Demo ✅ (with mock components)
+----------------------------------------------------
+[✅] Create hidden_object_scenario.py:
+    - Place target in specified shadow boxel
     - Initial state: target location unknown (KIF=false for shadows)
     - Goal: (holding target)
-[ ] Run full demo with real robot motion
+    - Run with --quick to test replanning (target in last shadow)
+[✅] PROVEN: Replanning loop works (5 replans to find target in shadow_005)
+[✅] PROVEN: Know-If belief updates correctly after each sensing
+[✅] PROVEN: Mock planner adapts to updated belief state
+[ ] Integrate with actual PDDLStream solver (replace mock planner)
+[ ] Connect executor to PyBullet robot control
 [ ] Visualize belief updates in boxel_viewer.html
 [ ] Record demo video for thesis
 
 ================================================================================
-MANUAL VERIFICATION STEPS
+VERIFICATION COMMANDS
 ================================================================================
 
-Run these commands to verify the implementation:
+1. Generate boxel data:
+   pybullet_env\Scripts\python.exe run_demo.py
 
-1. Generate boxel data (if not already done):
-   python run_demo.py
+2. Run hidden object scenario (quick test with replanning):
+   pybullet_env\Scripts\python.exe hidden_object_scenario.py --quick
 
-2. Run the interactive test suite:
-   python test_pddl_integration.py
+3. Run with GUI:
+   pybullet_env\Scripts\python.exe hidden_object_scenario.py
 
-3. Or run all tests automatically:
-   python test_pddl_integration.py --all
+4. Run interactive test suite:
+   pybullet_env\Scripts\python.exe test_pddl_integration.py
 
-The test suite verifies:
-  - BoxelRegistry loads correctly from JSON
-  - Domain file has all required components
-  - Problem generator creates valid PDDL
-  - Know-If fluents represent belief state correctly
-  - Belief updates work after sensing
-  - Mock execution demonstrates replanning
+What the tests verify:
+  [✅] BoxelRegistry loads correctly from JSON
+  [✅] Domain file has all required components
+  [✅] Problem generator creates valid PDDL
+  [✅] Know-If fluents represent belief state correctly
+  [✅] Belief updates work after sensing (UNKNOWN -> KNOWN NOT)
+  [✅] Replanning loop works (5 replans in quick test)
+  [✅] Goal achieved after systematic search
 
 ================================================================================
-PHASE 3: MANIPULATION & EVALUATION (Month 3)
+PHASE 3: REAL ROBOT INTEGRATION (Month 3)
 ================================================================================
 
-Week 9-10: Manipulation Actions
--------------------------------
-[ ] Add pick action with:
-    - Precondition: obj_pose_known
-    - Grasp sampling stream
-    - Motion planning stream
-[ ] Add place action with placement sampling
-[ ] Full pick-and-place pipeline with sensing
+Week 9: Real Streams & PyBullet Control
+---------------------------------------
+[ ] Build FastDownward planner on Windows:
+    cd pddlstream_lib\downward
+    python build.py
+[ ] Replace mock planner with real PDDLStream solve()
+[ ] Implement real IK in sample_sensing_config using PyBullet:
+    - p.calculateInverseKinematics()
+    - Visibility check for boxel center
+[ ] Implement real IK in sample_kin_solution for grasping
+[ ] Add collision checking using p.getClosestPoints()
+
+Week 10: Robot Execution
+------------------------
+[ ] Connect executor to PyBullet robot control:
+    - p.setJointMotorControlArray() for motion
+    - Gripper control for pick/place
+[ ] Implement real sensing:
+    - Move robot to sensing config
+    - Capture depth image
+    - Check if object detected in boxel region
+[ ] Full pick-hidden-object demo with real robot motion
 
 Week 11-12: Evaluation & Benchmarking
 -------------------------------------
 [ ] Implement evaluation metrics:
     - Success rate
     - Planning time
-    - Plan quality/cost
+    - Number of sensing actions
+    - Total plan length
 [ ] Create baseline comparisons:
-    - Uniform voxelization
-    - Fixed semantic regions
+    - Uniform voxelization (many small cells)
+    - Single shadow per object (no splitting)
 [ ] Vary scene complexity (# occluders, workspace size)
 [ ] Document results for thesis
 
@@ -148,10 +171,19 @@ KEY MILESTONES
 ================================================================================
 
 [✅] M1: Boxel generation pipeline complete (End of Week 4)
-[ ] M2: First sensing plan generated by PDDLStream (End of Week 8)
-[ ] M3: Full pick-hidden-object demo working (End of Week 10)
+[✅] M2: Replanning loop proven with mock components (End of Week 8)
+     - Know-If fluents working
+     - Belief state updates correctly
+     - 5 replans demonstrated in hidden object scenario
+[ ] M3: Full demo with real PDDLStream + PyBullet control (End of Week 10)
 [ ] M4: Evaluation complete with baselines (End of Week 12)
 
 ================================================================================
-CURRENT FOCUS: Week 5 - PDDLStream Domain Definition
+CURRENT FOCUS: Week 9 - Real Streams & FastDownward Integration
 ================================================================================
+
+Next immediate steps:
+1. Build FastDownward on Windows (CMake + C++ compiler required)
+2. Replace mock planner with real PDDLStream solve()
+3. Implement real IK solver in streams.py
+4. Test with actual PDDLStream planning
