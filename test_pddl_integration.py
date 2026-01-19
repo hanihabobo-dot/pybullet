@@ -49,7 +49,7 @@ def test_1_load_registry():
     
     registry = BoxelRegistry.load_from_json(json_path)
     
-    print(f"✓ Loaded {len(registry.boxels)} boxels from {json_path}")
+    print(f"[OK] Loaded {len(registry.boxels)} boxels from {json_path}")
     print(f"\nBoxel summary:")
     print(f"  - Objects:    {len(registry.get_object_boxels())}")
     print(f"  - Shadows:    {len(registry.get_shadow_boxels())}")
@@ -88,13 +88,13 @@ def test_2_check_domain_file():
     all_passed = True
     for pattern, description in checks:
         if pattern in content:
-            print(f"  ✓ {description}: found")
+            print(f"  [OK] {description}: found")
         else:
-            print(f"  ✗ {description}: NOT FOUND!")
+            print(f"  [FAIL] {description}: NOT FOUND!")
             all_passed = False
     
     if all_passed:
-        print(f"\n✓ Domain file is valid: {domain_path}")
+        print(f"\n[OK] Domain file is valid: {domain_path}")
     
     return all_passed
 
@@ -132,7 +132,7 @@ def test_3_generate_problem(registry: BoxelRegistry):
     os.makedirs("pddl", exist_ok=True)
     with open(output_path, 'w') as f:
         f.write(pddl_str)
-    print(f"\n✓ Full problem saved to: {output_path}")
+    print(f"\n[OK] Full problem saved to: {output_path}")
     
     return problem
 
@@ -150,9 +150,9 @@ def test_4_epistemic_state(registry: BoxelRegistry, problem: PlanningProblem):
     
     # Explain the representation
     print("\nInterpretation:")
-    print("  - 'KNOWN IN BOXEL':     KIF=true, at=true  → K(in)")
-    print("  - 'KNOWN NOT IN BOXEL': KIF=true, at=false → K(¬in)")
-    print("  - 'UNKNOWN':            KIF=false          → might be here")
+    print("  - 'KNOWN IN BOXEL':     KIF=true, at=true  -> K(in)")
+    print("  - 'KNOWN NOT IN BOXEL': KIF=true, at=false -> K(~in)")
+    print("  - 'UNKNOWN':            KIF=false          -> might be here")
     
     # Count unknowns
     unknown_count = 0
@@ -161,7 +161,7 @@ def test_4_epistemic_state(registry: BoxelRegistry, problem: PlanningProblem):
         if kif_fact not in problem.init:
             unknown_count += 1
     
-    print(f"\n✓ {unknown_count} shadow boxels have UNKNOWN location for target_1")
+    print(f"\n[OK] {unknown_count} shadow boxels have UNKNOWN location for target_1")
     print("  (The planner must sense these to find the target)")
 
 
@@ -192,7 +192,7 @@ def test_5_belief_update(registry: BoxelRegistry):
     
     # Simulate sensing first shadow - NOT FOUND
     shadow1 = shadows[0].id
-    print(f"\n→ Sensing {shadow1} for target_1...")
+    print(f"\n-> Sensing {shadow1} for target_1...")
     print(f"  Observation: NOT FOUND")
     
     problem = generator.update_after_sensing(problem, "target_1", shadow1, found=False)
@@ -200,13 +200,13 @@ def test_5_belief_update(registry: BoxelRegistry):
     
     # Simulate sensing second shadow - FOUND
     shadow2 = shadows[1].id
-    print(f"\n→ Sensing {shadow2} for target_1...")
+    print(f"\n-> Sensing {shadow2} for target_1...")
     print(f"  Observation: FOUND!")
     
     problem = generator.update_after_sensing(problem, "target_1", shadow2, found=True)
     generator.print_epistemic_state(problem, ["target_1"])
     
-    print("✓ Belief updates working correctly!")
+    print("[OK] Belief updates working correctly!")
     print("  - After 'not found': KIF set to true, at stays false")
     print("  - After 'found': KIF=true, at=true, pose known")
     print("  - When found: all other shadows also marked as 'not in'")
@@ -238,9 +238,9 @@ def test_6_mock_execution(registry: BoxelRegistry):
     success = demo_execution(registry, target_location)
     
     if success:
-        print("\n✓ Execution test PASSED!")
+        print("\n[OK] Execution test PASSED!")
     else:
-        print("\n✗ Execution test FAILED!")
+        print("\n[FAIL] Execution test FAILED!")
 
 
 def test_7_streams(registry: BoxelRegistry):
@@ -277,7 +277,7 @@ def test_7_streams(registry: BoxelRegistry):
         print(f"  First grasp: {grasp.name}")
         print(f"  Position offset: {grasp.position}")
     
-    print("\n✓ Streams working correctly!")
+    print("\n[OK] Streams working correctly!")
 
 
 def run_all_tests():

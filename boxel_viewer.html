@@ -317,6 +317,10 @@
             scene.add(axesHelper);
             
             // Load boxel data
+            if (window.location.protocol === 'file:') {
+                alert('Security Error: Browser blocked loading boxel_data.json because you opened this file directly. \n\nPlease run a local web server as described in the README:\npython -m http.server');
+                return;
+            }
             await loadBoxelData();
             
             // Setup event listeners

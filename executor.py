@@ -128,19 +128,19 @@ class BoxelExecutor:
                 
                 if result == ActionResult.SUCCESS:
                     if self.verbose:
-                        print(f"  ✓ {action[0]} succeeded")
+                        print(f"  [OK] {action[0]} succeeded")
                     continue
                     
                 elif result == ActionResult.SENSING_MISMATCH:
                     if self.verbose:
-                        print(f"  ⟳ Sensing mismatch - triggering replan")
+                        print(f"  [REPLAN] Sensing mismatch - triggering replan")
                         self.problem_generator.print_epistemic_state(
                             state.problem, target_objects)
                     state.replans += 1
                     break  # Exit action loop, regenerate plan
                     
                 else:  # FAILURE
-                    print(f"  ✗ Action failed: {action}")
+                    print(f"  [FAIL] Action failed: {action}")
                     return False
             else:
                 # Plan completed successfully (no break)
@@ -195,7 +195,7 @@ class BoxelExecutor:
         obj_name, boxel_id, config = params
         
         if self.verbose:
-            print(f"  → Sensing {boxel_id} for {obj_name}...")
+            print(f"  -> Sensing {boxel_id} for {obj_name}...")
         
         # Oracle: Is the object actually in this boxel?
         actual_location = self.oracle_locations.get(obj_name)
@@ -222,7 +222,7 @@ class BoxelExecutor:
         q1, q2, traj = params
         
         if self.verbose:
-            print(f"  → Moving from {q1} to {q2}")
+            print(f"  -> Moving from {q1} to {q2}")
         
         # Update state
         state.current_config = q2
@@ -237,7 +237,7 @@ class BoxelExecutor:
         obj_name, boxel_id, grasp, config = params
         
         if self.verbose:
-            print(f"  → Picking {obj_name} from {boxel_id}")
+            print(f"  -> Picking {obj_name} from {boxel_id}")
         
         # Update state
         state.holding = obj_name
@@ -252,7 +252,7 @@ class BoxelExecutor:
         obj_name, boxel_id, grasp, config = params
         
         if self.verbose:
-            print(f"  → Placing {obj_name} in {boxel_id}")
+            print(f"  -> Placing {obj_name} in {boxel_id}")
         
         # Update state
         state.holding = None

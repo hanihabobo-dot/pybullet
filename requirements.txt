@@ -1,0 +1,8 @@
+# Semantic Boxels - TAMP with Partial Observability
+# Core dependencies
+numpy>=1.20.0
+pybullet>=3.2.0
+
+# PDDLStream - install separately:
+# git clone https://github.com/caelan/pddlstream.git ../pddlstream_lib
+# Then add to PYTHONPATH or use config.py

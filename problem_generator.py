@@ -213,11 +213,11 @@ class ProblemGenerator:
                 has_at = at_fact in problem.init
                 
                 if has_kif and has_at:
-                    status = "✓ KNOWN IN BOXEL"
+                    status = "[+] KNOWN IN BOXEL"
                 elif has_kif and not has_at:
-                    status = "✗ KNOWN NOT IN BOXEL"
+                    status = "[-] KNOWN NOT IN BOXEL"
                 else:
-                    status = "? UNKNOWN"
+                    status = "[?] UNKNOWN"
                 
                 boxel_type = boxel.boxel_type.value
                 print(f"  {boxel.id:15} ({boxel_type:10}): {status}")
