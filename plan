@@ -1,19 +1,157 @@
-Week 1:
+================================================================================
+                    SEMANTIC BOXELS FOR POD-TAMP - PROJECT PLAN
+================================================================================
 
-1. Set up a PyBullet system on some machine
-2. Run the Tampura tests without wasting too much time (skipped)
-3. Set up 3D objects and Scene
-4. Set up d-rgp Camera and successfully receive point clouds (DONE)
+================================================================================
+PHASE 1: SEMANTIC DISCRETIZATION (Month 1) ✅ COMPLETE
+================================================================================
 
-Week 2:
+Week 1: Environment Setup
+-------------------------
+[✅] Set up PyBullet simulation environment
+[✅] Create scene with Franka robot, table, occluders, targets
+[✅] Set up depth camera and point cloud capture
+[⏭️] Run TAMPURA tests (skipped - not needed for core implementation)
 
-1. Match the point clouds to the 3D objects
-2. Generate bounding boxels
+Week 2: Object Boxel Generation
+-------------------------------
+[✅] Implement oracle object detection (boxel_env.py)
+[✅] Generate axis-aligned bounding boxes for detected objects
+[✅] Create Boxel data structure (boxel_types.py)
 
-Week 3:
-1. Calcualte the occlusion regions
-2. Discretize the entire working space
+Week 3: Occlusion & Free Space
+------------------------------
+[✅] Implement shadow calculation via ray casting (shadow_calculator.py)
+[✅] Handle shadow splitting when intersecting obstacles
+[✅] Implement octree-based free space discretization (free_space.py)
+[✅] Merge adjacent free space cells (cell_merger.py)
 
-Week 4:
-1. Save the data in pddl friendly way
-2. start phase 2
+Week 4: Data Export & Visualization
+-----------------------------------
+[✅] Create rich BoxelData structure for PDDLStream (boxel_data.py)
+[✅] Compute spatial neighbor relationships
+[✅] Export to JSON (boxel_data.json)
+[✅] Export PDDL facts (boxel_facts.pddl)
+[✅] Build 3D web viewer (boxel_viewer.html)
+[✅] PyBullet debug visualization (visualization.py)
+
+================================================================================
+PHASE 2: PDDLSTREAM + KNOW-IF FLUENTS (Month 2) 🚧 IN PROGRESS
+================================================================================
+
+Approach: PDDLStream with Know-If fluents + Optimistic Planning + Replanning
+Reference: "Know-If" fluents paper for partial observability in PDDL
+Key insight: Single planning framework, sensing handled via replanning
+
+KNOW-IF PATTERN:
+  - obj_in_boxel(?o, ?b)      = ground truth (object physically in boxel)
+  - obj_in_boxel_KIF(?o, ?b)  = Know-If (we know the value, true or false)
+  - K(in) = KIF ∧ in          = known to be IN boxel
+  - K(¬in) = KIF ∧ ¬in        = known to NOT be in boxel
+
+Week 5: PDDLStream Domain with Know-If
+--------------------------------------
+[✅] Create domain_boxel_tamp.pddl with:
+    - Ground truth fluents: obj_at_boxel, at_config, holding
+    - Know-If fluents: obj_at_boxel_KIF
+    - Actions: sense_boxel (optimistic), move, pick, place
+[✅] Create problem_template.pddl showing problem structure
+[✅] Create stream declarations for geometric reasoning
+[ ] Install PDDLStream: pip install pddlstream
+[ ] Test domain syntax with PDDLStream validator
+
+Week 6: Stream Implementations
+------------------------------
+[✅] Create streams.py with PDDLStream generators:
+    - sample_sensing_config: IK for viewing a boxel (MOCK)
+    - sample_grasp: Grasp poses for objects (MOCK)
+    - plan_motion: Linear interpolation (MOCK)
+    - compute_kin_solution: IK for pick (MOCK)
+[ ] Integrate REAL PyBullet IK solver for Franka Panda
+[ ] Add collision checking to motion planning
+[ ] Test streams independently before integration
+
+Week 7: Executor with Replanning
+--------------------------------
+[✅] Create problem_generator.py: BoxelRegistry → PDDLStream problem
+[✅] Create executor.py with BoxelExecutor:
+    - Initialize state from BoxelRegistry
+    - Execute plan action-by-action
+    - On sense_boxel: perform real sensing, update state
+    - If sensing mismatch: trigger replan with updated belief
+    - Propagate knowledge (found → not in other boxels)
+[✅] Create test_pddl_integration.py for manual verification
+[✅] Test execution loop with mock planner/sensing
+
+Week 8: Hidden Object Demo
+--------------------------
+[ ] Integrate with actual PDDLStream solver (not mock planner)
+[ ] Connect executor to PyBullet robot control
+[ ] Create hidden_object_scenario.py:
+    - Place target behind occluder (in shadow boxel)
+    - Initial state: target location unknown (KIF=false for shadows)
+    - Goal: (holding target)
+[ ] Run full demo with real robot motion
+[ ] Visualize belief updates in boxel_viewer.html
+[ ] Record demo video for thesis
+
+================================================================================
+MANUAL VERIFICATION STEPS
+================================================================================
+
+Run these commands to verify the implementation:
+
+1. Generate boxel data (if not already done):
+   python run_demo.py
+
+2. Run the interactive test suite:
+   python test_pddl_integration.py
+
+3. Or run all tests automatically:
+   python test_pddl_integration.py --all
+
+The test suite verifies:
+  - BoxelRegistry loads correctly from JSON
+  - Domain file has all required components
+  - Problem generator creates valid PDDL
+  - Know-If fluents represent belief state correctly
+  - Belief updates work after sensing
+  - Mock execution demonstrates replanning
+
+================================================================================
+PHASE 3: MANIPULATION & EVALUATION (Month 3)
+================================================================================
+
+Week 9-10: Manipulation Actions
+-------------------------------
+[ ] Add pick action with:
+    - Precondition: obj_pose_known
+    - Grasp sampling stream
+    - Motion planning stream
+[ ] Add place action with placement sampling
+[ ] Full pick-and-place pipeline with sensing
+
+Week 11-12: Evaluation & Benchmarking
+-------------------------------------
+[ ] Implement evaluation metrics:
+    - Success rate
+    - Planning time
+    - Plan quality/cost
+[ ] Create baseline comparisons:
+    - Uniform voxelization
+    - Fixed semantic regions
+[ ] Vary scene complexity (# occluders, workspace size)
+[ ] Document results for thesis
+
+================================================================================
+KEY MILESTONES
+================================================================================
+
+[✅] M1: Boxel generation pipeline complete (End of Week 4)
+[ ] M2: First sensing plan generated by PDDLStream (End of Week 8)
+[ ] M3: Full pick-hidden-object demo working (End of Week 10)
+[ ] M4: Evaluation complete with baselines (End of Week 12)
+
+================================================================================
+CURRENT FOCUS: Week 5 - PDDLStream Domain Definition
+================================================================================
