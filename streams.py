@@ -56,29 +56,37 @@ class BoxelStreams:
     PDDLStream calls them lazily during planning.
     """
     
+    # Franka Panda constants
+    ARM_JOINT_INDICES = [0, 1, 2, 3, 4, 5, 6]  # 7 DOF arm
+    END_EFFECTOR_LINK = 11  # panda_grasptarget
+    FINGER_JOINTS = [9, 10]  # panda_finger_joint1, panda_finger_joint2
+    
     def __init__(self, registry: BoxelRegistry, robot_id: int = None,
-                 camera_position: np.ndarray = None):
+                 physics_client: int = None):
         """
         Initialize streams with environment context.
         
         Args:
             registry: BoxelRegistry containing all boxels
-            robot_id: PyBullet body ID of the robot
-            camera_position: Default camera position for sensing
+            robot_id: PyBullet body ID of the robot (required for real IK)
+            physics_client: PyBullet physics client ID (0 if using default)
         """
         self.registry = registry
         self.robot_id = robot_id
-        self.camera_position = camera_position or np.array([0.5, -0.8, 0.7])
+        self.physics_client = physics_client if physics_client is not None else 0
         
-        # Franka Panda joint limits
+        # Franka Panda joint limits (radians)
         self.joint_limits_low = np.array([-2.8973, -1.7628, -2.8973, -3.0718, 
                                           -2.8973, -0.0175, -2.8973])
         self.joint_limits_high = np.array([2.8973, 1.7628, 2.8973, -0.0698,
                                            2.8973, 3.7525, 2.8973])
         
+        # Rest pose for null-space IK (helps get consistent solutions)
+        self.rest_poses = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]
+        
         # Home configuration
         self.home_config = RobotConfig(
-            joint_positions=np.array([0, -0.785, 0, -2.356, 0, 1.571, 0.785]),
+            joint_positions=np.array(self.rest_poses),
             name="q_home"
         )
         
@@ -86,6 +94,10 @@ class BoxelStreams:
         self._config_counter = 0
         self._traj_counter = 0
         self._grasp_counter = 0
+        
+        # IK parameters
+        self.ik_max_iterations = 100
+        self.ik_residual_threshold = 1e-4
     
     # =========================================================================
     # STREAM: Sample Sensing Configuration
@@ -138,12 +150,85 @@ class BoxelStreams:
         """
         Compute IK for end-effector position looking at target.
         
-        For now, returns a mock configuration. In full implementation,
-        would use PyBullet's calculateInverseKinematics.
-        """
-        # TODO: Implement actual IK with PyBullet
-        # For now, return mock configs for testing
+        Uses PyBullet's calculateInverseKinematics if robot_id is set,
+        otherwise falls back to heuristic for testing.
         
+        Args:
+            ee_pos: Desired end-effector position [x, y, z]
+            look_at: Point the end-effector should look at
+            
+        Returns:
+            RobotConfig if IK solution found, None otherwise
+        """
+        # Compute orientation: end-effector pointing toward look_at
+        direction = look_at - ee_pos
+        direction = direction / (np.linalg.norm(direction) + 1e-8)
+        
+        # End-effector z-axis points down, so we want -direction
+        # Use rotation to align with downward-looking pose
+        ee_orn = self._direction_to_quat(-direction)
+        
+        # Try real IK if robot is available
+        if self.robot_id is not None:
+            return self._pybullet_ik(ee_pos, ee_orn)
+        
+        # Fallback: heuristic for testing without robot
+        return self._heuristic_ik(ee_pos, look_at)
+    
+    def _pybullet_ik(self, ee_pos: np.ndarray, 
+                     ee_orn: np.ndarray) -> Optional[RobotConfig]:
+        """
+        Compute IK using PyBullet's calculateInverseKinematics.
+        
+        Args:
+            ee_pos: Desired end-effector position
+            ee_orn: Desired end-effector orientation (quaternion)
+            
+        Returns:
+            RobotConfig if valid solution found, None otherwise
+        """
+        try:
+            # Simple IK call - more robust than null-space version
+            joint_positions = p.calculateInverseKinematics(
+                bodyUniqueId=self.robot_id,
+                endEffectorLinkIndex=self.END_EFFECTOR_LINK,
+                targetPosition=ee_pos.tolist(),
+                targetOrientation=ee_orn.tolist(),
+                maxNumIterations=self.ik_max_iterations,
+                residualThreshold=self.ik_residual_threshold,
+                physicsClientId=self.physics_client
+            )
+            
+            if joint_positions is None or len(joint_positions) < 7:
+                return None
+            
+            # Extract only the arm joints (first 7)
+            arm_joints = np.array(joint_positions[:7])
+            
+            # Validate joint limits (with small tolerance)
+            if np.any(arm_joints < self.joint_limits_low - 0.1) or \
+               np.any(arm_joints > self.joint_limits_high + 0.1):
+                return None
+            
+            # Clamp to limits
+            arm_joints = np.clip(arm_joints, self.joint_limits_low, self.joint_limits_high)
+            
+            # Verify solution by checking forward kinematics error
+            # (skip for now to avoid state changes)
+            
+            return RobotConfig(joint_positions=arm_joints)
+            
+        except Exception as e:
+            # IK failed
+            return None
+    
+    def _heuristic_ik(self, ee_pos: np.ndarray, 
+                      look_at: np.ndarray) -> Optional[RobotConfig]:
+        """
+        Heuristic IK for testing without robot.
+        
+        Generates plausible joint configurations based on target position.
+        """
         # Simple heuristic: perturb home config based on target
         offset = (ee_pos - np.array([0.5, 0, 0.5])) * 0.5
         joint_offsets = np.array([offset[1], offset[2], offset[0], 
@@ -155,6 +240,68 @@ class BoxelStreams:
         new_joints = np.clip(new_joints, self.joint_limits_low, self.joint_limits_high)
         
         return RobotConfig(joint_positions=new_joints)
+    
+    def _direction_to_quat(self, direction: np.ndarray) -> np.ndarray:
+        """
+        Convert a direction vector to a quaternion.
+        
+        The resulting orientation has z-axis aligned with direction.
+        
+        Args:
+            direction: Normalized direction vector
+            
+        Returns:
+            Quaternion [x, y, z, w]
+        """
+        # Default: pointing down (-z)
+        z_axis = direction / (np.linalg.norm(direction) + 1e-8)
+        
+        # Choose x-axis perpendicular to z
+        if abs(z_axis[2]) < 0.9:
+            x_axis = np.cross([0, 0, 1], z_axis)
+        else:
+            x_axis = np.cross([0, 1, 0], z_axis)
+        x_axis = x_axis / (np.linalg.norm(x_axis) + 1e-8)
+        
+        # y-axis completes the frame
+        y_axis = np.cross(z_axis, x_axis)
+        
+        # Build rotation matrix
+        R = np.array([x_axis, y_axis, z_axis]).T
+        
+        # Convert to quaternion
+        return self._rotation_matrix_to_quat(R)
+    
+    def _rotation_matrix_to_quat(self, R: np.ndarray) -> np.ndarray:
+        """Convert 3x3 rotation matrix to quaternion [x, y, z, w]."""
+        trace = R[0, 0] + R[1, 1] + R[2, 2]
+        
+        if trace > 0:
+            s = 0.5 / np.sqrt(trace + 1.0)
+            w = 0.25 / s
+            x = (R[2, 1] - R[1, 2]) * s
+            y = (R[0, 2] - R[2, 0]) * s
+            z = (R[1, 0] - R[0, 1]) * s
+        elif R[0, 0] > R[1, 1] and R[0, 0] > R[2, 2]:
+            s = 2.0 * np.sqrt(1.0 + R[0, 0] - R[1, 1] - R[2, 2])
+            w = (R[2, 1] - R[1, 2]) / s
+            x = 0.25 * s
+            y = (R[0, 1] + R[1, 0]) / s
+            z = (R[0, 2] + R[2, 0]) / s
+        elif R[1, 1] > R[2, 2]:
+            s = 2.0 * np.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2])
+            w = (R[0, 2] - R[2, 0]) / s
+            x = (R[0, 1] + R[1, 0]) / s
+            y = 0.25 * s
+            z = (R[1, 2] + R[2, 1]) / s
+        else:
+            s = 2.0 * np.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1])
+            w = (R[1, 0] - R[0, 1]) / s
+            x = (R[0, 2] + R[2, 0]) / s
+            y = (R[1, 2] + R[2, 1]) / s
+            z = 0.25 * s
+        
+        return np.array([x, y, z, w])
     
     # =========================================================================
     # STREAM: Sample Grasp
