@@ -24,3 +24,6 @@ Thumbs.db
 # Project outputs (optional - remove if you want to track these)
 # boxel_data.json
 # boxel_facts.pddl
+wsl_env/
+temp/
+statistics/
