@@ -13,9 +13,16 @@ Key Pattern:
 """
 
 import time
-from typing import List, Tuple, Set, Optional, Callable
-from dataclasses import dataclass
+import numpy as np
+from typing import List, Tuple, Set, Optional, Callable, Dict
+from dataclasses import dataclass, field
 from enum import Enum
+
+try:
+    import pybullet as p
+    PYBULLET_AVAILABLE = True
+except ImportError:
+    PYBULLET_AVAILABLE = False
 
 from boxel_data import BoxelRegistry, BoxelData, BoxelType
 from problem_generator import ProblemGenerator, PlanningProblem
@@ -46,12 +53,24 @@ class BoxelExecutor:
     Uses optimistic planning: the planner assumes sensing will succeed.
     During execution, if sensing fails (object not found), the executor
     updates the belief state and triggers replanning.
+    
+    Can optionally control a real PyBullet robot for execution.
     """
+    
+    # Franka Panda constants
+    ARM_JOINT_INDICES = [0, 1, 2, 3, 4, 5, 6]
+    FINGER_JOINTS = [9, 10]
+    FINGER_OPEN = 0.04
+    FINGER_CLOSED = 0.01
     
     def __init__(self, 
                  registry: BoxelRegistry,
                  oracle_locations: dict,
                  planner_fn: Callable[[PlanningProblem], List] = None,
+                 robot_id: int = None,
+                 physics_client: int = None,
+                 config_lookup: Dict[str, np.ndarray] = None,
+                 execute_real: bool = False,
                  verbose: bool = True):
         """
         Initialize executor.
@@ -61,6 +80,10 @@ class BoxelExecutor:
             oracle_locations: Dict mapping object_name -> boxel_id (ground truth)
             planner_fn: Function that takes PlanningProblem and returns action list
                         If None, uses mock planner for testing
+            robot_id: PyBullet body ID of the robot (for real execution)
+            physics_client: PyBullet physics client ID
+            config_lookup: Dict mapping config names to joint arrays
+            execute_real: If True, actually move robot in PyBullet
             verbose: Print execution trace
         """
         self.registry = registry
@@ -68,8 +91,18 @@ class BoxelExecutor:
         self.planner_fn = planner_fn or self._mock_planner
         self.verbose = verbose
         
+        # PyBullet robot control
+        self.robot_id = robot_id
+        self.physics_client = physics_client if physics_client is not None else 0
+        self.config_lookup = config_lookup or {}
+        self.execute_real = execute_real and PYBULLET_AVAILABLE and robot_id is not None
+        
+        # Home configuration
+        self.home_joints = np.array([0, -0.785, 0, -2.356, 0, 1.571, 0.785])
+        self.config_lookup['q_home'] = self.home_joints
+        
         self.problem_generator = ProblemGenerator(registry)
-        self.streams = BoxelStreams(registry)
+        self.streams = BoxelStreams(registry, robot_id=robot_id, physics_client=physics_client)
     
     def execute(self, 
                 target_objects: List[str],
@@ -227,10 +260,100 @@ class BoxelExecutor:
         # Update state
         state.current_config = q2
         
-        # TODO: Actually execute motion in PyBullet
-        time.sleep(0.1)  # Simulate execution time
+        # Execute real motion if enabled
+        if self.execute_real:
+            target_joints = self._get_config_joints(q2)
+            if target_joints is not None:
+                self._move_robot_to_config(target_joints)
+        else:
+            time.sleep(0.1)  # Simulate execution time
         
         return ActionResult.SUCCESS
+    
+    def _get_config_joints(self, config_name: str) -> Optional[np.ndarray]:
+        """Get joint positions for a named configuration."""
+        if config_name in self.config_lookup:
+            return self.config_lookup[config_name]
+        return None
+    
+    def _move_robot_to_config(self, target_joints: np.ndarray, 
+                              duration: float = 1.0, max_steps: int = 500,
+                              tolerance: float = 0.05):
+        """
+        Move robot to target joint configuration.
+        
+        Args:
+            target_joints: Target joint positions (7 DOF)
+            duration: Minimum time to complete motion in seconds
+            max_steps: Maximum simulation steps
+            tolerance: Joint error tolerance for convergence
+        """
+        if not PYBULLET_AVAILABLE or self.robot_id is None:
+            return
+        
+        # Set target for all joints
+        for j, joint_idx in enumerate(self.ARM_JOINT_INDICES):
+            p.setJointMotorControl2(
+                self.robot_id,
+                joint_idx,
+                p.POSITION_CONTROL,
+                targetPosition=target_joints[j],
+                force=240,
+                maxVelocity=2.0,
+                physicsClientId=self.physics_client
+            )
+        
+        # Step simulation until converged or max steps reached
+        dt = 1.0 / 240.0
+        for step in range(max_steps):
+            p.stepSimulation(physicsClientId=self.physics_client)
+            
+            # Check convergence every 10 steps
+            if step % 10 == 0 and step > 0:
+                current_joints = np.array([
+                    p.getJointState(self.robot_id, i, physicsClientId=self.physics_client)[0]
+                    for i in self.ARM_JOINT_INDICES
+                ])
+                error = np.max(np.abs(current_joints - target_joints))
+                if error < tolerance:
+                    break
+            
+            # Sleep to maintain real-time (optional, slows down but looks better in GUI)
+            # time.sleep(dt)
+    
+    def _open_gripper(self):
+        """Open the robot gripper."""
+        if not PYBULLET_AVAILABLE or self.robot_id is None:
+            return
+        for finger_idx in self.FINGER_JOINTS:
+            p.setJointMotorControl2(
+                self.robot_id,
+                finger_idx,
+                p.POSITION_CONTROL,
+                targetPosition=self.FINGER_OPEN,
+                force=20,
+                physicsClientId=self.physics_client
+            )
+        for _ in range(50):
+            p.stepSimulation(physicsClientId=self.physics_client)
+            time.sleep(1/240)
+    
+    def _close_gripper(self):
+        """Close the robot gripper."""
+        if not PYBULLET_AVAILABLE or self.robot_id is None:
+            return
+        for finger_idx in self.FINGER_JOINTS:
+            p.setJointMotorControl2(
+                self.robot_id,
+                finger_idx,
+                p.POSITION_CONTROL,
+                targetPosition=self.FINGER_CLOSED,
+                force=20,
+                physicsClientId=self.physics_client
+            )
+        for _ in range(50):
+            p.stepSimulation(physicsClientId=self.physics_client)
+            time.sleep(1/240)
     
     def _execute_pick(self, params: Tuple, state: ExecutionState) -> ActionResult:
         """Execute pick action."""
@@ -239,11 +362,19 @@ class BoxelExecutor:
         if self.verbose:
             print(f"  -> Picking {obj_name} from {boxel_id}")
         
+        # Execute real pick if enabled
+        if self.execute_real:
+            # Move to pick config
+            target_joints = self._get_config_joints(config)
+            if target_joints is not None:
+                self._open_gripper()
+                self._move_robot_to_config(target_joints)
+                self._close_gripper()
+        else:
+            time.sleep(0.1)
+        
         # Update state
         state.holding = obj_name
-        
-        # TODO: Actually execute pick in PyBullet
-        time.sleep(0.1)
         
         return ActionResult.SUCCESS
     
@@ -254,11 +385,17 @@ class BoxelExecutor:
         if self.verbose:
             print(f"  -> Placing {obj_name} in {boxel_id}")
         
+        # Execute real place if enabled
+        if self.execute_real:
+            target_joints = self._get_config_joints(config)
+            if target_joints is not None:
+                self._move_robot_to_config(target_joints)
+                self._open_gripper()
+        else:
+            time.sleep(0.1)
+        
         # Update state
         state.holding = None
-        
-        # TODO: Actually execute place in PyBullet
-        time.sleep(0.1)
         
         return ActionResult.SUCCESS
     
