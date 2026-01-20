@@ -24,7 +24,6 @@ import sys
 import os
 import argparse
 import random
-import time
 
 # Add pddlstream to path (for WSL)
 PDDLSTREAM_PATH = '/mnt/c/Users/HaniAlassiriAlhabbou/git/pddlstream_lib'
@@ -73,6 +72,10 @@ class BeliefState:
         """Get list of shadows we haven't checked yet."""
         return [s for s, status in self.shadow_status.items() if status == 'unknown']
     
+    def get_known_empty_shadows(self):
+        """Get list of shadows we've checked and found empty."""
+        return [s for s, status in self.shadow_status.items() if status == 'not_here']
+    
     def is_target_found(self):
         """Check if we've found the target."""
         return self.target_found_in is not None
@@ -91,11 +94,9 @@ def main(gui=True):
     robot_id = env.objects["robot"].object_id
     print(f"Robot ID: {robot_id}")
     
-    # Let settle
-    for _ in range(100):
+    # Let settle (minimal)
+    for _ in range(50):
         env.step_simulation()
-        if gui:
-            time.sleep(1.0 / 240.0)
     
     # Get boxels
     obs = env.get_camera_observation()
@@ -108,15 +109,13 @@ def main(gui=True):
             cameraTargetPosition=[0.5, 0.0, env.table_surface_height]
         )
         env.draw_boxels(all_known, duration=0)
-        
-        free_boxels = env.generate_free_space(all_known, visualize=False)
-        merged_free = merge_free_space_cells(free_boxels)
-        env.draw_boxels(all_known + merged_free, duration=0, clear_previous=True)
-        all_known = all_known + merged_free
-    else:
-        free_boxels = env.generate_free_space(all_known, visualize=False)
-        merged_free = merge_free_space_cells(free_boxels)
-        all_known = all_known + merged_free
+    
+    free_boxels = env.generate_free_space(all_known, visualize=False)
+    merged_free = merge_free_space_cells(free_boxels)
+    all_known = all_known + merged_free
+    
+    if gui:
+        env.draw_boxels(all_known, duration=0, clear_previous=True)
     
     # Create registry
     print("\n--- Phase 3: Creating BoxelRegistry ---")
@@ -161,16 +160,16 @@ def main(gui=True):
     planner = PDDLStreamPlanner(registry, robot_id=robot_id, 
                                  shadow_occluder_map=shadow_occluder_map)
     
+    # Get boxel centers for robot motion targets
+    boxel_centers = {b.id: b.center for b in registry.boxels.values()}
+    
     plan_count = 0
     max_replans = len(shadows) + 1  # Safety limit
-    
-    if gui:
-        print("Starting in 2 seconds...")
-        time.sleep(2)
     
     while not belief.is_target_found() and plan_count < max_replans:
         plan_count += 1
         unknown_shadows = belief.get_unknown_shadows()
+        known_empty = belief.get_known_empty_shadows()
         
         print(f"\n=== PLAN #{plan_count} ===")
         print(f"Unknown shadows remaining: {len(unknown_shadows)}")
@@ -179,10 +178,12 @@ def main(gui=True):
             print("ERROR: Searched all shadows but target not found!")
             break
         
-        # Call PDDLStream to plan
+        # Call PDDLStream to plan with current belief state
         plan = planner.plan(
             target_objects=[target_name],
             goal=f'(holding {target_name})',
+            known_empty_shadows=known_empty,
+            moved_occluders=list(belief.occluders_moved),
             max_time=60.0,
             verbose=False  # Quiet for replanning
         )
@@ -204,18 +205,36 @@ def main(gui=True):
             
             if action_name == 'push_aside':
                 occluder_id = params[0]
+                config_name = params[1]
                 print(f"    Pushing {occluder_id} aside...")
                 belief.mark_occluder_moved(occluder_id)
-                # In real execution: move robot to push config, push object
-                if gui:
-                    time.sleep(0.5)
+                
+                # Move robot to push position and push
+                if occluder_id in boxel_centers:
+                    push_target = boxel_centers[occluder_id] + np.array([0.1, 0, 0.1])
+                    move_robot_to_pos(robot_id, push_target, gui)
                     
             elif action_name == 'move':
                 q1, q2, traj = params
                 print(f"    Moving to {q2}...")
-                # In real execution: follow trajectory
-                if gui:
-                    time.sleep(0.3)
+                
+                # Extract boxel ID from config name and move to it
+                # Config names like "q_sense_shadow_004_2" -> shadow_004
+                if 'sense' in q2:
+                    parts = q2.split('_')
+                    boxel_id = '_'.join(parts[2:-1])  # e.g. "shadow_004"
+                    if boxel_id in boxel_centers:
+                        sense_pos = boxel_centers[boxel_id] + np.array([0, -0.3, 0.2])
+                        move_robot_to_pos(robot_id, sense_pos, gui)
+                elif 'push' in q2:
+                    parts = q2.split('_')
+                    occluder_id = '_'.join(parts[2:-1])
+                    if occluder_id in boxel_centers:
+                        push_pos = boxel_centers[occluder_id] + np.array([0, -0.2, 0.15])
+                        move_robot_to_pos(robot_id, push_pos, gui)
+                elif 'pick' in q2:
+                    # Move above target
+                    move_robot_to_pos(robot_id, target_pos + np.array([0, 0, 0.15]), gui)
                     
             elif action_name == 'sense_shadow':
                 obj, shadow_id, occluder_id, config = params
@@ -231,9 +250,6 @@ def main(gui=True):
                     print(f"    Target NOT in {shadow_id}")
                     print(f"    -> REPLANNING with updated belief...")
                     break  # Exit action loop to replan
-                
-                if gui:
-                    time.sleep(0.5)
                     
             elif action_name == 'pick':
                 obj, boxel_id, grasp, config = params
@@ -258,63 +274,48 @@ def main(gui=True):
     print("=" * 60)
     
     if gui:
-        print("\nWindow stays open for 10 seconds...")
-        for _ in range(int(240 * 10)):
-            env.step_simulation()
-            time.sleep(1.0/240.0)
+        print("\nWindow stays open (press Ctrl+C to exit)...")
+        try:
+            while True:
+                env.step_simulation()
+        except KeyboardInterrupt:
+            pass
     
     env.close()
     return belief.is_target_found()
 
 
-def execute_pick(robot_id, env, target_name, target_pos, gui):
-    """Execute pick action with robot."""
-    rest_pose = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]
-    pick_orn = p.getQuaternionFromEuler([0, np.pi, 0])
-    
-    # Move above target
-    pick_pos = target_pos + np.array([0, 0, 0.15])
-    pick_joints = p.calculateInverseKinematics(
-        robot_id, 11, pick_pos.tolist(), pick_orn,
-        lowerLimits=[-2.9, -1.8, -2.9, -3.1, -2.9, -0.02, -2.9],
-        upperLimits=[2.9, 1.8, 2.9, -0.07, 2.9, 3.8, 2.9],
-        jointRanges=[5.8, 3.6, 5.8, 3.0, 5.8, 3.8, 5.8],
-        restPoses=rest_pose
-    )[:7]
-    move_robot_smooth(robot_id, pick_joints, gui)
-    
-    # Lower
-    grasp_pos = target_pos + np.array([0, 0, 0.05])
-    grasp_joints = p.calculateInverseKinematics(
-        robot_id, 11, grasp_pos.tolist(), pick_orn,
-        lowerLimits=[-2.9, -1.8, -2.9, -3.1, -2.9, -0.02, -2.9],
-        upperLimits=[2.9, 1.8, 2.9, -0.07, 2.9, 3.8, 2.9],
-        jointRanges=[5.8, 3.6, 5.8, 3.0, 5.8, 3.8, 5.8],
-        restPoses=rest_pose
-    )[:7]
-    move_robot_smooth(robot_id, grasp_joints, gui)
-    
-    # Gripper
-    close_gripper(robot_id, gui)
-    
-    # Attach
-    target_id = env.objects[target_name].object_id
-    p.createConstraint(robot_id, 11, target_id, -1, p.JOINT_FIXED, [0,0,0], [0,0,0.05], [0,0,0])
-    
-    # Lift
-    lift_pos = target_pos + np.array([0, 0, 0.3])
-    lift_joints = p.calculateInverseKinematics(
-        robot_id, 11, lift_pos.tolist(), pick_orn,
-        lowerLimits=[-2.9, -1.8, -2.9, -3.1, -2.9, -0.02, -2.9],
-        upperLimits=[2.9, 1.8, 2.9, -0.07, 2.9, 3.8, 2.9],
-        jointRanges=[5.8, 3.6, 5.8, 3.0, 5.8, 3.8, 5.8],
-        restPoses=rest_pose
-    )[:7]
-    move_robot_smooth(robot_id, lift_joints, gui)
+# Robot IK parameters
+REST_POSE = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]
+JOINT_LIMITS_LOW = [-2.9, -1.8, -2.9, -3.1, -2.9, -0.02, -2.9]
+JOINT_LIMITS_HIGH = [2.9, 1.8, 2.9, -0.07, 2.9, 3.8, 2.9]
+JOINT_RANGES = [5.8, 3.6, 5.8, 3.0, 5.8, 3.8, 5.8]
+END_EFFECTOR_LINK = 11
 
 
-def move_robot_smooth(robot_id, target_joints, gui=True, steps=100):
-    """Smoothly move robot."""
+def compute_ik(robot_id, target_pos, target_orn=None):
+    """Compute IK solution for target position."""
+    if target_orn is None:
+        target_orn = p.getQuaternionFromEuler([0, np.pi, 0])  # Gripper pointing down
+    
+    joints = p.calculateInverseKinematics(
+        robot_id, END_EFFECTOR_LINK, target_pos.tolist(), target_orn,
+        lowerLimits=JOINT_LIMITS_LOW,
+        upperLimits=JOINT_LIMITS_HIGH,
+        jointRanges=JOINT_RANGES,
+        restPoses=REST_POSE
+    )[:7]
+    return joints
+
+
+def move_robot_to_pos(robot_id, target_pos, gui=True):
+    """Move robot end-effector to target position."""
+    joints = compute_ik(robot_id, target_pos)
+    move_robot_smooth(robot_id, joints, gui)
+
+
+def move_robot_smooth(robot_id, target_joints, gui=True, steps=60):
+    """Smoothly move robot to target joint configuration."""
     current = [p.getJointState(robot_id, i)[0] for i in range(7)]
     for t in range(steps):
         alpha = (t + 1) / steps
@@ -323,18 +324,34 @@ def move_robot_smooth(robot_id, target_joints, gui=True, steps=100):
             p.setJointMotorControl2(robot_id, i, p.POSITION_CONTROL,
                                     targetPosition=interp[i], force=240)
         p.stepSimulation()
-        if gui:
-            time.sleep(1/240)
 
 
 def close_gripper(robot_id, gui=True):
     """Close gripper."""
-    for _ in range(50):
+    for _ in range(30):
         p.setJointMotorControl2(robot_id, 9, p.POSITION_CONTROL, targetPosition=0.01, force=50)
         p.setJointMotorControl2(robot_id, 10, p.POSITION_CONTROL, targetPosition=0.01, force=50)
         p.stepSimulation()
-        if gui:
-            time.sleep(1/240)
+
+
+def execute_pick(robot_id, env, target_name, target_pos, gui):
+    """Execute pick action with robot."""
+    # Move above target
+    move_robot_to_pos(robot_id, target_pos + np.array([0, 0, 0.15]), gui)
+    
+    # Lower to grasp
+    move_robot_to_pos(robot_id, target_pos + np.array([0, 0, 0.05]), gui)
+    
+    # Close gripper
+    close_gripper(robot_id, gui)
+    
+    # Attach object
+    target_id = env.objects[target_name].object_id
+    p.createConstraint(robot_id, END_EFFECTOR_LINK, target_id, -1, 
+                       p.JOINT_FIXED, [0,0,0], [0,0,0.05], [0,0,0])
+    
+    # Lift
+    move_robot_to_pos(robot_id, target_pos + np.array([0, 0, 0.3]), gui)
 
 
 if __name__ == "__main__":

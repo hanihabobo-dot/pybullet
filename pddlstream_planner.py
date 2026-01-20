@@ -129,7 +129,9 @@ class PDDLStreamPlanner:
     def create_problem(self, 
                        target_objects: List[str],
                        goal_expr: str,
-                       current_config: str = "q_home") -> PDDLProblem:
+                       current_config: str = "q_home",
+                       known_empty_shadows: List[str] = None,
+                       moved_occluders: List[str] = None) -> PDDLProblem:
         """
         Create a PDDLStream problem from current state.
         
@@ -137,10 +139,15 @@ class PDDLStreamPlanner:
             target_objects: Objects to reason about
             goal_expr: Goal expression like "(holding target_1)"
             current_config: Current robot configuration name
+            known_empty_shadows: Shadows we've already checked (not containing target)
+            moved_occluders: Occluders that have been pushed aside
             
         Returns:
             PDDLProblem for PDDLStream solver
         """
+        known_empty_shadows = known_empty_shadows or []
+        moved_occluders = moved_occluders or []
+        
         # Build initial state as list of facts (tuples)
         init = []
         
@@ -155,11 +162,18 @@ class PDDLStreamPlanner:
             if boxel.boxel_type == BoxelType.SHADOW:
                 init.append(('is_shadow', boxel.id))
                 shadows.append(boxel.id)
-                # Shadows start as UNKNOWN - no KIF fact
+                
+                # If we've searched this shadow and found nothing, mark as KNOWN NOT HERE
+                if boxel.id in known_empty_shadows:
+                    for obj in target_objects:
+                        init.append(('obj_at_boxel_KIF', obj, boxel.id))
+                # Otherwise still UNKNOWN - no KIF fact
                 
             elif boxel.boxel_type == BoxelType.OBJECT:
                 init.append(('is_occluder', boxel.id))
-                init.append(('occluder_blocking', boxel.id))  # Starts blocking
+                # Only blocking if NOT moved yet
+                if boxel.id not in moved_occluders:
+                    init.append(('occluder_blocking', boxel.id))
                 occluders.append(boxel.id)
                 # Known NOT in boxel for targets
                 for obj in target_objects:
@@ -217,6 +231,8 @@ class PDDLStreamPlanner:
              target_objects: List[str],
              goal: str,
              current_config: str = "q_home",
+             known_empty_shadows: List[str] = None,
+             moved_occluders: List[str] = None,
              max_time: float = 30.0,
              verbose: bool = True) -> Optional[List[Tuple]]:
         """
@@ -226,13 +242,16 @@ class PDDLStreamPlanner:
             target_objects: Objects to reason about
             goal: Goal expression
             current_config: Current robot config
+            known_empty_shadows: Shadows already checked (empty)
+            moved_occluders: Occluders already pushed aside
             max_time: Maximum planning time in seconds
             verbose: Print planning info
             
         Returns:
             List of action tuples, or None if planning fails
         """
-        problem = self.create_problem(target_objects, goal, current_config)
+        problem = self.create_problem(target_objects, goal, current_config,
+                                      known_empty_shadows, moved_occluders)
         
         if verbose:
             print(f"\n--- PDDLStream Planning ---")
