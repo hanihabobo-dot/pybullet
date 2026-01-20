@@ -151,7 +151,18 @@ def main(gui=True):
     for i, shadow_id in enumerate(shadows):
         shadow_occluder_map[shadow_id] = occluders[i % len(occluders)]
     
-    print(f"  Shadow->Occluder mapping: {shadow_occluder_map}")
+    # Create mapping from boxel IDs to PyBullet object names and IDs
+    # Boxel IDs are like "obj_000", PyBullet names are like "occluder_1"
+    boxel_to_pybullet = {}
+    for boxel in registry.boxels.values():
+        if boxel.object_name and boxel.object_name in env.objects:
+            boxel_to_pybullet[boxel.id] = {
+                'name': boxel.object_name,
+                'pybullet_id': env.objects[boxel.object_name].object_id,
+                'position': np.array(env.objects[boxel.object_name].position)
+            }
+    
+    print(f"  Boxel->PyBullet mapping: {len(boxel_to_pybullet)} objects")
     
     # =========================================================
     # PHASE 5: Planning with Replanning Loop
@@ -211,10 +222,29 @@ def main(gui=True):
                 print(f"    Pushing {occluder_id} aside...")
                 belief.mark_occluder_moved(occluder_id)
                 
-                # Move robot to push position and push
-                if occluder_id in boxel_centers:
-                    push_target = boxel_centers[occluder_id] + np.array([0.1, 0, 0.1])
-                    move_robot_to_pos(robot_id, push_target, gui)
+                # Actually move the occluder in PyBullet
+                if occluder_id in boxel_to_pybullet:
+                    occ_info = boxel_to_pybullet[occluder_id]
+                    occ_pybullet_id = occ_info['pybullet_id']
+                    occ_pos = occ_info['position']
+                    
+                    # Move robot above occluder
+                    move_robot_to_pos(robot_id, occ_pos + np.array([0, 0, 0.15]), gui)
+                    
+                    # Push occluder to the side (move it in PyBullet)
+                    new_pos = occ_pos + np.array([0.3, 0, 0])  # Push 30cm to the right
+                    p.resetBasePositionAndOrientation(
+                        occ_pybullet_id, new_pos.tolist(), [0, 0, 0, 1]
+                    )
+                    
+                    # Update our position tracking
+                    occ_info['position'] = new_pos
+                    
+                    # Step simulation to let physics settle
+                    for _ in range(30):
+                        p.stepSimulation()
+                    
+                    print(f"    -> Moved {occ_info['name']} from {occ_pos[:2]} to {new_pos[:2]}")
                     
             elif action_name == 'move':
                 q1, q2, traj = params
@@ -222,21 +252,28 @@ def main(gui=True):
                 
                 # Extract boxel ID from config name and move to it
                 # Config names like "q_sense_shadow_004_2" -> shadow_004
-                if 'sense' in q2:
-                    parts = q2.split('_')
-                    boxel_id = '_'.join(parts[2:-1])  # e.g. "shadow_004"
+                # Or "q_push_obj_000_1" -> obj_000
+                if 'sense' in str(q2):
+                    parts = str(q2).split('_')
+                    # q_sense_shadow_004_2 -> shadow_004
+                    boxel_id = '_'.join(parts[2:-1])
                     if boxel_id in boxel_centers:
                         sense_pos = boxel_centers[boxel_id] + np.array([0, -0.3, 0.2])
                         move_robot_to_pos(robot_id, sense_pos, gui)
-                elif 'push' in q2:
-                    parts = q2.split('_')
-                    occluder_id = '_'.join(parts[2:-1])
-                    if occluder_id in boxel_centers:
-                        push_pos = boxel_centers[occluder_id] + np.array([0, -0.2, 0.15])
+                        print(f"    -> Moved to sense position for {boxel_id}")
+                elif 'push' in str(q2):
+                    parts = str(q2).split('_')
+                    # q_push_obj_000_1 -> obj_000
+                    occluder_boxel_id = '_'.join(parts[2:-1])
+                    if occluder_boxel_id in boxel_to_pybullet:
+                        occ_pos = boxel_to_pybullet[occluder_boxel_id]['position']
+                        push_pos = occ_pos + np.array([0, -0.2, 0.15])
                         move_robot_to_pos(robot_id, push_pos, gui)
-                elif 'pick' in q2:
+                        print(f"    -> Moved to push position for {occluder_boxel_id}")
+                elif 'pick' in str(q2):
                     # Move above target
                     move_robot_to_pos(robot_id, target_pos + np.array([0, 0, 0.15]), gui)
+                    print(f"    -> Moved to pick position")
                     
             elif action_name == 'sense_shadow':
                 obj, shadow_id, occluder_id, config = params
