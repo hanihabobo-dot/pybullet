@@ -146,13 +146,12 @@ def main(gui=True):
     print(f"  Robot must search to find it!")
     
     # Create shadow->occluder mapping (for the PDDL domain)
-    # Each shadow is mapped to an occluder (cycling if more shadows than occluders)
+    # EVERY shadow must have an occluder mapped (cycle through if needed)
     shadow_occluder_map = {}
     for i, shadow_id in enumerate(shadows):
-        # Use modulo to cycle through occluders if we have more shadows
         shadow_occluder_map[shadow_id] = occluders[i % len(occluders)]
     
-    print(f"  Shadow->Occluder mapping: {len(shadow_occluder_map)} mappings")
+    print(f"  Shadow->Occluder mapping: {shadow_occluder_map}")
     
     # =========================================================
     # PHASE 5: Planning with Replanning Loop
@@ -319,7 +318,6 @@ def move_robot_to_pos(robot_id, target_pos, gui=True):
 
 def move_robot_smooth(robot_id, target_joints, gui=True, steps=60):
     """Smoothly move robot to target joint configuration."""
-    import time
     current = [p.getJointState(robot_id, i)[0] for i in range(7)]
     for t in range(steps):
         alpha = (t + 1) / steps
@@ -328,19 +326,14 @@ def move_robot_smooth(robot_id, target_joints, gui=True, steps=60):
             p.setJointMotorControl2(robot_id, i, p.POSITION_CONTROL,
                                     targetPosition=interp[i], force=240)
         p.stepSimulation()
-        if gui:
-            time.sleep(1/120)  # Small delay for visual feedback
 
 
 def close_gripper(robot_id, gui=True):
     """Close gripper."""
-    import time
     for _ in range(30):
         p.setJointMotorControl2(robot_id, 9, p.POSITION_CONTROL, targetPosition=0.01, force=50)
         p.setJointMotorControl2(robot_id, 10, p.POSITION_CONTROL, targetPosition=0.01, force=50)
         p.stepSimulation()
-        if gui:
-            time.sleep(1/120)
 
 
 def execute_pick(robot_id, env, target_name, target_pos, gui):
