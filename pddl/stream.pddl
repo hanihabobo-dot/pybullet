@@ -1,6 +1,15 @@
 (define (stream boxel-streams)
   
+  ;; Sample a robot configuration for pushing an occluder aside
+  (:stream sample-push-config
+    :inputs (?occ)
+    :domain (is_occluder ?occ)
+    :outputs (?q)
+    :certified (and (Config ?q) (push_config ?occ ?q))
+  )
+  
   ;; Sample a robot configuration for sensing a shadow boxel
+  ;; (Only valid after occluder is pushed aside - checked at action level)
   (:stream sample-sensing-config
     :inputs (?b)
     :domain (is_shadow ?b)

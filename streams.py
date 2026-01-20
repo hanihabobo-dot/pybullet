@@ -100,6 +100,49 @@ class BoxelStreams:
         self.ik_residual_threshold = 1e-4
     
     # =========================================================================
+    # STREAM: Sample Push Configuration (for moving occluders aside)
+    # =========================================================================
+    def sample_push_config(self, occluder_id: str) -> Iterator[Tuple[RobotConfig]]:
+        """
+        Generate robot configurations for pushing an occluder aside.
+        
+        PDDLStream declaration:
+            (:stream sample-push-config
+              :inputs (?occ)
+              :domain (is_occluder ?occ)
+              :outputs (?q)
+              :certified (and (Config ?q) (push_config ?occ ?q)))
+        
+        Args:
+            occluder_id: ID of the occluder boxel to push
+            
+        Yields:
+            Tuples of (config,) that can push the occluder
+        """
+        boxel = self.registry.get_boxel(occluder_id)
+        if boxel is None:
+            return
+        
+        # Generate push positions (approach from the side)
+        occluder_center = boxel.center
+        
+        for angle in np.linspace(0, 2*np.pi, 4, endpoint=False):
+            # Position to the side of the occluder
+            push_pos = occluder_center + np.array([
+                0.15 * np.cos(angle),
+                0.15 * np.sin(angle),
+                0.1  # Slightly above
+            ])
+            
+            # Compute IK
+            config = self._compute_sensing_ik(push_pos, occluder_center)
+            
+            if config is not None:
+                self._config_counter += 1
+                config.name = f"q_push_{occluder_id}_{self._config_counter}"
+                yield (config,)
+    
+    # =========================================================================
     # STREAM: Sample Sensing Configuration
     # =========================================================================
     def sample_sensing_config(self, boxel_id: str) -> Iterator[Tuple[RobotConfig]]:

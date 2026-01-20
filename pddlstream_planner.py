@@ -46,16 +46,19 @@ class PDDLStreamPlanner:
     stream sampling for IK and motion planning.
     """
     
-    def __init__(self, registry: BoxelRegistry, robot_id: int = None):
+    def __init__(self, registry: BoxelRegistry, robot_id: int = None,
+                 shadow_occluder_map: Dict[str, str] = None):
         """
         Initialize the planner.
         
         Args:
             registry: BoxelRegistry with scene boxels
             robot_id: PyBullet robot body ID (optional, for real IK)
+            shadow_occluder_map: Dict mapping shadow_id -> occluder_id
         """
         self.registry = registry
         self.robot_id = robot_id
+        self.shadow_occluder_map = shadow_occluder_map or {}
         
         # Load PDDL files (use PDDLStream-compatible untyped domain)
         self.domain_pddl = read_pddl_file('domain_pddlstream.pddl')
@@ -74,11 +77,23 @@ class PDDLStreamPlanner:
             Dict mapping stream names to generator functions
         """
         return {
+            'sample-push-config': from_gen_fn(self._gen_push_config),
             'sample-sensing-config': from_gen_fn(self._gen_sensing_config),
             'sample-grasp': from_gen_fn(self._gen_grasp),
             'plan-motion': from_gen_fn(self._gen_motion),
             'compute-kin': from_gen_fn(self._gen_kin_solution),
         }
+    
+    def _gen_push_config(self, occluder_id: str):
+        """Generator for push configurations (to move occluder aside)."""
+        boxel = self.registry.get_boxel(occluder_id)
+        if boxel is None:
+            return
+        
+        for i in range(2):
+            self._config_count += 1
+            config_name = f"q_push_{occluder_id}_{self._config_count}"
+            yield (config_name,)
     
     def _gen_sensing_config(self, boxel_id: str):
         """Generator for sensing configurations."""
@@ -129,26 +144,44 @@ class PDDLStreamPlanner:
         # Build initial state as list of facts (tuples)
         init = []
         
+        # Track occluders and their shadows
+        occluders = []
+        shadows = []
+        
         # Add boxel facts with type predicates
         for boxel in self.registry.boxels.values():
             init.append(('Boxel', boxel.id))  # Type predicate
-            init.append(('semantic_zone', boxel.id))
             
             if boxel.boxel_type == BoxelType.SHADOW:
                 init.append(('is_shadow', boxel.id))
+                shadows.append(boxel.id)
                 # Shadows start as UNKNOWN - no KIF fact
                 
             elif boxel.boxel_type == BoxelType.OBJECT:
                 init.append(('is_occluder', boxel.id))
+                init.append(('occluder_blocking', boxel.id))  # Starts blocking
+                occluders.append(boxel.id)
                 # Known NOT in boxel for targets
                 for obj in target_objects:
                     init.append(('obj_at_boxel_KIF', obj, boxel.id))
-                    # Note: NOT having obj_at_boxel means known not there
                     
             elif boxel.boxel_type == BoxelType.FREE_SPACE:
+                init.append(('is_free_space', boxel.id))
                 # Known NOT in boxel for targets
                 for obj in target_objects:
                     init.append(('obj_at_boxel_KIF', obj, boxel.id))
+        
+        # Add casts_shadow relationships
+        # Map shadows to their occluders based on provided map or heuristic
+        if self.shadow_occluder_map:
+            for shadow_id, occluder_id in self.shadow_occluder_map.items():
+                init.append(('casts_shadow', occluder_id, shadow_id))
+        else:
+            # Simple heuristic: assign shadows to occluders in order
+            for i, shadow_id in enumerate(shadows):
+                if i < len(occluders):
+                    occluder_id = occluders[i % len(occluders)]
+                    init.append(('casts_shadow', occluder_id, shadow_id))
         
         # Add target objects with type predicates
         for obj in target_objects:
@@ -242,12 +275,21 @@ def test_planner():
     registry = BoxelRegistry.load_from_json('boxel_data.json')
     print(f"Loaded {len(registry.boxels)} boxels")
     
-    # Count shadow boxels
-    shadows = [b for b in registry.boxels.values() if b.boxel_type == BoxelType.SHADOW]
+    # Count shadow and occluder boxels
+    shadows = [b.id for b in registry.boxels.values() if b.boxel_type == BoxelType.SHADOW]
+    occluders = [b.id for b in registry.boxels.values() if b.boxel_type == BoxelType.OBJECT]
     print(f"Shadow boxels: {len(shadows)}")
+    print(f"Occluder boxels: {len(occluders)}")
+    
+    # Create shadow->occluder mapping
+    shadow_occluder_map = {}
+    for i, shadow_id in enumerate(shadows):
+        if i < len(occluders):
+            shadow_occluder_map[shadow_id] = occluders[i % len(occluders)]
+    print(f"Shadow-Occluder mapping: {shadow_occluder_map}")
     
     # Create planner
-    planner = PDDLStreamPlanner(registry)
+    planner = PDDLStreamPlanner(registry, shadow_occluder_map=shadow_occluder_map)
     
     # Plan
     print("\nPlanning to find and hold target_1...")

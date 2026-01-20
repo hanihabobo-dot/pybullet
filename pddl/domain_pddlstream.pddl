@@ -3,8 +3,10 @@
 ;; =============================================================================
 ;; 
 ;; Uses Know-If fluents for partial observability.
+;; Key insight: Shadows are BLOCKED by their occluders. Must push occluder aside
+;; before sensing the shadow region.
+;;
 ;; Object types are encoded as predicates: (Boxel ?x), (Obj ?x), etc.
-;; Derived predicates inlined in action preconditions for compatibility.
 
 (define (domain boxel-tamp)
   (:requirements :strips :equality)
@@ -18,15 +20,20 @@
     (Grasp ?x)
     
     ;; --- Boxel structure ---
-    (semantic_zone ?b)
-    (is_shadow ?b)
-    (is_occluder ?b)
+    (is_shadow ?b)           ; This boxel is a shadow region
+    (is_occluder ?b)         ; This boxel is an occluder object
+    (is_free_space ?b)       ; This boxel is free space
+    (casts_shadow ?occ ?shd) ; Occluder ?occ casts shadow ?shd
+    
+    ;; --- Occluder state ---
+    (occluder_blocking ?occ) ; Occluder is in its original position (blocking)
+    (occluder_aside ?occ)    ; Occluder has been pushed aside (shadow revealed)
     
     ;; --- Ground truth (actual world state) ---
-    (obj_at_boxel ?o ?b)
+    (obj_at_boxel ?o ?b)     ; Object ?o is physically at boxel ?b
     
     ;; --- Know-If fluent (do we know the value?) ---
-    (obj_at_boxel_KIF ?o ?b)
+    (obj_at_boxel_KIF ?o ?b) ; We know whether ?o is at ?b (true or false)
     
     ;; --- Robot state ---
     (at_config ?q)
@@ -35,30 +42,56 @@
     (obj_pose_known ?o)
     
     ;; --- Stream certified facts ---
-    (sensing_config ?b ?q)
-    (valid_grasp ?o ?g)
-    (motion ?q1 ?q2 ?t)
-    (kin_solution ?o ?b ?g ?q)
+    (sensing_config ?b ?q)        ; Config ?q can sense boxel ?b
+    (push_config ?occ ?q)         ; Config ?q can push occluder ?occ
+    (valid_grasp ?o ?g)           ; Grasp ?g valid for object ?o
+    (motion ?q1 ?q2 ?t)           ; Trajectory ?t from ?q1 to ?q2
+    (kin_solution ?o ?b ?g ?q)    ; Config ?q for picking ?o from ?b with ?g
   )
   
   ;; =========================================================================
-  ;; SENSE_BOXEL: Observe a shadow boxel to check for object
+  ;; PUSH_ASIDE: Move an occluder to reveal its shadow
   ;; =========================================================================
-  ;; OPTIMISTIC: assumes object will be found (replanning handles failures)
-  (:action sense_boxel
-    :parameters (?o ?b ?q)
+  ;; This must be done BEFORE sensing the shadow region
+  (:action push_aside
+    :parameters (?occ ?q)
     :precondition (and
-      (Obj ?o)
-      (Boxel ?b)
+      (Boxel ?occ)
       (Config ?q)
-      (is_shadow ?b)
+      (is_occluder ?occ)
+      (occluder_blocking ?occ)
       (at_config ?q)
-      (sensing_config ?b ?q)
-      (not (obj_at_boxel_KIF ?o ?b))
+      (push_config ?occ ?q)
+      (handempty)
     )
     :effect (and
-      (obj_at_boxel_KIF ?o ?b)
-      (obj_at_boxel ?o ?b)
+      (occluder_aside ?occ)
+      (not (occluder_blocking ?occ))
+    )
+  )
+  
+  ;; =========================================================================
+  ;; SENSE_SHADOW: Observe a shadow boxel to check for object
+  ;; =========================================================================
+  ;; REQUIRES: The occluder must be pushed aside first!
+  ;; OPTIMISTIC: Assumes object will be found (replanning handles failures)
+  (:action sense_shadow
+    :parameters (?o ?shd ?occ ?q)
+    :precondition (and
+      (Obj ?o)
+      (Boxel ?shd)
+      (Boxel ?occ)
+      (Config ?q)
+      (is_shadow ?shd)
+      (casts_shadow ?occ ?shd)
+      (occluder_aside ?occ)           ; MUST have pushed occluder aside!
+      (at_config ?q)
+      (sensing_config ?shd ?q)
+      (not (obj_at_boxel_KIF ?o ?shd)) ; Only sense if unknown
+    )
+    :effect (and
+      (obj_at_boxel_KIF ?o ?shd)       ; Now we know
+      (obj_at_boxel ?o ?shd)           ; OPTIMISTIC: assume found
       (obj_pose_known ?o)
     )
   )
@@ -84,7 +117,7 @@
   ;; =========================================================================
   ;; PICK: Pick up an object from a boxel
   ;; =========================================================================
-  ;; Precondition: know_obj_at_boxel = (KIF and at) inlined
+  ;; Must KNOW object is there (KIF=true AND at=true)
   (:action pick
     :parameters (?o ?b ?g ?q)
     :precondition (and
@@ -94,8 +127,8 @@
       (Config ?q)
       (handempty)
       (at_config ?q)
-      (obj_at_boxel_KIF ?o ?b)
-      (obj_at_boxel ?o ?b)
+      (obj_at_boxel_KIF ?o ?b)        ; Must know
+      (obj_at_boxel ?o ?b)            ; Must be there
       (kin_solution ?o ?b ?g ?q)
     )
     :effect (and
