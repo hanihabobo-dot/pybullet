@@ -357,6 +357,7 @@ def move_robot_to_pos(robot_id, target_pos, gui=True):
 
 def move_robot_smooth(robot_id, target_joints, gui=True, steps=60):
     """Smoothly move robot to target joint configuration."""
+    import time
     current = [p.getJointState(robot_id, i)[0] for i in range(7)]
     for t in range(steps):
         alpha = (t + 1) / steps
@@ -365,14 +366,19 @@ def move_robot_smooth(robot_id, target_joints, gui=True, steps=60):
             p.setJointMotorControl2(robot_id, i, p.POSITION_CONTROL,
                                     targetPosition=interp[i], force=240)
         p.stepSimulation()
+        if gui:
+            time.sleep(1/120)  # Real-time visualization (120 Hz)
 
 
 def close_gripper(robot_id, gui=True):
     """Close gripper."""
+    import time
     for _ in range(30):
         p.setJointMotorControl2(robot_id, 9, p.POSITION_CONTROL, targetPosition=0.01, force=50)
         p.setJointMotorControl2(robot_id, 10, p.POSITION_CONTROL, targetPosition=0.01, force=50)
         p.stepSimulation()
+        if gui:
+            time.sleep(1/120)
 
 
 def execute_pick(robot_id, env, target_name, target_pos, gui):
