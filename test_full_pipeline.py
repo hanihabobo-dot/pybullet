@@ -98,33 +98,35 @@ def main(gui=True):
     for _ in range(50):
         env.step_simulation()
     
-    # Get boxels
+    # =========================================================
+    # PHASE 2: Boxel Calculation (fast, no visualization)
+    # =========================================================
+    print("\n--- Phase 2: Calculating Boxels ---")
     obs = env.get_camera_observation()
     all_known = obs.boxels
-    
-    if gui:
-        print("\n--- Phase 2: Boxel Visualization ---")
-        p.resetDebugVisualizerCamera(
-            cameraDistance=1.5, cameraYaw=45, cameraPitch=-30,
-            cameraTargetPosition=[0.5, 0.0, env.table_surface_height]
-        )
-        env.draw_boxels(all_known, duration=0)
-    
     free_boxels = env.generate_free_space(all_known, visualize=False)
     merged_free = merge_free_space_cells(free_boxels)
-    all_known = all_known + merged_free
+    all_boxels = all_known + merged_free
+    print(f"  Calculated {len(all_boxels)} boxels")
     
-    if gui:
-        env.draw_boxels(all_known, duration=0, clear_previous=True)
-    
-    # Create registry
+    # =========================================================
+    # PHASE 3: Create Registry
+    # =========================================================
     print("\n--- Phase 3: Creating BoxelRegistry ---")
-    registry = create_boxel_registry_from_boxels(all_known, env.table_surface_height)
+    registry = create_boxel_registry_from_boxels(all_boxels, env.table_surface_height)
     registry.save_to_json("boxel_data.json")
     
     shadows = [b.id for b in registry.boxels.values() if b.boxel_type == BoxelType.SHADOW]
     occluders = [b.id for b in registry.boxels.values() if b.boxel_type == BoxelType.OBJECT]
     print(f"  {len(registry.boxels)} boxels, {len(shadows)} shadows, {len(occluders)} occluders")
+    
+    # Visualize all boxels at once (after calculations complete)
+    if gui:
+        p.resetDebugVisualizerCamera(
+            cameraDistance=1.5, cameraYaw=45, cameraPitch=-30,
+            cameraTargetPosition=[0.5, 0.0, env.table_surface_height]
+        )
+        env.draw_boxels(all_boxels, duration=0)
     
     # =========================================================
     # PHASE 4: Hidden Object Scenario (ORACLE ONLY)
