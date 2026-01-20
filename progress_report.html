@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thesis Progress Report - Semantic Boxels</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #e4e4e7;
+            padding: 40px;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, #60a5fa, #a78bfa, #f472b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            font-size: 1.1rem;
+            color: #94a3b8;
+            font-weight: 300;
+        }
+        
+        .date {
+            margin-top: 15px;
+            padding: 8px 20px;
+            background: rgba(96, 165, 250, 0.1);
+            border: 1px solid rgba(96, 165, 250, 0.3);
+            border-radius: 20px;
+            display: inline-block;
+            font-size: 0.9rem;
+            color: #60a5fa;
+        }
+        
+        .section {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            backdrop-filter: blur(10px);
+        }
+        
+        h2 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        h2 .icon {
+            font-size: 1.5rem;
+        }
+        
+        .timeline {
+            position: relative;
+            padding-left: 30px;
+        }
+        
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 8px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(180deg, #22c55e, #60a5fa, #a78bfa);
+        }
+        
+        .week {
+            position: relative;
+            margin-bottom: 25px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 12px;
+            border-left: 3px solid transparent;
+        }
+        
+        .week.complete {
+            border-left-color: #22c55e;
+        }
+        
+        .week.current {
+            border-left-color: #f59e0b;
+            background: rgba(245, 158, 11, 0.05);
+        }
+        
+        .week.last-meeting {
+            border-left-color: #ef4444;
+        }
+        
+        .week::before {
+            content: '';
+            position: absolute;
+            left: -26px;
+            top: 24px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #22c55e;
+            border: 2px solid #1a1a2e;
+        }
+        
+        .week.current::before {
+            background: #f59e0b;
+            box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+        }
+        
+        .week.last-meeting::before {
+            background: #ef4444;
+        }
+        
+        .week-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .week-title {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+        
+        .badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .badge.complete {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+        }
+        
+        .badge.current {
+            background: rgba(245, 158, 11, 0.2);
+            color: #f59e0b;
+        }
+        
+        .badge.meeting {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        
+        .week-content {
+            color: #94a3b8;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+        
+        .week-content ul {
+            margin-top: 10px;
+            padding-left: 20px;
+        }
+        
+        .week-content li {
+            margin-bottom: 5px;
+        }
+        
+        .highlight-box {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(96, 165, 250, 0.1));
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 12px;
+            padding: 25px;
+            margin: 25px 0;
+        }
+        
+        .highlight-box h3 {
+            color: #22c55e;
+            font-size: 1.1rem;
+            margin-bottom: 15px;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+        
+        .stat {
+            text-align: center;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 12px;
+        }
+        
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .stat-label {
+            color: #94a3b8;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+        
+        .code-block {
+            background: #0d1117;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            margin: 15px 0;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .code-block .comment {
+            color: #6b7280;
+        }
+        
+        .code-block .keyword {
+            color: #f472b6;
+        }
+        
+        .code-block .string {
+            color: #a5f3fc;
+        }
+        
+        .next-steps {
+            background: rgba(245, 158, 11, 0.05);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 12px;
+            padding: 25px;
+        }
+        
+        .next-steps h3 {
+            color: #f59e0b;
+            margin-bottom: 15px;
+        }
+        
+        .next-steps ul {
+            padding-left: 20px;
+        }
+        
+        .next-steps li {
+            margin-bottom: 8px;
+            color: #d4d4d8;
+        }
+        
+        .demo-section {
+            background: linear-gradient(135deg, rgba(167, 139, 250, 0.1), rgba(244, 114, 182, 0.1));
+            border: 1px solid rgba(167, 139, 250, 0.3);
+            border-radius: 12px;
+            padding: 25px;
+            margin-top: 20px;
+        }
+        
+        .demo-section h3 {
+            color: #a78bfa;
+            margin-bottom: 15px;
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            color: #6b7280;
+            font-size: 0.85rem;
+        }
+        
+        .arrow {
+            display: inline-block;
+            margin: 0 8px;
+            color: #60a5fa;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Semantic Boxels for POD-TAMP</h1>
+            <p class="subtitle">Master's Thesis Progress Report</p>
+            <div class="date">📅 Supervisor Meeting - January 21, 2026</div>
+        </header>
+        
+        <div class="section">
+            <h2><span class="icon">📊</span> Progress Summary</h2>
+            <p style="color: #94a3b8; margin-bottom: 20px;">
+                Since our last meeting at <strong style="color: #ef4444;">Week 4</strong>, I've completed 
+                <strong style="color: #22c55e;">6 more weeks</strong> of development. The core TAMP system 
+                is now fully functional with real planning and robot execution!
+            </p>
+            
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">10</div>
+                    <div class="stat-label">Weeks Completed</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">57</div>
+                    <div class="stat-label">Semantic Boxels</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">2.4s</div>
+                    <div class="stat-label">Planning Time</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">✅</div>
+                    <div class="stat-label">Robot Execution</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2><span class="icon">🗓️</span> Timeline Since Last Meeting</h2>
+            
+            <div class="timeline">
+                <div class="week last-meeting">
+                    <div class="week-header">
+                        <span class="week-title">Week 4: Data Export & Visualization</span>
+                        <span class="badge meeting">Last Meeting</span>
+                    </div>
+                    <div class="week-content">
+                        Completed boxel generation, JSON export, PDDL facts, and 3D web viewer.
+                    </div>
+                </div>
+                
+                <div class="week complete">
+                    <div class="week-header">
+                        <span class="week-title">Week 5: PDDLStream Domain with Know-If</span>
+                        <span class="badge complete">✓ Complete</span>
+                    </div>
+                    <div class="week-content">
+                        <ul>
+                            <li>Created PDDL domain with <strong>Know-If fluents</strong> for partial observability</li>
+                            <li>Defined actions: <code>sense_boxel</code>, <code>move</code>, <code>pick</code></li>
+                            <li>Cloned PDDLStream library from GitHub</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="week complete">
+                    <div class="week-header">
+                        <span class="week-title">Week 6: Stream Implementations</span>
+                        <span class="badge complete">✓ Complete</span>
+                    </div>
+                    <div class="week-content">
+                        <ul>
+                            <li>Implemented geometric streams: <code>sample_sensing_config</code>, <code>sample_grasp</code>, <code>plan_motion</code></li>
+                            <li>Created PDDLStream-compatible generator functions</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="week complete">
+                    <div class="week-header">
+                        <span class="week-title">Week 7: Executor with Replanning</span>
+                        <span class="badge complete">✓ Complete</span>
+                    </div>
+                    <div class="week-content">
+                        <ul>
+                            <li>Built <code>BoxelExecutor</code> with optimistic planning + replanning loop</li>
+                            <li>Correct epistemic initialization (shadows=UNKNOWN, others=KNOWN)</li>
+                            <li>Belief state updates after sensing observations</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="week complete">
+                    <div class="week-header">
+                        <span class="week-title">Week 8: Hidden Object Demo</span>
+                        <span class="badge complete">✓ Complete</span>
+                    </div>
+                    <div class="week-content">
+                        <ul>
+                            <li>Created <code>hidden_object_scenario.py</code></li>
+                            <li><strong>Proven:</strong> Replanning loop works (5 replans to find hidden target)</li>
+                            <li><strong>Proven:</strong> Know-If belief updates correctly</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="week complete">
+                    <div class="week-header">
+                        <span class="week-title">Week 9-10: Real PDDLStream + Robot Control</span>
+                        <span class="badge complete">✓ Complete</span>
+                    </div>
+                    <div class="week-content">
+                        <ul>
+                            <li>Built <strong>FastDownward planner</strong> in WSL</li>
+                            <li>Integrated real <code>PDDLStream.solve()</code></li>
+                            <li>Implemented <strong>real IK solver</strong> using PyBullet</li>
+                            <li>Connected executor to <strong>PyBullet robot control</strong></li>
+                            <li>Full GUI demo with boxel visualization + robot execution!</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2><span class="icon">🧠</span> Key Innovation: Know-If Fluents</h2>
+            <p style="color: #94a3b8; margin-bottom: 15px;">
+                Instead of using a complex belief-space planner, I implemented <strong>Know-If fluents</strong> 
+                to handle partial observability within standard PDDLStream:
+            </p>
+            
+            <div class="code-block">
+<span class="comment">; Know-If pattern for partial observability</span>
+<span class="keyword">obj_at_boxel</span>(?o, ?b)      <span class="comment">; Ground truth</span>
+<span class="keyword">obj_at_boxel_KIF</span>(?o, ?b)  <span class="comment">; Know-If (do we know the value?)</span>
+
+<span class="comment">; Derived knowledge:</span>
+K(in)  = KIF ∧ in    <span class="comment">; Known IN boxel</span>
+K(¬in) = KIF ∧ ¬in   <span class="comment">; Known NOT in boxel</span>
+            </div>
+            
+            <div class="highlight-box">
+                <h3>💡 Why This Works</h3>
+                <ul style="padding-left: 20px; color: #d4d4d8;">
+                    <li><strong>Optimistic planning:</strong> Assume sensing will succeed</li>
+                    <li><strong>Replan on mismatch:</strong> If object not found, update belief and replan</li>
+                    <li><strong>Simple architecture:</strong> No need for complex belief-space planners like LW1</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2><span class="icon">🎬</span> Working Demo</h2>
+            
+            <div class="demo-section">
+                <h3>🤖 Full TAMP Pipeline (run_tamp_demo.py)</h3>
+                <p style="color: #d4d4d8; margin-bottom: 15px;">
+                    Complete demonstration with boxel visualization and robot execution:
+                </p>
+                
+                <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 15px;">
+                    <div style="flex: 1; min-width: 200px;">
+                        <strong style="color: #a78bfa;">Scene Setup</strong>
+                        <ul style="color: #94a3b8; padding-left: 20px; margin-top: 5px;">
+                            <li>4 object boxels</li>
+                            <li>6 shadow boxels</li>
+                            <li>47 free space boxels</li>
+                        </ul>
+                    </div>
+                    <div style="flex: 1; min-width: 200px;">
+                        <strong style="color: #a78bfa;">Plan Generated</strong>
+                        <ul style="color: #94a3b8; padding-left: 20px; margin-top: 5px;">
+                            <li>1. Move to sensing config</li>
+                            <li>2. Sense shadow region</li>
+                            <li>3. Move to pick position</li>
+                            <li>4. Pick object</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="code-block" style="margin-top: 20px;">
+<span class="comment"># To run:</span>
+pybullet_env\Scripts\python.exe run_tamp_demo.py
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2><span class="icon">📈</span> Architecture Diagram</h2>
+            <div style="text-align: center; padding: 30px; background: rgba(0,0,0,0.2); border-radius: 12px; font-family: monospace;">
+                <div style="display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <span style="background: #22c55e; padding: 10px 15px; border-radius: 8px;">BoxelTestEnv</span>
+                    <span class="arrow">→</span>
+                    <span style="background: #60a5fa; padding: 10px 15px; border-radius: 8px;">BoxelRegistry</span>
+                    <span class="arrow">→</span>
+                    <span style="background: #a78bfa; padding: 10px 15px; border-radius: 8px;">PDDLStream</span>
+                    <span class="arrow">→</span>
+                    <span style="background: #f472b6; padding: 10px 15px; border-radius: 8px;">Executor</span>
+                    <span class="arrow">→</span>
+                    <span style="background: #f59e0b; padding: 10px 15px; border-radius: 8px;">PyBullet Robot</span>
+                </div>
+                <div style="margin-top: 20px; color: #6b7280; font-size: 0.9rem;">
+                    Scene → Boxels → PDDL Problem → Plan → Robot Motion
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2><span class="icon">🎯</span> Next Steps</h2>
+            <div class="next-steps">
+                <h3>Weeks 11-12: Evaluation & Benchmarking</h3>
+                <ul>
+                    <li>Implement evaluation metrics (success rate, planning time, # sensing actions)</li>
+                    <li>Create baseline comparisons (uniform voxelization, no shadow splitting)</li>
+                    <li>Vary scene complexity (# occluders, workspace size)</li>
+                    <li>Document results and record demo video for thesis</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2><span class="icon">📁</span> Key Files Created</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
+                <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px;">
+                    <strong style="color: #60a5fa;">pddl/domain_pddlstream.pddl</strong>
+                    <p style="color: #6b7280; font-size: 0.85rem;">PDDL domain with Know-If fluents</p>
+                </div>
+                <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px;">
+                    <strong style="color: #60a5fa;">streams.py</strong>
+                    <p style="color: #6b7280; font-size: 0.85rem;">Geometric stream generators with real IK</p>
+                </div>
+                <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px;">
+                    <strong style="color: #60a5fa;">executor.py</strong>
+                    <p style="color: #6b7280; font-size: 0.85rem;">Plan execution with replanning</p>
+                </div>
+                <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px;">
+                    <strong style="color: #60a5fa;">pddlstream_planner.py</strong>
+                    <p style="color: #6b7280; font-size: 0.85rem;">PDDLStream integration</p>
+                </div>
+                <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px;">
+                    <strong style="color: #60a5fa;">run_tamp_demo.py</strong>
+                    <p style="color: #6b7280; font-size: 0.85rem;">Full GUI demo</p>
+                </div>
+                <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px;">
+                    <strong style="color: #60a5fa;">hidden_object_scenario.py</strong>
+                    <p style="color: #6b7280; font-size: 0.85rem;">Replanning demonstration</p>
+                </div>
+            </div>
+        </div>
+        
+        <footer>
+            <p>Semantic Boxels for Partially Observable Task and Motion Planning</p>
+            <p style="margin-top: 5px;">Master's Thesis • Hani Alassiri Alhabbou • 2026</p>
+        </footer>
+    </div>
+</body>
+</html>

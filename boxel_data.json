@@ -1,40 +1,275 @@
 {
   "boxels": [
     {
-      "id": "shadow_000",
-      "boxel_type": "shadow",
+      "id": "obj_000",
+      "boxel_type": "object",
       "min_corner": [
-        0.26597110172824134,
-        0.2754533563428925,
-        0.32499999999999996
+        0.42477315852881337,
+        0.12503820013478817,
+        0.324986184884499
       ],
       "max_corner": [
-        0.7338967268523997,
-        0.5,
-        0.47499022805002267
+        0.5751843559555622,
+        0.2754533563428735,
+        0.4749902280500123
       ],
       "center": [
-        0.4999339142903205,
-        0.38772667817144624,
-        0.3999951140250113
+        0.49997875724218777,
+        0.20024577823883083,
+        0.39998820646725564
       ],
       "extent": [
-        0.23396281256207918,
-        0.11227332182855376,
-        0.07499511402501136
+        0.0752055987133744,
+        0.07520757810404266,
+        0.07500202158275665
       ],
-      "volume": 0.015759642540604787,
+      "volume": 0.003393710036535378,
+      "object_name": "occluder_1",
+      "is_occluder": false,
+      "shadow_boxel_ids": [
+        "shadow_004"
+      ],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [
+          "shadow_005"
+        ],
+        "x_neg": [
+          "shadow_007"
+        ],
+        "y_pos": [
+          "shadow_004"
+        ],
+        "y_neg": [
+          "shadow_006",
+          "shadow_008"
+        ],
+        "z_pos": [
+          "free_030",
+          "free_034",
+          "free_041",
+          "free_049"
+        ],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": true,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true
+    },
+    {
+      "id": "obj_001",
+      "boxel_type": "object",
+      "min_corner": [
+        0.5247655649782356,
+        -0.17496612480318832,
+        0.32498723415013525
+      ],
+      "max_corner": [
+        0.6751845576762773,
+        -0.024544289089392102,
+        0.4749903917244284
+      ],
+      "center": [
+        0.5999750613272564,
+        -0.09975520694629021,
+        0.39998881293728183
+      ],
+      "extent": [
+        0.07520949634902085,
+        0.07521091785689811,
+        0.07500157878714658
+      ],
+      "volume": 0.0033940165954053437,
+      "object_name": "occluder_2",
+      "is_occluder": false,
+      "shadow_boxel_ids": [
+        "shadow_005",
+        "shadow_006"
+      ],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [
+          "shadow_009"
+        ],
+        "x_neg": [],
+        "y_pos": [
+          "shadow_005",
+          "shadow_006"
+        ],
+        "y_neg": [
+          "obj_003"
+        ],
+        "z_pos": [
+          "free_021",
+          "free_041"
+        ],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": true,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true
+    },
+    {
+      "id": "obj_002",
+      "boxel_type": "object",
+      "min_corner": [
+        0.324996737217701,
+        -0.2753963494744849,
+        0.32498546479053636
+      ],
+      "max_corner": [
+        0.47499976013293616,
+        -0.12538853860665583,
+        0.4749902689358123
+      ],
+      "center": [
+        0.3999982486753186,
+        -0.20039244404057036,
+        0.39998786686317434
+      ],
+      "extent": [
+        0.07500151145761758,
+        0.07500390543391453,
+        0.07500240207263797
+      ],
+      "volume": 0.0033753518647365657,
+      "object_name": "occluder_3",
+      "is_occluder": false,
+      "shadow_boxel_ids": [
+        "shadow_007",
+        "shadow_008"
+      ],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [
+          "shadow_007",
+          "shadow_008"
+        ],
+        "y_neg": [
+          "free_053"
+        ],
+        "z_pos": [
+          "free_029",
+          "free_033"
+        ],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": true,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true
+    },
+    {
+      "id": "obj_003",
+      "boxel_type": "object",
+      "min_corner": [
+        0.6558353432111279,
+        -0.25624570518079043,
+        0.324971240774546
+      ],
+      "max_corner": [
+        0.7445713487255738,
+        -0.16749168072874848,
+        0.4049916386254272
+      ],
+      "center": [
+        0.7002033459683509,
+        -0.21186869295476946,
+        0.3649814396999866
+      ],
+      "extent": [
+        0.04436800275722297,
+        0.04437701222602097,
+        0.04001019892544061
+      ],
+      "volume": 0.0006302148551537919,
+      "object_name": "target_4",
+      "is_occluder": false,
+      "shadow_boxel_ids": [
+        "shadow_009"
+      ],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [
+          "free_042"
+        ],
+        "x_neg": [],
+        "y_pos": [
+          "obj_001",
+          "shadow_009"
+        ],
+        "y_neg": [],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325,
+      "possibly_contains": [],
+      "confirmed_contains": null,
+      "confirmed_empty": false,
+      "observed": true,
+      "last_observation_time": null,
+      "is_reachable": true,
+      "is_observable": true
+    },
+    {
+      "id": "shadow_004",
+      "boxel_type": "shadow",
+      "min_corner": [
+        0.265971101728267,
+        0.2754533563428735,
+        0.325
+      ],
+      "max_corner": [
+        0.7338967268523571,
+        0.5,
+        0.4749902280500123
+      ],
+      "center": [
+        0.49993391429031203,
+        0.38772667817143674,
+        0.39999511402500615
+      ],
+      "extent": [
+        0.23396281256204504,
+        0.11227332182856326,
+        0.07499511402500614
+      ],
+      "volume": 0.015759642540602723,
       "object_name": null,
       "is_occluder": false,
       "shadow_boxel_ids": [],
-      "created_by_boxel_id": "obj_006",
+      "created_by_boxel_id": "obj_000",
       "created_by_object": "occluder_1",
       "neighbor_ids": {
         "x_pos": [],
         "x_neg": [],
         "y_pos": [],
         "y_neg": [
-          "obj_006"
+          "obj_000"
         ],
         "z_pos": [
           "free_030",
@@ -57,43 +292,43 @@
       "is_observable": true
     },
     {
-      "id": "shadow_001",
+      "id": "shadow_005",
       "boxel_type": "shadow",
       "min_corner": [
-        0.5751843559555676,
-        -0.02454428908939149,
+        0.575184355955562,
+        -0.024544289089392102,
         0.325
       ],
       "max_corner": [
-        0.791961795018761,
-        0.49237099615469665,
-        0.47499039172442853
+        0.7919617950187603,
+        0.49237099615469426,
+        0.4749903917244284
       ],
       "center": [
-        0.6835730754871643,
-        0.23391335353265258,
-        0.39999519586221427
+        0.6835730754871612,
+        0.23391335353265108,
+        0.3999951958622142
       ],
       "extent": [
-        0.10838871953159668,
-        0.25845764262204407,
-        0.07499519586221426
+        0.10838871953159912,
+        0.2584576426220432,
+        0.0749951958622142
       ],
-      "volume": 0.016807259101362354,
+      "volume": 0.016807259101362666,
       "object_name": null,
       "is_occluder": false,
       "shadow_boxel_ids": [],
-      "created_by_boxel_id": "obj_007",
+      "created_by_boxel_id": "obj_001",
       "created_by_object": "occluder_2",
       "neighbor_ids": {
         "x_pos": [],
         "x_neg": [
-          "shadow_002",
-          "obj_006"
+          "obj_000",
+          "shadow_006"
         ],
         "y_pos": [],
         "y_neg": [
-          "obj_007",
+          "obj_001",
           "free_039",
           "free_056"
         ],
@@ -118,44 +353,44 @@
       "is_observable": true
     },
     {
-      "id": "shadow_002",
+      "id": "shadow_006",
       "boxel_type": "shadow",
       "min_corner": [
-        0.5247655649782359,
-        -0.02454428908939149,
+        0.5247655649782357,
+        -0.024544289089392102,
         0.325
       ],
       "max_corner": [
-        0.5751843559555676,
-        0.12503820013479194,
-        0.47499039172442853
+        0.575184355955562,
+        0.12503820013478817,
+        0.4749903917244284
       ],
       "center": [
-        0.5499749604669018,
-        0.050246955522700226,
-        0.39999519586221427
+        0.5499749604668989,
+        0.050246955522698034,
+        0.3999951958622142
       ],
       "extent": [
-        0.025209395488665853,
-        0.07479124461209172,
-        0.07499519586221426
+        0.02520939548866319,
+        0.07479124461209014,
+        0.0749951958622142
       ],
-      "volume": 0.0011311927753217418,
+      "volume": 0.0011311927753215976,
       "object_name": null,
       "is_occluder": false,
       "shadow_boxel_ids": [],
-      "created_by_boxel_id": "obj_007",
+      "created_by_boxel_id": "obj_001",
       "created_by_object": "occluder_2",
       "neighbor_ids": {
         "x_pos": [
-          "shadow_001"
+          "shadow_005"
         ],
         "x_neg": [],
         "y_pos": [
-          "obj_006"
+          "obj_000"
         ],
         "y_neg": [
-          "obj_007"
+          "obj_001"
         ],
         "z_pos": [
           "free_041"
@@ -173,43 +408,43 @@
       "is_observable": true
     },
     {
-      "id": "shadow_003",
+      "id": "shadow_007",
       "boxel_type": "shadow",
       "min_corner": [
-        0.2083405093964319,
-        -0.1253885386068173,
-        0.32500000000000007
+        0.20834050939494198,
+        -0.12538853860665583,
+        0.32499999999999996
       ],
       "max_corner": [
-        0.42477315852881925,
-        0.3243038104411791,
-        0.47499026893525
+        0.42477315852881337,
+        0.3243038104442577,
+        0.4749902689358123
       ],
       "center": [
-        0.3165568339626256,
-        0.0994576359171809,
-        0.399995134467625
+        0.31655683396187767,
+        0.09945763591880094,
+        0.39999513446790613
       ],
       "extent": [
-        0.10821632456619368,
-        0.22484617452399822,
-        0.07499513446762496
+        0.1082163245669357,
+        0.22484617452545677,
+        0.07499513446790618
       ],
-      "volume": 0.01459826885374824,
+      "volume": 0.014598268853997776,
       "object_name": null,
       "is_occluder": false,
       "shadow_boxel_ids": [],
-      "created_by_boxel_id": "obj_008",
+      "created_by_boxel_id": "obj_002",
       "created_by_object": "occluder_3",
       "neighbor_ids": {
         "x_pos": [
-          "shadow_004",
-          "obj_006"
+          "obj_000",
+          "shadow_008"
         ],
         "x_neg": [],
         "y_pos": [],
         "y_neg": [
-          "obj_008"
+          "obj_002"
         ],
         "z_pos": [
           "free_029",
@@ -228,44 +463,44 @@
       "is_observable": true
     },
     {
-      "id": "shadow_004",
+      "id": "shadow_008",
       "boxel_type": "shadow",
       "min_corner": [
-        0.42477315852881925,
-        -0.1253885386068173,
-        0.32500000000000007
+        0.42477315852881337,
+        -0.12538853860665583,
+        0.32499999999999996
       ],
       "max_corner": [
-        0.47499976013297407,
-        0.12503820013479194,
-        0.47499026893525
+        0.4749997601329361,
+        0.12503820013478817,
+        0.4749902689358123
       ],
       "center": [
-        0.44988645933089666,
-        -0.00017516923601268442,
-        0.399995134467625
+        0.44988645933087473,
+        -0.00017516923593383082,
+        0.39999513446790613
       ],
       "extent": [
-        0.02511330080207741,
-        0.12521336937080463,
-        0.07499513446762496
+        0.025113300802061367,
+        0.125213369370722,
+        0.07499513446790618
       ],
-      "volume": 0.0018865902075201819,
+      "volume": 0.001886590207524806,
       "object_name": null,
       "is_occluder": false,
       "shadow_boxel_ids": [],
-      "created_by_boxel_id": "obj_008",
+      "created_by_boxel_id": "obj_002",
       "created_by_object": "occluder_3",
       "neighbor_ids": {
         "x_pos": [],
         "x_neg": [
-          "shadow_003"
+          "shadow_007"
         ],
         "y_pos": [
-          "obj_006"
+          "obj_000"
         ],
         "y_neg": [
-          "obj_008"
+          "obj_002"
         ],
         "z_pos": [
           "free_029",
@@ -285,33 +520,33 @@
       "is_observable": true
     },
     {
-      "id": "shadow_005",
+      "id": "shadow_009",
       "boxel_type": "shadow",
       "min_corner": [
-        0.6751845576762774,
-        -0.16749168072874132,
-        0.32499999999999996
+        0.6751845576762772,
+        -0.16749168072874848,
+        0.32500000000000007
       ],
       "max_corner": [
-        0.8108869706090838,
-        0.00401321041053776,
-        0.40499163862542753
+        0.8108869706090818,
+        0.00401321041052724,
+        0.4049916386254272
       ],
       "center": [
-        0.7430357641426806,
-        -0.08173923515910178,
-        0.36499581931271374
+        0.7430357641426795,
+        -0.08173923515911062,
+        0.36499581931271363
       ],
       "extent": [
-        0.06785120646640319,
-        0.08575244556963954,
-        0.03999581931271379
+        0.0678512064664023,
+        0.08575244556963786,
+        0.039995819312713565
       ],
-      "volume": 0.0018616956050726103,
+      "volume": 0.0018616956050725387,
       "object_name": null,
       "is_occluder": false,
       "shadow_boxel_ids": [],
-      "created_by_boxel_id": "obj_009",
+      "created_by_boxel_id": "obj_003",
       "created_by_object": "target_4",
       "neighbor_ids": {
         "x_pos": [
@@ -319,11 +554,11 @@
           "free_045"
         ],
         "x_neg": [
-          "obj_007"
+          "obj_001"
         ],
         "y_pos": [],
         "y_neg": [
-          "obj_009"
+          "obj_003"
         ],
         "z_pos": [],
         "z_neg": []
@@ -334,241 +569,6 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": false,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
-    },
-    {
-      "id": "obj_006",
-      "boxel_type": "object",
-      "min_corner": [
-        0.42477315852881925,
-        0.12503820013479194,
-        0.3249861848844837
-      ],
-      "max_corner": [
-        0.5751843559555677,
-        0.2754533563428925,
-        0.47499022805002267
-      ],
-      "center": [
-        0.4999787572421935,
-        0.2002457782388422,
-        0.3999882064672532
-      ],
-      "extent": [
-        0.07520559871337423,
-        0.07520757810405027,
-        0.07500202158276947
-      ],
-      "volume": 0.003393710036536294,
-      "object_name": "occluder_1",
-      "is_occluder": true,
-      "shadow_boxel_ids": [
-        "shadow_000"
-      ],
-      "created_by_boxel_id": null,
-      "created_by_object": null,
-      "neighbor_ids": {
-        "x_pos": [
-          "shadow_001"
-        ],
-        "x_neg": [
-          "shadow_003"
-        ],
-        "y_pos": [
-          "shadow_000"
-        ],
-        "y_neg": [
-          "shadow_002",
-          "shadow_004"
-        ],
-        "z_pos": [
-          "free_030",
-          "free_034",
-          "free_041",
-          "free_049"
-        ],
-        "z_neg": []
-      },
-      "on_surface": "table",
-      "surface_z": 0.325,
-      "possibly_contains": [],
-      "confirmed_contains": null,
-      "confirmed_empty": false,
-      "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
-    },
-    {
-      "id": "obj_007",
-      "boxel_type": "object",
-      "min_corner": [
-        0.524765564978236,
-        -0.1749661248031882,
-        0.3249872341501347
-      ],
-      "max_corner": [
-        0.6751845576762775,
-        -0.02454428908939152,
-        0.47499039172442853
-      ],
-      "center": [
-        0.5999750613272568,
-        -0.09975520694628986,
-        0.3999888129372816
-      ],
-      "extent": [
-        0.07520949634902074,
-        0.07521091785689835,
-        0.07500157878714692
-      ],
-      "volume": 0.0033940165954053645,
-      "object_name": "occluder_2",
-      "is_occluder": true,
-      "shadow_boxel_ids": [
-        "shadow_001",
-        "shadow_002"
-      ],
-      "created_by_boxel_id": null,
-      "created_by_object": null,
-      "neighbor_ids": {
-        "x_pos": [
-          "shadow_005"
-        ],
-        "x_neg": [],
-        "y_pos": [
-          "shadow_001",
-          "shadow_002"
-        ],
-        "y_neg": [
-          "obj_009"
-        ],
-        "z_pos": [
-          "free_021",
-          "free_041"
-        ],
-        "z_neg": []
-      },
-      "on_surface": "table",
-      "surface_z": 0.325,
-      "possibly_contains": [],
-      "confirmed_contains": null,
-      "confirmed_empty": false,
-      "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
-    },
-    {
-      "id": "obj_008",
-      "boxel_type": "object",
-      "min_corner": [
-        0.3249967372181577,
-        -0.2753963494727035,
-        0.3249854647916719
-      ],
-      "max_corner": [
-        0.47499976013297407,
-        -0.1253885386068173,
-        0.47499026893525
-      ],
-      "center": [
-        0.3999982486755659,
-        -0.20039244403976042,
-        0.39998786686346094
-      ],
-      "extent": [
-        0.07500151145740819,
-        0.07500390543294311,
-        0.07500240207178904
-      ],
-      "volume": 0.0033753518646452213,
-      "object_name": "occluder_3",
-      "is_occluder": true,
-      "shadow_boxel_ids": [
-        "shadow_003",
-        "shadow_004"
-      ],
-      "created_by_boxel_id": null,
-      "created_by_object": null,
-      "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [
-          "shadow_003",
-          "shadow_004"
-        ],
-        "y_neg": [
-          "free_053"
-        ],
-        "z_pos": [
-          "free_029",
-          "free_033"
-        ],
-        "z_neg": []
-      },
-      "on_surface": "table",
-      "surface_z": 0.325,
-      "possibly_contains": [],
-      "confirmed_contains": null,
-      "confirmed_empty": false,
-      "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
-    },
-    {
-      "id": "obj_009",
-      "boxel_type": "object",
-      "min_corner": [
-        0.6558353432111277,
-        -0.25624570518078926,
-        0.32497124077454087
-      ],
-      "max_corner": [
-        0.744571348725575,
-        -0.16749168072874132,
-        0.40499163862542753
-      ],
-      "center": [
-        0.7002033459683513,
-        -0.2118686929547653,
-        0.3649814396999842
-      ],
-      "extent": [
-        0.044368002757223635,
-        0.04437701222602397,
-        0.04001019892544333
-      ],
-      "volume": 0.0006302148551538868,
-      "object_name": "target_4",
-      "is_occluder": true,
-      "shadow_boxel_ids": [
-        "shadow_005"
-      ],
-      "created_by_boxel_id": null,
-      "created_by_object": null,
-      "neighbor_ids": {
-        "x_pos": [
-          "free_042"
-        ],
-        "x_neg": [],
-        "y_pos": [
-          "shadow_005",
-          "obj_007"
-        ],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
-      },
-      "on_surface": "table",
-      "surface_z": 0.325,
-      "possibly_contains": [],
-      "confirmed_contains": null,
-      "confirmed_empty": false,
-      "observed": true,
       "last_observation_time": null,
       "is_reachable": true,
       "is_observable": true
@@ -1280,8 +1280,8 @@
           "free_010"
         ],
         "z_neg": [
-          "shadow_001",
-          "obj_007",
+          "obj_001",
+          "shadow_005",
           "free_038",
           "free_039"
         ]
@@ -1765,9 +1765,9 @@
           "free_015"
         ],
         "z_neg": [
-          "shadow_003",
-          "shadow_004",
-          "obj_008",
+          "obj_002",
+          "shadow_007",
+          "shadow_008",
           "free_052"
         ]
       },
@@ -1828,10 +1828,10 @@
           "free_015"
         ],
         "z_neg": [
-          "shadow_000",
-          "shadow_003",
+          "obj_000",
           "shadow_004",
-          "obj_006",
+          "shadow_007",
+          "shadow_008",
           "free_054"
         ]
       },
@@ -2012,7 +2012,7 @@
           "free_017"
         ],
         "z_neg": [
-          "obj_008",
+          "obj_002",
           "free_053"
         ]
       },
@@ -2075,9 +2075,9 @@
           "free_015"
         ],
         "z_neg": [
-          "shadow_000",
+          "obj_000",
           "shadow_004",
-          "obj_006"
+          "shadow_008"
         ]
       },
       "on_surface": null,
@@ -2135,7 +2135,7 @@
           "free_015"
         ],
         "z_neg": [
-          "shadow_000"
+          "shadow_004"
         ]
       },
       "on_surface": null,
@@ -2194,8 +2194,8 @@
           "free_026"
         ],
         "z_neg": [
-          "shadow_000",
-          "shadow_001"
+          "shadow_004",
+          "shadow_005"
         ]
       },
       "on_surface": null,
@@ -2365,7 +2365,7 @@
         ],
         "x_neg": [],
         "y_pos": [
-          "shadow_001"
+          "shadow_005"
         ],
         "y_neg": [
           "free_038"
@@ -2492,10 +2492,10 @@
           "free_015"
         ],
         "z_neg": [
-          "shadow_001",
-          "shadow_002",
-          "obj_006",
-          "obj_007"
+          "obj_000",
+          "obj_001",
+          "shadow_005",
+          "shadow_006"
         ]
       },
       "on_surface": null,
@@ -2542,7 +2542,7 @@
           "free_022"
         ],
         "x_neg": [
-          "obj_009",
+          "obj_003",
           "free_038"
         ],
         "y_pos": [
@@ -2601,7 +2601,7 @@
           "free_022"
         ],
         "x_neg": [
-          "shadow_005"
+          "shadow_009"
         ],
         "y_pos": [
           "free_045"
@@ -2718,7 +2718,7 @@
           "free_022"
         ],
         "x_neg": [
-          "shadow_005",
+          "shadow_009",
           "free_056"
         ],
         "y_pos": [],
@@ -2853,7 +2853,7 @@
           "free_026"
         ],
         "z_neg": [
-          "shadow_001",
+          "shadow_005",
           "free_046",
           "free_048",
           "free_056"
@@ -2977,9 +2977,9 @@
           "free_026"
         ],
         "z_neg": [
-          "shadow_000",
-          "shadow_001",
-          "obj_006"
+          "obj_000",
+          "shadow_004",
+          "shadow_005"
         ]
       },
       "on_surface": null,
@@ -3041,8 +3041,8 @@
           "free_026"
         ],
         "z_neg": [
-          "shadow_000",
-          "shadow_001",
+          "shadow_004",
+          "shadow_005",
           "free_048"
         ]
       },
@@ -3205,7 +3205,7 @@
           "free_031"
         ],
         "y_pos": [
-          "obj_008"
+          "obj_002"
         ],
         "y_neg": [
           "free_032"
@@ -3371,7 +3371,7 @@
           "free_039"
         ],
         "y_pos": [
-          "shadow_001"
+          "shadow_005"
         ],
         "y_neg": [
           "free_046"
