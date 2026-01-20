@@ -2,18 +2,25 @@
 """
 Full TAMP Demo: Boxel Visualization + Robot Execution
 
-This combines:
+This demonstrates:
 1. BoxelTestEnv scene setup with objects, shadows, free space
 2. Full boxel visualization  
-3. TAMP plan execution with the robot
+3. Hidden object search with replanning
+
+The target is randomly hidden in one of the shadow regions.
+The robot must sense shadows to find it, then pick it up.
 
 Run from Windows:
     pybullet_env\\Scripts\\python.exe run_tamp_demo.py
+    
+Note: This uses a mock planner for visualization. 
+For real PDDLStream planning, run test_full_pipeline.py from WSL.
 """
 
 import numpy as np
 import pybullet as p
 import time
+import random
 
 from boxel_test_env import BoxelTestEnv
 from boxel_data import BoxelRegistry, BoxelType, create_boxel_registry_from_boxels
@@ -28,7 +35,7 @@ ENABLE_FREE_SPACE = True
 
 def main():
     print("=" * 60)
-    print("TAMP Demo: Boxel Visualization + Robot Execution")
+    print("TAMP Demo: Hidden Object Search with Replanning")
     print("=" * 60)
     
     # =========================================================
@@ -94,8 +101,7 @@ def main():
         merged_free = merge_free_space_cells(free_boxels)
         print(f"  Merged: {len(free_boxels)} -> {len(merged_free)} boxels")
         
-        env.draw_boxels(all_known + merged_free, duration=0, 
-                       clear_previous=True)
+        env.draw_boxels(all_known + merged_free, duration=0, clear_previous=True)
         free_boxels = merged_free
     else:
         free_boxels = []
@@ -120,109 +126,125 @@ def main():
     streams = BoxelStreams(registry, robot_id=robot_id, physics_client=0)
     
     # =========================================================
-    # PHASE 4: Execute TAMP Plan
+    # PHASE 4: Hidden Object Scenario
     # =========================================================
-    print("\n--- Phase 4: Robot Execution ---")
-    print("\nSimulating TAMP plan execution:")
-    print("  1. Move to sensing position")
-    print("  2. Sense shadow region")
-    print("  3. Move to pick position")
-    print("  4. Pick object")
+    print("\n--- Phase 4: Hidden Object Search ---")
     
+    # Get all target objects (both visible and hidden)
+    all_targets = [name for name in env.objects.keys() if name.startswith("target")]
+    print(f"  All targets in scene: {all_targets}")
+    
+    # Randomly select which target to search for
+    target_name = random.choice(all_targets)
+    target_info = env.objects[target_name]
+    target_pos = np.array(target_info.position)
+    
+    # Randomly decide which shadow the target is "hidden" in
+    # (For demo purposes - in reality, we'd use the actual occlusion)
+    hidden_shadow_idx = random.randint(0, len(shadow_ids) - 1)
+    hidden_shadow_id = shadow_ids[hidden_shadow_idx]
+    
+    print(f"\n  *** SCENARIO ***")
+    print(f"  Target: {target_name}")
+    print(f"  Hidden in: {hidden_shadow_id} (shadow {hidden_shadow_idx + 1} of {len(shadow_ids)})")
+    print(f"  Robot must search {hidden_shadow_idx + 1} shadow(s) to find it!")
+    
+    # =========================================================
+    # PHASE 5: Execute Search with Replanning
+    # =========================================================
+    print("\n--- Phase 5: Executing Search Plan ---")
     print("\nStarting robot execution in 2 seconds...")
     time.sleep(2)
     
-    # Step 1: Move to sensing config for first shadow
-    print("\n[1/4] Moving to sensing position...")
-    if shadow_ids:
-        sensing_configs = list(streams.sample_sensing_config(shadow_ids[0]))
+    # Search shadows one by one (simulating optimistic planning + replanning)
+    found = False
+    search_count = 0
+    
+    for i, shadow_id in enumerate(shadow_ids):
+        search_count += 1
+        print(f"\n[Plan {search_count}] Searching shadow {i + 1}/{len(shadow_ids)}: {shadow_id}")
+        
+        # Step 1: Move to sensing config
+        print(f"  -> Moving to sensing position...")
+        sensing_configs = list(streams.sample_sensing_config(shadow_id))
         if sensing_configs:
             sensing_config = sensing_configs[0][0]
             move_robot_smooth(robot_id, sensing_config.joint_positions)
-            print(f"      Reached sensing config: {sensing_config.name}")
-    
-    wait_with_sim(env, 1.0)
-    
-    # Step 2: Sense (simulate observation)
-    print("\n[2/4] Sensing shadow region...")
-    print("      Observation: Target FOUND!")
-    time.sleep(1.0)
-    
-    # Step 3: Move to pick position
-    print("\n[3/4] Moving to pick position...")
-    
-    # Find target object position (use first visible target)
-    target_name = None
-    target_pos = None
-    for name, info in env.objects.items():
-        if name.startswith("target") and info.is_visible:
-            target_name = name
-            target_pos = info.position
+        
+        wait_with_sim(env, 0.5)
+        
+        # Step 2: Sense
+        print(f"  -> Sensing {shadow_id}...")
+        time.sleep(0.5)
+        
+        # Check if this is the shadow where target is hidden
+        if shadow_id == hidden_shadow_id:
+            print(f"  -> *** TARGET FOUND in {shadow_id}! ***")
+            found = True
+            
+            # Move to pick position
+            print(f"  -> Moving to pick position...")
+            pick_pos = target_pos + np.array([0, 0, 0.15])
+            pick_orn = p.getQuaternionFromEuler([0, np.pi, 0])
+            rest_pose = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]
+            
+            pick_joints = p.calculateInverseKinematics(
+                robot_id, 11, pick_pos.tolist(), pick_orn,
+                lowerLimits=[-2.9, -1.8, -2.9, -3.1, -2.9, -0.02, -2.9],
+                upperLimits=[2.9, 1.8, 2.9, -0.07, 2.9, 3.8, 2.9],
+                jointRanges=[5.8, 3.6, 5.8, 3.0, 5.8, 3.8, 5.8],
+                restPoses=rest_pose
+            )[:7]
+            move_robot_smooth(robot_id, pick_joints)
+            
+            # Lower to grasp
+            grasp_pos = target_pos + np.array([0, 0, 0.05])
+            grasp_joints = p.calculateInverseKinematics(
+                robot_id, 11, grasp_pos.tolist(), pick_orn,
+                lowerLimits=[-2.9, -1.8, -2.9, -3.1, -2.9, -0.02, -2.9],
+                upperLimits=[2.9, 1.8, 2.9, -0.07, 2.9, 3.8, 2.9],
+                jointRanges=[5.8, 3.6, 5.8, 3.0, 5.8, 3.8, 5.8],
+                restPoses=rest_pose
+            )[:7]
+            move_robot_smooth(robot_id, grasp_joints)
+            
+            # Pick
+            print(f"  -> Picking {target_name}...")
+            close_gripper(robot_id)
+            
+            # Attach object
+            target_id = env.objects[target_name].object_id
+            constraint = p.createConstraint(
+                robot_id, 11, target_id, -1,
+                p.JOINT_FIXED, [0, 0, 0], [0, 0, 0.05], [0, 0, 0]
+            )
+            
+            # Lift
+            print(f"  -> Lifting {target_name}...")
+            lift_pos = target_pos + np.array([0, 0, 0.3])
+            lift_joints = p.calculateInverseKinematics(
+                robot_id, 11, lift_pos.tolist(), pick_orn,
+                lowerLimits=[-2.9, -1.8, -2.9, -3.1, -2.9, -0.02, -2.9],
+                upperLimits=[2.9, 1.8, 2.9, -0.07, 2.9, 3.8, 2.9],
+                jointRanges=[5.8, 3.6, 5.8, 3.0, 5.8, 3.8, 5.8],
+                restPoses=rest_pose
+            )[:7]
+            move_robot_smooth(robot_id, lift_joints)
+            
             break
-    
-    if target_pos is not None:
-        print(f"      Target: {target_name} at {target_pos}")
-        
-        # Compute pick config
-        pick_pos = target_pos + np.array([0, 0, 0.15])  # Above target
-        pick_orn = p.getQuaternionFromEuler([0, np.pi, 0])
-        
-        rest_pose = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]
-        pick_joints = p.calculateInverseKinematics(
-            robot_id, 11, pick_pos.tolist(), pick_orn,
-            lowerLimits=[-2.9, -1.8, -2.9, -3.1, -2.9, -0.02, -2.9],
-            upperLimits=[2.9, 1.8, 2.9, -0.07, 2.9, 3.8, 2.9],
-            jointRanges=[5.8, 3.6, 5.8, 3.0, 5.8, 3.8, 5.8],
-            restPoses=rest_pose
-        )[:7]
-        
-        move_robot_smooth(robot_id, pick_joints)
-        
-        # Lower to grasp
-        grasp_pos = target_pos + np.array([0, 0, 0.05])
-        grasp_joints = p.calculateInverseKinematics(
-            robot_id, 11, grasp_pos.tolist(), pick_orn,
-            lowerLimits=[-2.9, -1.8, -2.9, -3.1, -2.9, -0.02, -2.9],
-            upperLimits=[2.9, 1.8, 2.9, -0.07, 2.9, 3.8, 2.9],
-            jointRanges=[5.8, 3.6, 5.8, 3.0, 5.8, 3.8, 5.8],
-            restPoses=rest_pose
-        )[:7]
-        move_robot_smooth(robot_id, grasp_joints)
-    
-    wait_with_sim(env, 0.5)
-    
-    # Step 4: Pick (close gripper)
-    print("\n[4/4] Picking object...")
-    close_gripper(robot_id)
-    
-    # Attach object
-    if target_name:
-        target_id = env.objects[target_name].object_id
-        constraint = p.createConstraint(
-            robot_id, 11, target_id, -1,
-            p.JOINT_FIXED, [0, 0, 0], [0, 0, 0.05], [0, 0, 0]
-        )
-    
-    # Lift
-    print("      Lifting object...")
-    if target_pos is not None:
-        lift_pos = target_pos + np.array([0, 0, 0.3])
-        lift_joints = p.calculateInverseKinematics(
-            robot_id, 11, lift_pos.tolist(), pick_orn,
-            lowerLimits=[-2.9, -1.8, -2.9, -3.1, -2.9, -0.02, -2.9],
-            upperLimits=[2.9, 1.8, 2.9, -0.07, 2.9, 3.8, 2.9],
-            jointRanges=[5.8, 3.6, 5.8, 3.0, 5.8, 3.8, 5.8],
-            restPoses=rest_pose
-        )[:7]
-        move_robot_smooth(robot_id, lift_joints)
+        else:
+            print(f"  -> Target NOT in {shadow_id}. Replanning...")
+            wait_with_sim(env, 0.3)
     
     # =========================================================
-    # PHASE 5: Done
+    # PHASE 6: Done
     # =========================================================
     print("\n" + "=" * 60)
-    print("TAMP DEMO COMPLETE!")
-    print("  - Generated semantic boxels (objects, shadows, free space)")
-    print("  - Executed sense-move-pick plan")
+    if found:
+        print(f"SUCCESS! Found {target_name} after searching {search_count} shadow(s)")
+        print(f"  - {search_count - 1} replan(s) were needed")
+    else:
+        print("FAILED: Target not found in any shadow")
     print("=" * 60)
     
     print("\nDemo complete. Window stays open for 15 seconds...")

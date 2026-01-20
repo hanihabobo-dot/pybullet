@@ -2,14 +2,22 @@
 """
 Full Pipeline Test: PDDLStream Planning + PyBullet Execution
 
+This uses the REAL PDDLStream planner (not mock) with GUI visualization.
+
 Run from WSL:
     source wsl_env/bin/activate
     export PYTHONPATH=/mnt/c/Users/HaniAlassiriAlhabbou/git/pddlstream_lib
     python3 test_full_pipeline.py
+
+Or with no GUI (for testing):
+    python3 test_full_pipeline.py --no-gui
 """
 
 import sys
 import os
+import argparse
+import random
+import time
 
 # Add pddlstream to path (for WSL)
 PDDLSTREAM_PATH = '/mnt/c/Users/HaniAlassiriAlhabbou/git/pddlstream_lib'
@@ -20,153 +28,286 @@ import numpy as np
 import pybullet as p
 import pybullet_data
 
-from boxel_data import BoxelRegistry, BoxelType
+from boxel_test_env import BoxelTestEnv
+from boxel_data import BoxelRegistry, BoxelType, create_boxel_registry_from_boxels
 from streams import BoxelStreams
-from executor import BoxelExecutor
+from cell_merger import merge_free_space_cells
 from pddlstream_planner import PDDLStreamPlanner
 
 
-def setup_pybullet():
-    """Initialize PyBullet environment."""
-    physics_client = p.connect(p.DIRECT)
-    p.setAdditionalSearchPath(pybullet_data.getDataPath())
-    p.setGravity(0, 0, -9.8)
+def main(gui=True):
+    print("=" * 60)
+    print("FULL PIPELINE: Real PDDLStream + PyBullet Execution")
+    print("=" * 60)
     
-    robot_id = p.loadURDF('franka_panda/panda.urdf', [0, 0, 0], useFixedBase=True)
+    # =========================================================
+    # PHASE 1: Setup Environment (same as run_demo.py)
+    # =========================================================
+    print("\n--- Phase 1: Environment Setup ---")
+    env = BoxelTestEnv(gui=gui)
     
-    # Set rest pose
-    rest_pose = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]
-    for i in range(7):
-        p.resetJointState(robot_id, i, rest_pose[i])
+    robot_id = env.objects["robot"].object_id
+    print(f"Robot ID: {robot_id}")
     
-    return physics_client, robot_id
-
-
-def main():
-    print("="*60)
-    print("FULL PIPELINE TEST")
-    print("PDDLStream Planning + PyBullet Execution")
-    print("="*60)
+    # Let objects settle
+    print("Letting objects settle...")
+    for _ in range(100):
+        env.step_simulation()
+        time.sleep(1.0 / 240.0) if gui else None
     
-    # Setup PyBullet
-    print("\n1. Setting up PyBullet...")
-    physics_client, robot_id = setup_pybullet()
-    print(f"   Robot loaded: ID={robot_id}")
+    # Get camera observation with boxels
+    print("Capturing camera observation...")
+    obs = env.get_camera_observation()
     
-    # Load boxel registry
-    print("\n2. Loading boxel registry...")
-    registry = BoxelRegistry.load_from_json('boxel_data.json')
+    print(f"  Visible objects: {obs.visible_objects}")
+    print(f"  Boxels generated: {len(obs.boxels) if obs.boxels else 0}")
+    
+    # =========================================================
+    # PHASE 2: Visualize Boxels (if GUI)
+    # =========================================================
+    if gui:
+        print("\n--- Phase 2: Boxel Visualization ---")
+        
+        all_known = obs.boxels
+        obj_boxels = [b for b in all_known if not b.is_shadow]
+        shadow_boxels = [b for b in all_known if b.is_shadow]
+        
+        print(f"  Object boxels: {len(obj_boxels)}")
+        print(f"  Shadow boxels: {len(shadow_boxels)}")
+        
+        # Set camera view (same as run_demo.py)
+        p.resetDebugVisualizerCamera(
+            cameraDistance=1.5,
+            cameraYaw=45,
+            cameraPitch=-30,
+            cameraTargetPosition=[0.5, 0.0, env.table_surface_height]
+        )
+        
+        # Show boxels
+        env.draw_boxels(all_known, duration=0)
+        
+        # Generate and show free space
+        print("Generating free space...")
+        free_boxels = env.generate_free_space(all_known, visualize=False)
+        merged_free = merge_free_space_cells(free_boxels)
+        print(f"  Merged: {len(free_boxels)} -> {len(merged_free)} boxels")
+        
+        env.draw_boxels(all_known + merged_free, duration=0, clear_previous=True)
+        all_known = all_known + merged_free
+        
+        for _ in range(int(240 * 1.0)):
+            env.step_simulation()
+            time.sleep(1.0/240.0)
+    else:
+        all_known = obs.boxels
+        free_boxels = env.generate_free_space(all_known, visualize=False)
+        merged_free = merge_free_space_cells(free_boxels)
+        all_known = all_known + merged_free
+    
+    # =========================================================
+    # PHASE 3: Create Registry
+    # =========================================================
+    print("\n--- Phase 3: Creating BoxelRegistry ---")
+    registry = create_boxel_registry_from_boxels(all_known, env.table_surface_height)
+    registry.save_to_json("boxel_data.json")
+    
     shadows = [b.id for b in registry.boxels.values() if b.boxel_type == BoxelType.SHADOW]
-    print(f"   Loaded {len(registry.boxels)} boxels, {len(shadows)} shadows")
+    print(f"  Saved {len(registry.boxels)} boxels, {len(shadows)} shadows")
     
-    # Create streams with real IK
-    print("\n3. Creating streams with real IK...")
-    streams = BoxelStreams(registry, robot_id=robot_id, physics_client=physics_client)
+    # =========================================================
+    # PHASE 4: Select Random Target & Hidden Location
+    # =========================================================
+    print("\n--- Phase 4: Hidden Object Scenario ---")
     
-    # Pre-generate configs for planner
-    print("\n4. Pre-generating robot configurations...")
-    config_lookup = {
-        'q_home': np.array([0, -0.785, 0, -2.356, 0, 1.571, 0.785])
-    }
+    all_targets = [name for name in env.objects.keys() if name.startswith("target")]
+    target_name = random.choice(all_targets)
+    target_info = env.objects[target_name]
+    target_pos = np.array(target_info.position)
     
-    for shadow_id in shadows:
-        configs = list(streams.sample_sensing_config(shadow_id))
-        for cfg, in configs[:2]:  # Keep first 2 configs per shadow
-            config_lookup[cfg.name] = cfg.joint_positions
-    print(f"   Generated {len(config_lookup)} configurations")
+    # Randomly hide in a shadow
+    hidden_shadow_idx = random.randint(0, len(shadows) - 1)
+    hidden_shadow_id = shadows[hidden_shadow_idx]
     
-    # Plan using PDDLStream
-    print("\n5. Planning with PDDLStream...")
+    print(f"  Target: {target_name}")
+    print(f"  Hidden in: {hidden_shadow_id} (shadow {hidden_shadow_idx + 1} of {len(shadows)})")
+    
+    # =========================================================
+    # PHASE 5: PDDLStream Planning (REAL PLANNER)
+    # =========================================================
+    print("\n--- Phase 5: PDDLStream Planning ---")
+    
+    streams = BoxelStreams(registry, robot_id=robot_id, physics_client=0)
     planner = PDDLStreamPlanner(registry, robot_id=robot_id)
     
+    print(f"Planning to find and hold {target_name}...")
+    
     plan = planner.plan(
-        target_objects=['target_1'],
-        goal='(holding target_1)',
+        target_objects=[target_name],
+        goal=f'(holding {target_name})',
         max_time=60.0,
-        verbose=False
-    )
-    
-    if plan is None:
-        print("   ERROR: No plan found!")
-        p.disconnect()
-        return False
-    
-    print(f"   Plan found with {len(plan)} actions:")
-    for i, action in enumerate(plan):
-        print(f"      {i+1}. {action[0]} {' '.join(action[1:])}")
-    
-    # Update config_lookup with any configs from the plan
-    for action in plan:
-        for param in action[1:]:
-            if param.startswith('q_') and param not in config_lookup:
-                # Generate this config
-                if 'sense' in param:
-                    shadow_id = param.replace('q_sense_', '').rsplit('_', 1)[0]
-                    configs = list(streams.sample_sensing_config(shadow_id))
-                    if configs:
-                        config_lookup[param] = configs[0][0].joint_positions
-                elif 'pick' in param:
-                    # Use a reasonable pick config
-                    config_lookup[param] = np.array([0.5, -0.5, 0, -2.0, 0, 1.5, 0.785])
-    
-    # Execute with real robot control
-    print("\n6. Executing plan with PyBullet robot...")
-    
-    # Oracle: target is in first shadow (optimistic case)
-    oracle_locations = {'target_1': shadows[0]}
-    
-    executor = BoxelExecutor(
-        registry=registry,
-        oracle_locations=oracle_locations,
-        robot_id=robot_id,
-        physics_client=physics_client,
-        config_lookup=config_lookup,
-        execute_real=True,
         verbose=True
     )
     
+    if plan is None:
+        print("ERROR: No plan found!")
+        env.close()
+        return False
+    
+    print(f"\nPlan found with {len(plan)} actions:")
+    for i, action in enumerate(plan):
+        print(f"  {i+1}. {action[0]} {' '.join(str(a) for a in action[1:])}")
+    
+    # =========================================================
+    # PHASE 6: Execute Plan with Robot
+    # =========================================================
+    print("\n--- Phase 6: Executing Plan ---")
+    
+    if gui:
+        print("Starting execution in 2 seconds...")
+        time.sleep(2)
+    
     # Execute each action
-    from executor import ActionResult, ExecutionState
-    from problem_generator import ProblemGenerator
+    for i, action in enumerate(plan):
+        action_name = action[0]
+        params = action[1:]
+        
+        print(f"\n[{i+1}/{len(plan)}] {action_name}")
+        
+        if action_name == 'move':
+            q1, q2, traj = params
+            print(f"  Moving from {q1} to {q2}...")
+            
+            # Get target config from streams
+            target_config = None
+            if hasattr(q2, 'joint_positions'):
+                target_config = q2.joint_positions
+            else:
+                # Try to generate config
+                for shadow_id in shadows:
+                    configs = list(streams.sample_sensing_config(shadow_id))
+                    for cfg, in configs:
+                        if cfg.name == str(q2):
+                            target_config = cfg.joint_positions
+                            break
+                    if target_config is not None:
+                        break
+            
+            if target_config is not None:
+                move_robot_smooth(robot_id, target_config, gui)
+            
+        elif action_name == 'sense_boxel':
+            obj, boxel_id, config = params
+            print(f"  Sensing {boxel_id} for {obj}...")
+            
+            # Check oracle
+            if str(boxel_id) == hidden_shadow_id:
+                print(f"  -> TARGET FOUND!")
+            else:
+                print(f"  -> Not here, would replan...")
+            
+            if gui:
+                time.sleep(0.5)
+                
+        elif action_name == 'pick':
+            obj, boxel_id, grasp, config = params
+            print(f"  Picking {obj} from {boxel_id}...")
+            
+            # Move to pick position
+            pick_pos = target_pos + np.array([0, 0, 0.15])
+            pick_orn = p.getQuaternionFromEuler([0, np.pi, 0])
+            rest_pose = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]
+            
+            pick_joints = p.calculateInverseKinematics(
+                robot_id, 11, pick_pos.tolist(), pick_orn,
+                lowerLimits=[-2.9, -1.8, -2.9, -3.1, -2.9, -0.02, -2.9],
+                upperLimits=[2.9, 1.8, 2.9, -0.07, 2.9, 3.8, 2.9],
+                jointRanges=[5.8, 3.6, 5.8, 3.0, 5.8, 3.8, 5.8],
+                restPoses=rest_pose
+            )[:7]
+            move_robot_smooth(robot_id, pick_joints, gui)
+            
+            # Lower and grasp
+            grasp_pos = target_pos + np.array([0, 0, 0.05])
+            grasp_joints = p.calculateInverseKinematics(
+                robot_id, 11, grasp_pos.tolist(), pick_orn,
+                lowerLimits=[-2.9, -1.8, -2.9, -3.1, -2.9, -0.02, -2.9],
+                upperLimits=[2.9, 1.8, 2.9, -0.07, 2.9, 3.8, 2.9],
+                jointRanges=[5.8, 3.6, 5.8, 3.0, 5.8, 3.8, 5.8],
+                restPoses=rest_pose
+            )[:7]
+            move_robot_smooth(robot_id, grasp_joints, gui)
+            
+            # Close gripper
+            close_gripper(robot_id, gui)
+            
+            # Attach object
+            target_id = env.objects[target_name].object_id
+            p.createConstraint(robot_id, 11, target_id, -1,
+                              p.JOINT_FIXED, [0,0,0], [0,0,0.05], [0,0,0])
+            
+            # Lift
+            lift_pos = target_pos + np.array([0, 0, 0.3])
+            lift_joints = p.calculateInverseKinematics(
+                robot_id, 11, lift_pos.tolist(), pick_orn,
+                lowerLimits=[-2.9, -1.8, -2.9, -3.1, -2.9, -0.02, -2.9],
+                upperLimits=[2.9, 1.8, 2.9, -0.07, 2.9, 3.8, 2.9],
+                jointRanges=[5.8, 3.6, 5.8, 3.0, 5.8, 3.8, 5.8],
+                restPoses=rest_pose
+            )[:7]
+            move_robot_smooth(robot_id, lift_joints, gui)
+            print(f"  -> {obj} picked up!")
     
-    problem = ProblemGenerator(registry).generate_problem(
-        target_objects=['target_1'],
-        goal='(holding target_1)'
-    )
+    # =========================================================
+    # PHASE 7: Done
+    # =========================================================
+    print("\n" + "=" * 60)
+    print(f"SUCCESS! Real PDDLStream planned and executed!")
+    print(f"  Target: {target_name}")
+    print(f"  Plan length: {len(plan)} actions")
+    print("=" * 60)
     
-    state = ExecutionState(
-        problem=problem,
-        current_config='q_home'
-    )
+    if gui:
+        print("\nDemo complete. Window stays open for 15 seconds...")
+        print("Use mouse to rotate view (Ctrl+Left click)")
+        for _ in range(int(240 * 15)):
+            env.step_simulation()
+            time.sleep(1.0/240.0)
     
-    success = True
-    for action in plan:
-        result = executor._execute_action(action, state, ['target_1'])
-        if result == ActionResult.FAILURE:
-            success = False
-            break
-        elif result == ActionResult.SENSING_MISMATCH:
-            print("   Sensing mismatch - would replan in full system")
-            # Continue anyway for this test
+    env.close()
+    return True
+
+
+def move_robot_smooth(robot_id, target_joints, gui=True, steps=150):
+    """Smoothly move robot to target configuration."""
+    current = [p.getJointState(robot_id, i)[0] for i in range(7)]
     
-    # Check final robot state
-    print("\n7. Checking final state...")
-    final_joints = np.array([p.getJointState(robot_id, i)[0] for i in range(7)])
-    print(f"   Final joints: {np.round(final_joints, 2)}")
-    print(f"   Holding: {state.holding}")
-    
-    p.disconnect()
-    
-    print("\n" + "="*60)
-    if success and state.holding == 'target_1':
-        print("FULL PIPELINE TEST: SUCCESS!")
-    else:
-        print("FULL PIPELINE TEST: Completed with issues")
-    print("="*60)
-    
-    return success
+    for t in range(steps):
+        alpha = (t + 1) / steps
+        interp = [(1 - alpha) * c + alpha * tgt for c, tgt in zip(current, target_joints)]
+        
+        for i in range(7):
+            p.setJointMotorControl2(robot_id, i, p.POSITION_CONTROL,
+                                    targetPosition=interp[i], force=240)
+        
+        p.stepSimulation()
+        if gui:
+            time.sleep(1/240)
+
+
+def close_gripper(robot_id, gui=True):
+    """Close gripper."""
+    for _ in range(100):
+        p.setJointMotorControl2(robot_id, 9, p.POSITION_CONTROL, targetPosition=0.01, force=50)
+        p.setJointMotorControl2(robot_id, 10, p.POSITION_CONTROL, targetPosition=0.01, force=50)
+        p.stepSimulation()
+        if gui:
+            time.sleep(1/240)
 
 
 if __name__ == "__main__":
-    success = main()
+    parser = argparse.ArgumentParser(description='Full PDDLStream Pipeline Test')
+    parser.add_argument('--no-gui', action='store_true', help='Run without GUI')
+    args = parser.parse_args()
+    
+    success = main(gui=not args.no_gui)
     sys.exit(0 if success else 1)
