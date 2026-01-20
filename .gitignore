@@ -27,3 +27,7 @@ Thumbs.db
 wsl_env/
 temp/
 statistics/
+
+# Documentation HTML (local only)
+technical_documentation.html
+progress_report.html
