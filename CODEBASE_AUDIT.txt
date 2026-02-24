@@ -21,7 +21,7 @@ Fixed: Random oracle replaced with AABB containment check. Each target's
        If no target is inside any shadow, the scenario exits gracefully.
 
 ================================================================================
-2. SENSING — STRING COMPARISON, NO PERCEPTION
+2. SENSING — STRING COMPARISON, NO PERCEPTION  [DONE]
 ================================================================================
 Where: test_full_pipeline.py line 285
 What:  found = (str(shadow_id) == oracle_hidden_shadow)
@@ -30,6 +30,15 @@ What:  found = (str(shadow_id) == oracle_hidden_shadow)
 Fix:   Implement actual sensing using PyBullet's camera or ray-casting.
        From the robot's sensing config, render a depth image or cast rays
        into the shadow region to detect whether an object is present.
+
+Fixed: String comparison replaced with PyBullet ray-casting via
+       sense_shadow_raycasting(). Casts a 5x5 grid of rays from the robot's
+       end-effector position into the shadow boxel's XY footprint.
+       If any ray hits the target object's PyBullet body, sensing reports
+       found=True. This means: (a) the robot must be at a valid sensing
+       position, (b) the occluder must have been physically moved for the
+       rays to reach the target, and (c) the target must actually be inside
+       the shadow region. The oracle variable is retained only for logging.
 
 ================================================================================
 3. PUSH — TELEPORTATION WITH HARDCODED DIRECTION

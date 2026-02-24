@@ -299,14 +299,16 @@ def main(gui=True):
                 obj, shadow_id, occluder_id, config = params
                 print(f"    Sensing {shadow_id}...")
                 
-                # ORACLE CHECK: Is the target actually here?
-                found = (str(shadow_id) == oracle_hidden_shadow)
+                # Ray-cast sensing: cast rays from end-effector into shadow
+                shadow_boxel = registry.get_boxel(str(shadow_id))
+                target_pybullet_id = env.objects[target_name].object_id
+                found = sense_shadow_raycasting(robot_id, shadow_boxel, target_pybullet_id)
                 belief.mark_sensed(str(shadow_id), found)
                 
                 if found:
-                    print(f"    *** TARGET FOUND in {shadow_id}! ***")
+                    print(f"    *** TARGET FOUND in {shadow_id}! (ray-cast) ***")
                 else:
-                    print(f"    Target NOT in {shadow_id}")
+                    print(f"    Target NOT in {shadow_id} (ray-cast: no hit)")
                     print(f"    -> REPLANNING with updated belief...")
                     break  # Exit action loop to replan
                     
@@ -397,6 +399,45 @@ def close_gripper(robot_id, gui=True):
         p.stepSimulation()
         if gui:
             time.sleep(1/120)
+
+
+def sense_shadow_raycasting(robot_id, shadow_boxel, target_pybullet_id):
+    """
+    Sense a shadow region using PyBullet ray-casting.
+    
+    Casts rays from the robot's end-effector into a grid of points spanning
+    the shadow boxel's XY footprint. If any ray hits the target object,
+    the target is detected.
+    
+    Args:
+        robot_id: PyBullet robot body ID
+        shadow_boxel: BoxelData for the shadow region to sense
+        target_pybullet_id: PyBullet body ID of the target object
+        
+    Returns:
+        True if the target was detected in the shadow region
+    """
+    ee_state = p.getLinkState(robot_id, END_EFFECTOR_LINK)
+    ray_origin = np.array(ee_state[0])
+
+    min_c = shadow_boxel.min_corner
+    max_c = shadow_boxel.max_corner
+    mid_z = (min_c[2] + max_c[2]) / 2.0
+
+    n = 5
+    ray_froms = []
+    ray_tos = []
+    for xi in np.linspace(min_c[0], max_c[0], n):
+        for yi in np.linspace(min_c[1], max_c[1], n):
+            ray_froms.append(ray_origin.tolist())
+            ray_tos.append([float(xi), float(yi), float(mid_z)])
+
+    results = p.rayTestBatch(ray_froms, ray_tos)
+    for hit_obj_id, _link, _frac, _pos, _normal in results:
+        if hit_obj_id == target_pybullet_id:
+            return True
+
+    return False
 
 
 def execute_pick(robot_id, env, target_name, target_pos, gui):
