@@ -1,0 +1,175 @@
+================================================================================
+CODEBASE AUDIT: What is fake/hardcoded and how to fix it
+================================================================================
+Date: 2026-02-06
+
+================================================================================
+1. OBJECT HIDING — FAKE ORACLE
+================================================================================
+Where: test_full_pipeline.py lines 141-144
+What:  The target is randomly assigned to a shadow via random.randint().
+       It has no relation to where the object actually is in the PyBullet scene.
+       Sensing (line 285) is a string comparison, not actual perception.
+
+Fix:   Determine which shadow a target is actually inside by checking if the
+       target's position falls within a shadow boxel's AABB. Replace the oracle
+       with ground-truth geometry from the scene.
+
+================================================================================
+2. SENSING — STRING COMPARISON, NO PERCEPTION
+================================================================================
+Where: test_full_pipeline.py line 285
+What:  found = (str(shadow_id) == oracle_hidden_shadow)
+       No ray-casting, no camera rendering, no visibility check.
+
+Fix:   Implement actual sensing using PyBullet's camera or ray-casting.
+       From the robot's sensing config, render a depth image or cast rays
+       into the shadow region to detect whether an object is present.
+
+================================================================================
+3. PUSH — TELEPORTATION WITH HARDCODED DIRECTION
+================================================================================
+Where: test_full_pipeline.py lines 237-239
+What:  The occluder is teleported +0.3 in X using p.resetBasePositionAndOrientation().
+       No physics simulation, no contact forces, no reasoning about where to push.
+       Direction is always +X regardless of camera/shadow geometry.
+       No check that the new position actually clears line of sight.
+       No collision check at the destination.
+
+Fix:   - The push destination should be computed to clear the line of sight
+         between camera and shadow region.
+       - Use physics-based pushing (apply forces or velocity control) instead
+         of teleportation.
+       - Or at minimum, compute a valid push direction/distance that provably
+         clears the occluder from the shadow's viewing cone.
+
+================================================================================
+4. STREAMS — RETURN STRING NAMES, NO GEOMETRY
+================================================================================
+Where: pddlstream_planner.py lines 87-127
+What:  All stream generators yield only string names like "q_push_obj_002_5".
+       No actual IK computation, no joint angles, no end-effector poses.
+       The certified geometric facts are meaningless — just labels.
+
+Fix:   Streams should return real geometric data:
+       - sample_push_config: compute actual IK for a push pose near the occluder
+       - sample_sensing_config: compute IK for a viewing pose that can see the shadow
+       - sample_grasp: compute actual grasp poses relative to object geometry
+       - plan_motion: compute collision-free trajectory (RRT/PRM)
+       - compute_kin: compute IK for pick/place at the boxel location
+
+       The streams in streams.py already have partial implementations with real
+       IK (using PyBullet's calculateInverseKinematics), but pddlstream_planner.py
+       does NOT use them — it has its own stub generators.
+
+================================================================================
+5. MOTION PLANNING — LINEAR INTERPOLATION, NO COLLISION CHECKING
+================================================================================
+Where: streams.py lines 413-432
+What:  Motion "planning" is linear interpolation in joint space between two configs.
+       No collision detection, no obstacle avoidance, no RRT/PRM.
+       Comment on line 413 says "TODO: Implement actual motion planning".
+
+Fix:   Implement a real motion planner (e.g., RRT-Connect or PRM using PyBullet's
+       collision checking). The motion planner should NOT reason about line of
+       sight — it should only produce collision-free paths. Line-of-sight clearing
+       is the responsibility of the push action and its streams.
+
+================================================================================
+6. EXECUTION — PARSES STRING NAMES, IGNORES PLAN PARAMETERS
+================================================================================
+Where: test_full_pipeline.py lines 251-278
+What:  The move action parses config names like "q_sense_shadow_006_1" by splitting
+       on underscores to extract the boxel ID. Then it uses hardcoded offsets
+       (e.g., [0, -0.3, 0.2] for sensing, [0, -0.2, 0.15] for pushing) to
+       compute target positions. The plan's actual geometric parameters are
+       completely ignored.
+
+Fix:   The plan should carry real geometric data (joint configs, trajectories).
+       Execution should use these directly:
+       - move: follow the trajectory from the plan
+       - push: use the push config from the plan + physics-based pushing
+       - pick: use the grasp and kin_solution from the plan
+
+================================================================================
+7. PICK — HARDCODED OFFSETS, IGNORES PLAN GRASP
+================================================================================
+Where: test_full_pipeline.py lines 384-401
+What:  execute_pick() uses hardcoded offsets from target_pos:
+       - +0.15 Z (move above)
+       - +0.05 Z (lower to grasp)
+       - +0.3 Z (lift)
+       The grasp parameter from the plan is completely ignored.
+       Object attachment uses p.createConstraint (not physics-based grasping).
+
+Fix:   Use the grasp pose and kin_solution from the plan to position the
+       end-effector. The constraint-based attachment is acceptable for
+       simulation but should be noted as a simplification.
+
+================================================================================
+8. MOVE ACTION — NO BOXEL REFERENCE
+================================================================================
+Where: pddl/domain_pddlstream.pddl lines 102-115
+What:  move(?q1, ?q2, ?t) takes only configs and trajectory.
+       There is no reference to which boxel the robot is moving to.
+       Config q2 is not constrained to be geometrically inside any boxel.
+
+Fix:   Consider move(?q1, ?q2, ?b, ?t) where ?b is the destination boxel.
+       The stream that generates ?q2 should certify that the end-effector
+       position at ?q2 is within boxel ?b. This connects the symbolic
+       plan to the geometric world.
+
+================================================================================
+9. PLACE ACTION — NO DESTINATION CONSTRAINT
+================================================================================
+Where: pddl/domain_pddlstream.pddl lines 144-161
+What:  place(?o, ?b, ?g, ?q) can place the object in any boxel ?b.
+       There is no reasoning about valid placement locations (e.g., on a
+       surface, not colliding, reachable).
+
+Fix:   Add constraints for valid placement: the boxel must be free space
+       or a surface region, and the kin_solution must be collision-free.
+       Currently place is unused (goal is only "holding"), but it will be
+       needed for rearrangement tasks.
+
+================================================================================
+10. SHADOW-OCCLUDER MAPPING — ROUND-ROBIN ASSIGNMENT
+================================================================================
+Where: test_full_pipeline.py lines 152-154
+What:  Shadows are assigned to occluders in round-robin order:
+       shadow_occluder_map[shadow_id] = occluders[i % len(occluders)]
+       This may not match which occluder actually casts which shadow.
+
+Fix:   The shadow calculator already knows which occluder creates which shadow.
+       Use that information directly from the boxel data (created_by_boxel_id
+       field in BoxelData).
+
+================================================================================
+FOR LATER
+================================================================================
+- Incremental boxel recomputation after actions (without redoing everything
+  from scratch). After pushing an occluder, the shadow it cast changes.
+  Only the affected shadows and free space cells need recomputation.
+
+================================================================================
+SUMMARY
+================================================================================
+The PLANNING ARCHITECTURE is sound:
+  - PDDL domain correctly models partial observability with KIF fluents
+  - PDDLStream correctly uses streams for geometric reasoning
+  - Replanning loop correctly updates belief state
+
+The IMPLEMENTATION shortcuts every geometric step:
+  - Streams produce labels instead of geometry
+  - Execution ignores plan parameters and hardcodes everything
+  - Sensing is a string comparison instead of perception
+  - Pushing is teleportation instead of physics
+
+Priority order for fixing:
+  1. Make streams return real geometric data (connects planning to geometry)
+  2. Fix execution to use plan parameters (removes hardcoding)
+  3. Implement real sensing (ray-casting or rendering)
+  4. Implement physics-based or geometry-aware pushing
+  5. Add collision-free motion planning
+  6. Fix the oracle to use actual scene geometry
+  7. Add boxel references to move action

@@ -121,12 +121,12 @@ def main(gui=True):
     print(f"  {len(registry.boxels)} boxels, {len(shadows)} shadows, {len(occluders)} occluders")
     
     # Visualize all boxels at once (after calculations complete)
-    if gui:
-        p.resetDebugVisualizerCamera(
-            cameraDistance=1.5, cameraYaw=45, cameraPitch=-30,
-            cameraTargetPosition=[0.5, 0.0, env.table_surface_height]
-        )
-        env.draw_boxels(all_boxels, duration=0)
+    # if gui:
+    #     p.resetDebugVisualizerCamera(
+    #         cameraDistance=1.5, cameraYaw=45, cameraPitch=-30,
+    #         cameraTargetPosition=[0.5, 0.0, env.table_surface_height]
+    #     )
+    #     env.draw_boxels(all_boxels, duration=0)
     
     # =========================================================
     # PHASE 4: Hidden Object Scenario (ORACLE ONLY)
