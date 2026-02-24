@@ -251,20 +251,21 @@ def main(gui=True):
                     # Move robot above occluder
                     move_robot_to_pos(robot_id, occ_pos + np.array([0, 0, 0.15]), gui)
                     
-                    # Compute geometry-aware push direction (perpendicular to
-                    # camera→shadow viewing line, with collision avoidance)
                     push_disp = compute_push_displacement(
                         env.camera_position, occluder_id, registry, boxel_to_pybullet
                     )
+                    if push_disp is None:
+                        print(f"    WARNING: No valid push direction for {occ_info['name']} "
+                              f"— all directions fail bounds/collision checks. Skipping physical push.")
+                        continue
+
                     new_pos = occ_pos + push_disp
                     p.resetBasePositionAndOrientation(
                         occ_pybullet_id, new_pos.tolist(), [0, 0, 0, 1]
                     )
                     
-                    # Update our position tracking
                     occ_info['position'] = new_pos
                     
-                    # Step simulation to let physics settle
                     for _ in range(30):
                         p.stepSimulation()
                     
@@ -491,7 +492,8 @@ def compute_push_displacement(camera_pos, occluder_id, registry, boxel_to_pybull
         boxel_to_pybullet: Dict mapping boxel IDs to PyBullet info
 
     Returns:
-        np.ndarray: Push displacement vector [dx, dy, 0]
+        np.ndarray or None: Push displacement vector [dx, dy, 0], or None if
+        no valid direction exists (both perpendiculars fail bounds/collision).
     """
     occluder_boxel = registry.get_boxel(occluder_id)
     if occluder_boxel is None:
@@ -556,7 +558,7 @@ def compute_push_displacement(camera_pos, occluder_id, registry, boxel_to_pybull
         if not collision:
             return np.array([direction[0] * push_dist, direction[1] * push_dist, 0.0])
 
-    return np.array([perp[0] * push_dist, perp[1] * push_dist, 0.0])
+    return None
 
 
 if __name__ == "__main__":
