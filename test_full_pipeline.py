@@ -147,11 +147,15 @@ def main(gui=True):
     print(f"  ORACLE: Actually hidden in {oracle_hidden_shadow} (shadow {hidden_shadow_idx + 1}/{len(shadows)})")
     print(f"  Robot must search to find it!")
     
-    # Create shadow->occluder mapping (for the PDDL domain)
-    # EVERY shadow must have an occluder mapped (cycle through if needed)
+    # Create shadow->occluder mapping from the registry's ground-truth data.
+    # Each shadow boxel knows which occluder created it (created_by_boxel_id).
     shadow_occluder_map = {}
-    for i, shadow_id in enumerate(shadows):
-        shadow_occluder_map[shadow_id] = occluders[i % len(occluders)]
+    for shadow_id in shadows:
+        shadow_boxel = registry.get_boxel(shadow_id)
+        if shadow_boxel and shadow_boxel.created_by_boxel_id:
+            shadow_occluder_map[shadow_id] = shadow_boxel.created_by_boxel_id
+        else:
+            print(f"  WARNING: Shadow {shadow_id} has no linked occluder — skipping")
     
     # Create mapping from boxel IDs to PyBullet object names and IDs
     # Boxel IDs are like "obj_000", PyBullet names are like "occluder_1"

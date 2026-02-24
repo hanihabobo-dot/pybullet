@@ -186,16 +186,16 @@ class PDDLStreamPlanner:
                     init.append(('obj_at_boxel_KIF', obj, boxel.id))
         
         # Add casts_shadow relationships
-        # Map shadows to their occluders based on provided map or heuristic
+        # Map shadows to their occluders based on provided map or registry data
         if self.shadow_occluder_map:
             for shadow_id, occluder_id in self.shadow_occluder_map.items():
                 init.append(('casts_shadow', occluder_id, shadow_id))
         else:
-            # Simple heuristic: assign shadows to occluders in order
-            for i, shadow_id in enumerate(shadows):
-                if i < len(occluders):
-                    occluder_id = occluders[i % len(occluders)]
-                    init.append(('casts_shadow', occluder_id, shadow_id))
+            # Derive from registry's ground-truth created_by_boxel_id
+            for shadow_id in shadows:
+                shadow_boxel = self.registry.get_boxel(shadow_id)
+                if shadow_boxel and shadow_boxel.created_by_boxel_id:
+                    init.append(('casts_shadow', shadow_boxel.created_by_boxel_id, shadow_id))
         
         # Add target objects with type predicates
         for obj in target_objects:
@@ -300,11 +300,12 @@ def test_planner():
     print(f"Shadow boxels: {len(shadows)}")
     print(f"Occluder boxels: {len(occluders)}")
     
-    # Create shadow->occluder mapping
+    # Create shadow->occluder mapping from registry ground-truth
     shadow_occluder_map = {}
-    for i, shadow_id in enumerate(shadows):
-        if i < len(occluders):
-            shadow_occluder_map[shadow_id] = occluders[i % len(occluders)]
+    for shadow_id in shadows:
+        shadow_boxel = registry.get_boxel(shadow_id)
+        if shadow_boxel and shadow_boxel.created_by_boxel_id:
+            shadow_occluder_map[shadow_id] = shadow_boxel.created_by_boxel_id
     print(f"Shadow-Occluder mapping: {shadow_occluder_map}")
     
     # Create planner
