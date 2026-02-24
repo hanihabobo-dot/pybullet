@@ -146,6 +146,7 @@
   ;; =========================================================================
   ;; PLACE: Place an object in a boxel
   ;; =========================================================================
+  ;; Destination must be free space — cannot place inside an occluder or shadow.
   (:action place
     :parameters (?o ?b ?g ?q)
     :precondition (and
@@ -155,6 +156,7 @@
       (Config ?q)
       (holding ?o)
       (at_config ?q)
+      (is_free_space ?b)
       (kin_solution ?o ?b ?g ?q)
     )
     :effect (and

@@ -105,12 +105,12 @@ Fix:   Implement a real motion planner (e.g., RRT-Connect or PRM using PyBullet'
 ================================================================================
 6. EXECUTION — PARSES STRING NAMES, IGNORES PLAN PARAMETERS
 ================================================================================
-Where: test_full_pipeline.py lines 251-278
-What:  The move action parses config names like "q_sense_shadow_006_1" by splitting
-       on underscores to extract the boxel ID. Then it uses hardcoded offsets
-       (e.g., [0, -0.3, 0.2] for sensing, [0, -0.2, 0.15] for pushing) to
-       compute target positions. The plan's actual geometric parameters are
-       completely ignored.
+Where: test_full_pipeline.py (move: ~280, push: ~239, pick: ~324)
+What:  Move now uses the boxel parameter from the plan (issue #8 fixed config
+       name parsing). Execution still uses type-dependent hardcoded offsets
+       ([0,-0.3,0.2] for shadows, [0,-0.2,0.15] for occluders, [0,0,0.15]
+       otherwise) instead of real geometry from streams. Pick and push ignore
+       grasp/kin_solution from the plan.
 
 Fix:   The plan should carry real geometric data (joint configs, trajectories).
        Execution should use these directly:
@@ -155,7 +155,7 @@ Fixed: Added (config_for_boxel ?q ?b) predicate to the PDDL domain.
        of parsing config name strings to extract boxel IDs.
 
 ================================================================================
-9. PLACE ACTION — NO DESTINATION CONSTRAINT
+9. PLACE ACTION — NO DESTINATION CONSTRAINT  [DONE]
 ================================================================================
 Where: pddl/domain_pddlstream.pddl lines 144-161
 What:  place(?o, ?b, ?g, ?q) can place the object in any boxel ?b.
@@ -166,6 +166,14 @@ Fix:   Add constraints for valid placement: the boxel must be free space
        or a surface region, and the kin_solution must be collision-free.
        Currently place is unused (goal is only "holding"), but it will be
        needed for rearrangement tasks.
+
+Fixed: Added (is_free_space ?b) as a precondition to the place action.
+       The planner already populates (is_free_space ...) in the init state
+       for every free space boxel, so no planner changes were needed.
+       This prevents placing objects inside occluders or shadow regions —
+       only free space boxels are valid destinations. Collision-free
+       kin_solution is a stream-level concern (issue #4) and will be
+       addressed when streams return real geometric data.
 
 ================================================================================
 10. SHADOW-OCCLUDER MAPPING — ROUND-ROBIN ASSIGNMENT  [DONE]
@@ -197,6 +205,20 @@ What:  When an occluder was already pushed (in moved_occluders), the init state
 Fixed: Added (occluder_aside occ_id) to init for already-moved occluders.
 
 ================================================================================
+BUG FIX: EXECUTION — BELIEF, OFFSETS, FAILED PUSH  [DONE]
+================================================================================
+Where: test_full_pipeline.py
+What:  (1) belief.mark_occluder_moved() was called before verifying push
+       succeeded; if push_disp is None, belief incorrectly said occluder moved.
+       (2) Move execution used uniform [0,0,0.15] for all boxels; original
+       used [0,-0.3,0.2] for sensing, [0,-0.2,0.15] for push. (3) On failed
+       push, continue let downstream actions run with wrong assumptions.
+
+Fixed: (1) belief.mark_occluder_moved() only after successful push. (2) Move
+       uses boxel-type-dependent offsets (shadow/object/else). (3) On push
+       failure, break to replan instead of continue.
+
+================================================================================
 FOR LATER
 ================================================================================
 - Incremental boxel recomputation after actions (without redoing everything
@@ -213,15 +235,12 @@ The PLANNING ARCHITECTURE is sound:
 
 The IMPLEMENTATION shortcuts every geometric step:
   - Streams produce labels instead of geometry
-  - Execution ignores plan parameters and hardcodes everything
-  - Sensing is a string comparison instead of perception
+  - Execution uses type-dependent offsets; pick/push ignore plan grasp/kin
+  - Sensing: ray-casting from fixed camera (done)
   - Pushing is teleportation instead of physics
 
 Priority order for fixing:
   1. Make streams return real geometric data (connects planning to geometry)
   2. Fix execution to use plan parameters (removes hardcoding)
-  3. Implement real sensing (ray-casting or rendering)
-  4. Implement physics-based or geometry-aware pushing
-  5. Add collision-free motion planning
-  6. Fix the oracle to use actual scene geometry
-  7. Add boxel references to move action
+  3. Implement physics-based or geometry-aware pushing
+  4. Add collision-free motion planning
