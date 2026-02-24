@@ -174,6 +174,8 @@ class PDDLStreamPlanner:
                 # Only blocking if NOT moved yet
                 if boxel.id not in moved_occluders:
                     init.append(('occluder_blocking', boxel.id))
+                else:
+                    init.append(('occluder_aside', boxel.id))
                 occluders.append(boxel.id)
                 # Known NOT in boxel for targets
                 for obj in target_objects:

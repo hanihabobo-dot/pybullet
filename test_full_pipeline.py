@@ -134,17 +134,31 @@ def main(gui=True):
     print("\n--- Phase 4: Hidden Object Scenario ---")
     
     all_targets = [name for name in env.objects.keys() if name.startswith("target")]
-    target_name = random.choice(all_targets)
+    
+    # Determine which targets are actually inside shadow regions
+    # by checking if each target's position falls within a shadow boxel's AABB.
+    target_to_shadow = {}
+    for tname in all_targets:
+        tpos = np.array(env.objects[tname].position)
+        for shadow_id in shadows:
+            sb = registry.get_boxel(shadow_id)
+            if sb and np.all(tpos >= sb.min_corner) and np.all(tpos <= sb.max_corner):
+                target_to_shadow[tname] = shadow_id
+                break
+    
+    if not target_to_shadow:
+        print(f"  ERROR: No target is geometrically inside any shadow region.")
+        print(f"  Cannot run hidden-object scenario.")
+        env.close()
+        return False
+    
+    target_name = random.choice(list(target_to_shadow.keys()))
     target_info = env.objects[target_name]
     target_pos = np.array(target_info.position)
-    
-    # ORACLE: Randomly decide which shadow the target is actually in
-    # The robot does NOT know this - it must search!
-    hidden_shadow_idx = random.randint(0, len(shadows) - 1)
-    oracle_hidden_shadow = shadows[hidden_shadow_idx]
+    oracle_hidden_shadow = target_to_shadow[target_name]
     
     print(f"  Target: {target_name}")
-    print(f"  ORACLE: Actually hidden in {oracle_hidden_shadow} (shadow {hidden_shadow_idx + 1}/{len(shadows)})")
+    print(f"  ORACLE: Actually hidden in {oracle_hidden_shadow} (ground-truth AABB containment)")
     print(f"  Robot must search to find it!")
     
     # Create shadow->occluder mapping from the registry's ground-truth data.

@@ -4,7 +4,7 @@ CODEBASE AUDIT: What is fake/hardcoded and how to fix it
 Date: 2026-02-06
 
 ================================================================================
-1. OBJECT HIDING — FAKE ORACLE
+1. OBJECT HIDING — FAKE ORACLE  [DONE]
 ================================================================================
 Where: test_full_pipeline.py lines 141-144
 What:  The target is randomly assigned to a shadow via random.randint().
@@ -14,6 +14,11 @@ What:  The target is randomly assigned to a shadow via random.randint().
 Fix:   Determine which shadow a target is actually inside by checking if the
        target's position falls within a shadow boxel's AABB. Replace the oracle
        with ground-truth geometry from the scene.
+
+Fixed: Random oracle replaced with AABB containment check. Each target's
+       position is tested against every shadow boxel's min_corner/max_corner.
+       Only targets that are geometrically inside a shadow are eligible.
+       If no target is inside any shadow, the scenario exits gracefully.
 
 ================================================================================
 2. SENSING — STRING COMPARISON, NO PERCEPTION
@@ -133,7 +138,7 @@ Fix:   Add constraints for valid placement: the boxel must be free space
        needed for rearrangement tasks.
 
 ================================================================================
-10. SHADOW-OCCLUDER MAPPING — ROUND-ROBIN ASSIGNMENT
+10. SHADOW-OCCLUDER MAPPING — ROUND-ROBIN ASSIGNMENT  [DONE]
 ================================================================================
 Where: test_full_pipeline.py lines 152-154
 What:  Shadows are assigned to occluders in round-robin order:
@@ -143,6 +148,23 @@ What:  Shadows are assigned to occluders in round-robin order:
 Fix:   The shadow calculator already knows which occluder creates which shadow.
        Use that information directly from the boxel data (created_by_boxel_id
        field in BoxelData).
+       
+Fixed: Round-robin replaced with registry lookup using created_by_boxel_id.
+       Each shadow now maps to the occluder that actually casts it.
+
+
+================================================================================
+BUG FIX (not in original audit): REPLANNING INIT STATE  [DONE]
+================================================================================
+Where: pddlstream_planner.py create_problem(), line 175
+What:  When an occluder was already pushed (in moved_occluders), the init state
+       omitted (occluder_blocking ...) but never added (occluder_aside ...).
+       This meant sense_shadow's precondition could never be satisfied for
+       shadows whose occluder was pushed in a previous plan cycle.
+       Result: replanning always failed once it needed to sense a shadow
+       belonging to an already-moved occluder.
+
+Fixed: Added (occluder_aside occ_id) to init for already-moved occluders.
 
 ================================================================================
 FOR LATER
