@@ -277,33 +277,22 @@ def main(gui=True):
                           f"to [{new_pos[0]:.2f},{new_pos[1]:.2f}]")
                     
             elif action_name == 'move':
-                q1, q2, traj = params
-                print(f"    Moving to {q2}...")
+                q1, q2, dest_boxel_id, traj = params
+                dest_boxel_id = str(dest_boxel_id)
+                print(f"    Moving to boxel {dest_boxel_id} (config: {q2})...")
                 
-                # Extract boxel ID from config name and move to it
-                # Config names like "q_sense_shadow_004_2" -> shadow_004
-                # Or "q_push_obj_000_1" -> obj_000
-                if 'sense' in str(q2):
-                    parts = str(q2).split('_')
-                    # q_sense_shadow_004_2 -> shadow_004
-                    boxel_id = '_'.join(parts[2:-1])
-                    if boxel_id in boxel_centers:
-                        sense_pos = boxel_centers[boxel_id] + np.array([0, -0.3, 0.2])
-                        move_robot_to_pos(robot_id, sense_pos, gui)
-                        print(f"    -> Moved to sense position for {boxel_id}")
-                elif 'push' in str(q2):
-                    parts = str(q2).split('_')
-                    # q_push_obj_000_1 -> obj_000
-                    occluder_boxel_id = '_'.join(parts[2:-1])
-                    if occluder_boxel_id in boxel_to_pybullet:
-                        occ_pos = boxel_to_pybullet[occluder_boxel_id]['position']
-                        push_pos = occ_pos + np.array([0, -0.2, 0.15])
-                        move_robot_to_pos(robot_id, push_pos, gui)
-                        print(f"    -> Moved to push position for {occluder_boxel_id}")
-                elif 'pick' in str(q2):
-                    # Move above target
-                    move_robot_to_pos(robot_id, target_pos + np.array([0, 0, 0.15]), gui)
-                    print(f"    -> Moved to pick position")
+                # Use the destination boxel from the plan directly —
+                # no string parsing needed.
+                if dest_boxel_id in boxel_to_pybullet:
+                    move_pos = boxel_to_pybullet[dest_boxel_id]['position'] + np.array([0, 0, 0.15])
+                elif dest_boxel_id in boxel_centers:
+                    move_pos = boxel_centers[dest_boxel_id] + np.array([0, 0, 0.15])
+                else:
+                    print(f"    WARNING: Unknown boxel {dest_boxel_id}, skipping move")
+                    continue
+                
+                move_robot_to_pos(robot_id, move_pos, gui)
+                print(f"    -> Moved above {dest_boxel_id}")
                     
             elif action_name == 'sense_shadow':
                 obj, shadow_id, occluder_id, config = params

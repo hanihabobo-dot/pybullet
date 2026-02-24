@@ -47,6 +47,7 @@
     (valid_grasp ?o ?g)           ; Grasp ?g valid for object ?o
     (motion ?q1 ?q2 ?t)           ; Trajectory ?t from ?q1 to ?q2
     (kin_solution ?o ?b ?g ?q)    ; Config ?q for picking ?o from ?b with ?g
+    (config_for_boxel ?q ?b)      ; Config ?q targets boxel ?b (EE inside ?b)
   )
   
   ;; =========================================================================
@@ -99,13 +100,17 @@
   ;; =========================================================================
   ;; MOVE: Move robot from one configuration to another
   ;; =========================================================================
+  ;; ?b is the destination boxel — the stream that produced ?q2 certifies
+  ;; that the end-effector at ?q2 is within boxel ?b.
   (:action move
-    :parameters (?q1 ?q2 ?t)
+    :parameters (?q1 ?q2 ?b ?t)
     :precondition (and
       (Config ?q1)
       (Config ?q2)
+      (Boxel ?b)
       (Trajectory ?t)
       (at_config ?q1)
+      (config_for_boxel ?q2 ?b)
       (motion ?q1 ?q2 ?t)
     )
     :effect (and

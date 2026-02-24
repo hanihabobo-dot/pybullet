@@ -1,11 +1,12 @@
 (define (stream boxel-streams)
   
   ;; Sample a robot configuration for pushing an occluder aside
+  ;; Certifies config_for_boxel so the move action knows the destination
   (:stream sample-push-config
     :inputs (?occ)
     :domain (is_occluder ?occ)
     :outputs (?q)
-    :certified (and (Config ?q) (push_config ?occ ?q))
+    :certified (and (Config ?q) (push_config ?occ ?q) (config_for_boxel ?q ?occ))
   )
   
   ;; Sample a robot configuration for sensing a shadow boxel
@@ -14,7 +15,7 @@
     :inputs (?b)
     :domain (is_shadow ?b)
     :outputs (?q)
-    :certified (and (Config ?q) (sensing_config ?b ?q))
+    :certified (and (Config ?q) (sensing_config ?b ?q) (config_for_boxel ?q ?b))
   )
   
   ;; Sample grasp poses for an object  
@@ -38,6 +39,6 @@
     :inputs (?o ?b ?g)
     :domain (and (Obj ?o) (Boxel ?b) (valid_grasp ?o ?g))
     :outputs (?q)
-    :certified (and (Config ?q) (kin_solution ?o ?b ?g ?q))
+    :certified (and (Config ?q) (kin_solution ?o ?b ?g ?q) (config_for_boxel ?q ?b))
   )
 )

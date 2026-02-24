@@ -134,7 +134,7 @@ Fix:   Use the grasp pose and kin_solution from the plan to position the
        simulation but should be noted as a simplification.
 
 ================================================================================
-8. MOVE ACTION — NO BOXEL REFERENCE
+8. MOVE ACTION — NO BOXEL REFERENCE  [DONE]
 ================================================================================
 Where: pddl/domain_pddlstream.pddl lines 102-115
 What:  move(?q1, ?q2, ?t) takes only configs and trajectory.
@@ -145,6 +145,14 @@ Fix:   Consider move(?q1, ?q2, ?b, ?t) where ?b is the destination boxel.
        The stream that generates ?q2 should certify that the end-effector
        position at ?q2 is within boxel ?b. This connects the symbolic
        plan to the geometric world.
+
+Fixed: Added (config_for_boxel ?q ?b) predicate to the PDDL domain.
+       Move action is now move(?q1, ?q2, ?b, ?t) with precondition
+       (config_for_boxel ?q2 ?b). Each config-producing stream
+       (sample-push-config, sample-sensing-config, compute-kin) now
+       certifies config_for_boxel for the boxel it targets. Execution
+       in test_full_pipeline.py uses the ?b parameter directly instead
+       of parsing config name strings to extract boxel IDs.
 
 ================================================================================
 9. PLACE ACTION — NO DESTINATION CONSTRAINT

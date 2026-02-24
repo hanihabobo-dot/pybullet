@@ -504,7 +504,7 @@ def get_stream_definitions():
       :inputs (?b - boxel)
       :domain (is_shadow ?b)
       :outputs (?q - config)
-      :certified (sensing_config ?b ?q)
+      :certified (and (sensing_config ?b ?q) (config_for_boxel ?q ?b))
     )
     
     (:stream sample-grasp
@@ -525,6 +525,6 @@ def get_stream_definitions():
       :inputs (?o - obj ?b - boxel ?g - grasp)
       :domain (and (obj_at_boxel ?o ?b) (valid_grasp ?o ?g))
       :outputs (?q - config)
-      :certified (kin_solution ?o ?b ?g ?q)
+      :certified (and (kin_solution ?o ?b ?g ?q) (config_for_boxel ?q ?b))
     )
     """
