@@ -251,8 +251,12 @@ def main(gui=True):
                     # Move robot above occluder
                     move_robot_to_pos(robot_id, occ_pos + np.array([0, 0, 0.15]), gui)
                     
-                    # Push occluder to the side (move it in PyBullet)
-                    new_pos = occ_pos + np.array([0.3, 0, 0])  # Push 30cm to the right
+                    # Compute geometry-aware push direction (perpendicular to
+                    # camera→shadow viewing line, with collision avoidance)
+                    push_disp = compute_push_displacement(
+                        env.camera_position, occluder_id, registry, boxel_to_pybullet
+                    )
+                    new_pos = occ_pos + push_disp
                     p.resetBasePositionAndOrientation(
                         occ_pybullet_id, new_pos.tolist(), [0, 0, 0, 1]
                     )
@@ -264,7 +268,12 @@ def main(gui=True):
                     for _ in range(30):
                         p.stepSimulation()
                     
-                    print(f"    -> Moved {occ_info['name']} from {occ_pos[:2]} to {new_pos[:2]}")
+                    push_dir_xy = push_disp[:2] / (np.linalg.norm(push_disp[:2]) + 1e-8)
+                    print(f"    -> Pushed {occ_info['name']} "
+                          f"dir=[{push_dir_xy[0]:.2f},{push_dir_xy[1]:.2f}] "
+                          f"dist={np.linalg.norm(push_disp[:2]):.3f}m "
+                          f"from [{occ_pos[0]:.2f},{occ_pos[1]:.2f}] "
+                          f"to [{new_pos[0]:.2f},{new_pos[1]:.2f}]")
                     
             elif action_name == 'move':
                 q1, q2, traj = params
@@ -299,10 +308,9 @@ def main(gui=True):
                 obj, shadow_id, occluder_id, config = params
                 print(f"    Sensing {shadow_id}...")
                 
-                # Ray-cast sensing: cast rays from end-effector into shadow
                 shadow_boxel = registry.get_boxel(str(shadow_id))
                 target_pybullet_id = env.objects[target_name].object_id
-                found = sense_shadow_raycasting(robot_id, shadow_boxel, target_pybullet_id)
+                found = sense_shadow_raycasting(env.camera_position, shadow_boxel, target_pybullet_id)
                 belief.mark_sensed(str(shadow_id), found)
                 
                 if found:
@@ -401,36 +409,42 @@ def close_gripper(robot_id, gui=True):
             time.sleep(1/120)
 
 
-def sense_shadow_raycasting(robot_id, shadow_boxel, target_pybullet_id):
+def sense_shadow_raycasting(camera_pos, shadow_boxel, target_pybullet_id):
     """
-    Sense a shadow region using PyBullet ray-casting.
-    
-    Casts rays from the robot's end-effector into a grid of points spanning
-    the shadow boxel's XY footprint. If any ray hits the target object,
-    the target is detected.
-    
+    Sense a shadow region using PyBullet ray-casting from the fixed camera.
+
+    Once the occluder has been physically pushed aside, rays from the fixed
+    scene camera can penetrate the shadow region to detect hidden objects.
+    Casts rays into a grid of points spanning the shadow boxel's XY footprint
+    at multiple Z levels.
+
     Args:
-        robot_id: PyBullet robot body ID
+        camera_pos: Fixed camera position [x, y, z]
         shadow_boxel: BoxelData for the shadow region to sense
         target_pybullet_id: PyBullet body ID of the target object
-        
+
     Returns:
         True if the target was detected in the shadow region
     """
-    ee_state = p.getLinkState(robot_id, END_EFFECTOR_LINK)
-    ray_origin = np.array(ee_state[0])
+    ray_origin = np.array(camera_pos)
 
     min_c = shadow_boxel.min_corner
     max_c = shadow_boxel.max_corner
-    mid_z = (min_c[2] + max_c[2]) / 2.0
 
-    n = 5
+    z_levels = [
+        min_c[2] + 0.04,
+        min_c[2] + (max_c[2] - min_c[2]) * 0.33,
+        min_c[2] + (max_c[2] - min_c[2]) * 0.67,
+    ]
+
+    n = 7
     ray_froms = []
     ray_tos = []
-    for xi in np.linspace(min_c[0], max_c[0], n):
-        for yi in np.linspace(min_c[1], max_c[1], n):
-            ray_froms.append(ray_origin.tolist())
-            ray_tos.append([float(xi), float(yi), float(mid_z)])
+    for z_target in z_levels:
+        for xi in np.linspace(min_c[0], max_c[0], n):
+            for yi in np.linspace(min_c[1], max_c[1], n):
+                ray_froms.append(ray_origin.tolist())
+                ray_tos.append([float(xi), float(yi), float(z_target)])
 
     results = p.rayTestBatch(ray_froms, ray_tos)
     for hit_obj_id, _link, _frac, _pos, _normal in results:
@@ -458,6 +472,91 @@ def execute_pick(robot_id, env, target_name, target_pos, gui):
     
     # Lift
     move_robot_to_pos(robot_id, target_pos + np.array([0, 0, 0.3]), gui)
+
+
+def compute_push_displacement(camera_pos, occluder_id, registry, boxel_to_pybullet):
+    """
+    Compute the displacement vector to push an occluder out of the camera's
+    line of sight to its shadow region(s).
+
+    The push direction is perpendicular to the camera-to-shadow viewing line
+    (in the XY plane). The distance ensures the occluder's AABB clears the
+    viewing corridor. Between the two perpendicular candidates, the one that
+    avoids collisions with other objects and stays within table bounds is chosen.
+
+    Args:
+        camera_pos: Camera position [x, y, z]
+        occluder_id: Boxel ID of the occluder to push
+        registry: BoxelRegistry with scene geometry
+        boxel_to_pybullet: Dict mapping boxel IDs to PyBullet info
+
+    Returns:
+        np.ndarray: Push displacement vector [dx, dy, 0]
+    """
+    occluder_boxel = registry.get_boxel(occluder_id)
+    if occluder_boxel is None:
+        return np.array([0.3, 0.0, 0.0])
+
+    occ_extent = occluder_boxel.extent
+
+    shadow_boxels = [registry.get_boxel(sid)
+                     for sid in occluder_boxel.shadow_boxel_ids
+                     if registry.get_boxel(sid) is not None]
+
+    if not shadow_boxels:
+        return np.array([0.3, 0.0, 0.0])
+
+    shadow_center = np.mean([sb.center for sb in shadow_boxels], axis=0)
+
+    cam_to_shadow_xy = np.array([
+        shadow_center[0] - camera_pos[0],
+        shadow_center[1] - camera_pos[1]
+    ])
+    view_len = np.linalg.norm(cam_to_shadow_xy)
+    if view_len < 1e-6:
+        return np.array([0.3, 0.0, 0.0])
+    cam_to_shadow_xy /= view_len
+
+    perp = np.array([-cam_to_shadow_xy[1], cam_to_shadow_xy[0]])
+
+    half_width = abs(occ_extent[0] * perp[0]) + abs(occ_extent[1] * perp[1])
+    push_dist = half_width + 0.10
+
+    TABLE_X_MIN, TABLE_X_MAX = 0.0, 1.0
+    TABLE_Y_MIN, TABLE_Y_MAX = -0.5, 0.5
+
+    occ_pos_xy = occluder_boxel.center[:2]
+    if occluder_id in boxel_to_pybullet:
+        occ_pos_xy = np.array(boxel_to_pybullet[occluder_id]['position'][:2])
+
+    for sign in [1.0, -1.0]:
+        direction = sign * perp
+        new_xy = occ_pos_xy + direction * push_dist
+
+        if (new_xy[0] - occ_extent[0] < TABLE_X_MIN or
+                new_xy[0] + occ_extent[0] > TABLE_X_MAX or
+                new_xy[1] - occ_extent[1] < TABLE_Y_MIN or
+                new_xy[1] + occ_extent[1] > TABLE_Y_MAX):
+            continue
+
+        collision = False
+        for bid, binfo in boxel_to_pybullet.items():
+            if bid == occluder_id:
+                continue
+            other_boxel = registry.get_boxel(bid)
+            if other_boxel is None:
+                continue
+            other_pos = np.array(binfo['position'][:2])
+            other_ext = other_boxel.extent
+            if (abs(new_xy[0] - other_pos[0]) < occ_extent[0] + other_ext[0] and
+                    abs(new_xy[1] - other_pos[1]) < occ_extent[1] + other_ext[1]):
+                collision = True
+                break
+
+        if not collision:
+            return np.array([direction[0] * push_dist, direction[1] * push_dist, 0.0])
+
+    return np.array([perp[0] * push_dist, perp[1] * push_dist, 0.0])
 
 
 if __name__ == "__main__":

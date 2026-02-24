@@ -32,16 +32,20 @@ Fix:   Implement actual sensing using PyBullet's camera or ray-casting.
        into the shadow region to detect whether an object is present.
 
 Fixed: String comparison replaced with PyBullet ray-casting via
-       sense_shadow_raycasting(). Casts a 5x5 grid of rays from the robot's
-       end-effector position into the shadow boxel's XY footprint.
-       If any ray hits the target object's PyBullet body, sensing reports
-       found=True. This means: (a) the robot must be at a valid sensing
-       position, (b) the occluder must have been physically moved for the
-       rays to reach the target, and (c) the target must actually be inside
-       the shadow region. The oracle variable is retained only for logging.
+       sense_shadow_raycasting(). Rays originate from the fixed scene camera
+       (the actual perception sensor) and target a 7×7 XY grid at 3 Z levels
+       (near table surface, 1/3 height, 2/3 height) within the shadow volume.
+       If any ray hits the target's PyBullet body, sensing reports found=True.
+       This means: (a) the occluder must have been physically pushed aside
+       so camera rays can penetrate the shadow, and (b) the target must
+       actually be inside the shadow region. Initially used the robot's
+       end-effector as ray origin, but sensing positions were beyond the
+       Panda's reach (~0.855m), causing IK to produce garbage solutions.
+       Switching to the fixed camera solved this — the camera always has a
+       known, stable position. The oracle variable is retained only for logging.
 
 ================================================================================
-3. PUSH — TELEPORTATION WITH HARDCODED DIRECTION
+3. PUSH — TELEPORTATION WITH HARDCODED DIRECTION  [DONE]
 ================================================================================
 Where: test_full_pipeline.py lines 237-239
 What:  The occluder is teleported +0.3 in X using p.resetBasePositionAndOrientation().
@@ -56,6 +60,15 @@ Fix:   - The push destination should be computed to clear the line of sight
          of teleportation.
        - Or at minimum, compute a valid push direction/distance that provably
          clears the occluder from the shadow's viewing cone.
+
+Fixed: Hardcoded +0.3 X replaced with compute_push_displacement(). The push
+       direction is now computed perpendicular to the camera→shadow viewing
+       line (in the XY plane). The push distance is the occluder's projected
+       half-width along the perpendicular + 10cm clearance margin. Between the
+       two perpendicular candidates (left/right), the function picks the one
+       that (a) keeps the occluder within table bounds and (b) does not collide
+       with other objects (AABB overlap check in XY). Teleportation is retained
+       as the motion mechanism — physics-based pushing is a separate improvement.
 
 ================================================================================
 4. STREAMS — RETURN STRING NAMES, NO GEOMETRY
