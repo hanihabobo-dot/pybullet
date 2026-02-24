@@ -240,7 +240,6 @@ def main(gui=True):
                 occluder_id = params[0]
                 config_name = params[1]
                 print(f"    Pushing {occluder_id} aside...")
-                belief.mark_occluder_moved(occluder_id)
                 
                 # Actually move the occluder in PyBullet
                 if occluder_id in boxel_to_pybullet:
@@ -269,6 +268,8 @@ def main(gui=True):
                     for _ in range(30):
                         p.stepSimulation()
                     
+                    belief.mark_occluder_moved(occluder_id)
+                    
                     push_dir_xy = push_disp[:2] / (np.linalg.norm(push_disp[:2]) + 1e-8)
                     print(f"    -> Pushed {occ_info['name']} "
                           f"dir=[{push_dir_xy[0]:.2f},{push_dir_xy[1]:.2f}] "
@@ -281,18 +282,28 @@ def main(gui=True):
                 dest_boxel_id = str(dest_boxel_id)
                 print(f"    Moving to boxel {dest_boxel_id} (config: {q2})...")
                 
-                # Use the destination boxel from the plan directly —
-                # no string parsing needed.
+                # Determine base position from plan's boxel parameter.
                 if dest_boxel_id in boxel_to_pybullet:
-                    move_pos = boxel_to_pybullet[dest_boxel_id]['position'] + np.array([0, 0, 0.15])
+                    base_pos = boxel_to_pybullet[dest_boxel_id]['position']
                 elif dest_boxel_id in boxel_centers:
-                    move_pos = boxel_centers[dest_boxel_id] + np.array([0, 0, 0.15])
+                    base_pos = boxel_centers[dest_boxel_id]
                 else:
                     print(f"    WARNING: Unknown boxel {dest_boxel_id}, skipping move")
                     continue
                 
-                move_robot_to_pos(robot_id, move_pos, gui)
-                print(f"    -> Moved above {dest_boxel_id}")
+                # Approach offset depends on boxel type: shadow moves need
+                # side clearance so the arm doesn't block camera rays;
+                # occluder moves approach from the side for pushing.
+                dest_boxel = registry.get_boxel(dest_boxel_id)
+                if dest_boxel and dest_boxel.boxel_type == BoxelType.SHADOW:
+                    offset = np.array([0, -0.3, 0.2])
+                elif dest_boxel and dest_boxel.boxel_type == BoxelType.OBJECT:
+                    offset = np.array([0, -0.2, 0.15])
+                else:
+                    offset = np.array([0, 0, 0.15])
+                
+                move_robot_to_pos(robot_id, base_pos + offset, gui)
+                print(f"    -> Moved to {dest_boxel_id} (offset {offset.tolist()})")
                     
             elif action_name == 'sense_shadow':
                 obj, shadow_id, occluder_id, config = params
