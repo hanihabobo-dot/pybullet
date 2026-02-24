@@ -255,8 +255,8 @@ def main(gui=True):
                     )
                     if push_disp is None:
                         print(f"    WARNING: No valid push direction for {occ_info['name']} "
-                              f"— all directions fail bounds/collision checks. Skipping physical push.")
-                        continue
+                              f"— all directions fail bounds/collision checks. Replanning...")
+                        break
 
                     new_pos = occ_pos + push_disp
                     p.resetBasePositionAndOrientation(
