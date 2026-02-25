@@ -146,71 +146,10 @@ class PDDLStreamPlanner:
         Returns:
             PDDLProblem for PDDLStream solver
         """
-        known_empty_shadows = known_empty_shadows or []
-        moved_occluders = moved_occluders or []
+        init = self._build_init(target_objects, current_config,
+                                known_empty_shadows, moved_occluders)
         
-        # Build initial state as list of facts (tuples)
-        init = []
-        
-        # Track occluders and their shadows
-        occluders = []
-        shadows = []
-        
-        # Add boxel facts with type predicates
-        for boxel in self.registry.boxels.values():
-            init.append(('Boxel', boxel.id))  # Type predicate
-            
-            if boxel.boxel_type == BoxelType.SHADOW:
-                init.append(('is_shadow', boxel.id))
-                shadows.append(boxel.id)
-                
-                # If we've searched this shadow and found nothing, mark as KNOWN NOT HERE
-                if boxel.id in known_empty_shadows:
-                    for obj in target_objects:
-                        init.append(('obj_at_boxel_KIF', obj, boxel.id))
-                # Otherwise still UNKNOWN - no KIF fact
-                
-            elif boxel.boxel_type == BoxelType.OBJECT:
-                init.append(('is_occluder', boxel.id))
-                # Only blocking if NOT moved yet
-                if boxel.id not in moved_occluders:
-                    init.append(('occluder_blocking', boxel.id))
-                else:
-                    init.append(('occluder_aside', boxel.id))
-                occluders.append(boxel.id)
-                # Known NOT in boxel for targets
-                for obj in target_objects:
-                    init.append(('obj_at_boxel_KIF', obj, boxel.id))
-                    
-            elif boxel.boxel_type == BoxelType.FREE_SPACE:
-                init.append(('is_free_space', boxel.id))
-                # Known NOT in boxel for targets
-                for obj in target_objects:
-                    init.append(('obj_at_boxel_KIF', obj, boxel.id))
-        
-        # Add casts_shadow relationships
-        # Map shadows to their occluders based on provided map or registry data
-        if self.shadow_occluder_map:
-            for shadow_id, occluder_id in self.shadow_occluder_map.items():
-                init.append(('casts_shadow', occluder_id, shadow_id))
-        else:
-            # Derive from registry's ground-truth created_by_boxel_id
-            for shadow_id in shadows:
-                shadow_boxel = self.registry.get_boxel(shadow_id)
-                if shadow_boxel and shadow_boxel.created_by_boxel_id:
-                    init.append(('casts_shadow', shadow_boxel.created_by_boxel_id, shadow_id))
-        
-        # Add target objects with type predicates
-        for obj in target_objects:
-            init.append(('Obj', obj))  # Type predicate
-        
-        # Robot state
-        init.append(('Config', current_config))  # Type predicate
-        init.append(('at_config', current_config))
-        init.append(('handempty',))
-        
-        # Create problem
-        constant_map = {}  # No constants
+        constant_map = {}
         stream_map = self._get_stream_map()
         
         return PDDLProblem(
@@ -222,6 +161,157 @@ class PDDLStreamPlanner:
             goal
         )
     
+    def export_problem_pddl(self,
+                            target_objects: List[str],
+                            goal: Tuple,
+                            current_config: str = "q_home",
+                            known_empty_shadows: List[str] = None,
+                            moved_occluders: List[str] = None,
+                            filepath: str = "pddl/problem_debug.pddl") -> str:
+        """
+        Export the programmatically-built problem to a standalone PDDL file.
+
+        Useful for debugging: inspect exactly what init state and goal the
+        planner receives, without running PDDLStream. The output file matches
+        domain_pddlstream.pddl's untyped format.
+
+        Note: stream-certified predicates (sensing_config, push_config, etc.)
+        are populated at runtime by PDDLStream streams and will NOT appear in
+        this file. The problem is therefore not solvable by a plain PDDL
+        planner — it's a snapshot of the static init state for inspection.
+
+        Args:
+            target_objects: Objects to reason about
+            goal: Goal as a tuple, e.g. ('holding', 'target_1')
+            current_config: Current robot configuration name
+            known_empty_shadows: Shadows already checked (empty)
+            moved_occluders: Occluders already pushed aside
+            filepath: Output path (default: pddl/problem_debug.pddl)
+
+        Returns:
+            The filepath written to
+        """
+        known_empty_shadows = known_empty_shadows or []
+        moved_occluders = moved_occluders or []
+
+        init = self._build_init(target_objects, current_config,
+                                known_empty_shadows, moved_occluders)
+
+        objects = set()
+        for fact in init:
+            for arg in fact[1:]:
+                objects.add(str(arg))
+
+        def format_fact(fact):
+            if len(fact) == 1:
+                return f"    ({fact[0]})"
+            return f"    ({' '.join(str(a) for a in fact)})"
+
+        def format_goal(g):
+            if isinstance(g, str):
+                return f"({g})"
+            if g[0] == 'and':
+                inner = ' '.join(format_goal(sub) for sub in g[1:])
+                return f"(and {inner})"
+            return f"({' '.join(str(a) for a in g)})"
+
+        lines = [
+            ";; Auto-generated problem file from PDDLStreamPlanner.export_problem_pddl()",
+            ";; Static init state only — stream-certified facts are NOT included.",
+            "",
+            "(define (problem boxel-tamp-debug)",
+            "  (:domain boxel-tamp)",
+            "",
+            "  (:objects",
+        ]
+        for obj in sorted(objects):
+            lines.append(f"    {obj}")
+        lines.append("  )")
+        lines.append("")
+        lines.append("  (:init")
+        for fact in sorted(init, key=lambda f: (f[0], f[1:])):
+            lines.append(format_fact(fact))
+        lines.append("  )")
+        lines.append("")
+        lines.append(f"  (:goal {format_goal(goal)})")
+        lines.append(")")
+        lines.append("")
+
+        output_path = os.path.join(os.path.dirname(__file__), filepath)
+        with open(output_path, 'w') as f:
+            f.write('\n'.join(lines))
+
+        return output_path
+
+    def _build_init(self,
+                    target_objects: List[str],
+                    current_config: str = "q_home",
+                    known_empty_shadows: List[str] = None,
+                    moved_occluders: List[str] = None) -> List[Tuple]:
+        """
+        Build the init state as a list of fact tuples.
+
+        Shared by create_problem() and export_problem_pddl() to guarantee
+        they produce identical init states.
+
+        Args:
+            target_objects: Objects to reason about
+            current_config: Current robot configuration name
+            known_empty_shadows: Shadows already checked (empty)
+            moved_occluders: Occluders already pushed aside
+
+        Returns:
+            List of fact tuples for the init state
+        """
+        known_empty_shadows = known_empty_shadows or []
+        moved_occluders = moved_occluders or []
+
+        init = []
+        shadows = []
+
+        for boxel in self.registry.boxels.values():
+            init.append(('Boxel', boxel.id))
+
+            if boxel.boxel_type == BoxelType.SHADOW:
+                init.append(('is_shadow', boxel.id))
+                shadows.append(boxel.id)
+
+                if boxel.id in known_empty_shadows:
+                    for obj in target_objects:
+                        init.append(('obj_at_boxel_KIF', obj, boxel.id))
+
+            elif boxel.boxel_type == BoxelType.OBJECT:
+                init.append(('is_occluder', boxel.id))
+                if boxel.id not in moved_occluders:
+                    init.append(('occluder_blocking', boxel.id))
+                else:
+                    init.append(('occluder_aside', boxel.id))
+                for obj in target_objects:
+                    init.append(('obj_at_boxel_KIF', obj, boxel.id))
+
+            elif boxel.boxel_type == BoxelType.FREE_SPACE:
+                init.append(('is_free_space', boxel.id))
+                for obj in target_objects:
+                    init.append(('obj_at_boxel_KIF', obj, boxel.id))
+
+        if self.shadow_occluder_map:
+            for shadow_id, occluder_id in self.shadow_occluder_map.items():
+                init.append(('casts_shadow', occluder_id, shadow_id))
+        else:
+            for shadow_id in shadows:
+                shadow_boxel = self.registry.get_boxel(shadow_id)
+                if shadow_boxel and shadow_boxel.created_by_boxel_id:
+                    init.append(('casts_shadow', shadow_boxel.created_by_boxel_id, shadow_id))
+
+        for obj in target_objects:
+            init.append(('Obj', obj))
+
+        init.append(('Config', current_config))
+        init.append(('at_config', current_config))
+        init.append(('handempty',))
+
+        return init
+
     def plan(self,
              target_objects: List[str],
              goal: Tuple,

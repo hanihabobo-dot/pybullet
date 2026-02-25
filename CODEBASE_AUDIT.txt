@@ -219,7 +219,7 @@ Fixed: (1) belief.mark_occluder_moved() only after successful push. (2) Move
        failure, break to replan instead of continue.
 
 ================================================================================
-11. NO PROBLEM FILE — BUILT IN PYTHON, LEGACY ARTIFACTS LINGER
+11. NO PROBLEM FILE — BUILT IN PYTHON, LEGACY ARTIFACTS LINGER  [DONE]
 ================================================================================
 Where: pddlstream_planner.py create_problem(), pddl/ directory
 What:  The pipeline does NOT use any problem .pddl file at runtime.
@@ -253,6 +253,21 @@ Fix:   - Move all unused PDDL files to an archive/ directory so the active
          a plain PDDL planner outside PDDLStream), add a method to
          PDDLStreamPlanner that exports the programmatically-built problem
          to a .pddl file after create_problem() runs.
+
+Fixed: Moved the three unused PDDL files to archive/pddl/:
+       - domain_boxel_tamp.pddl — old typed domain with sense_boxel (not
+         sense_shadow), no push_aside, 3-param move. Incompatible with
+         PDDLStream's untyped requirement. Only referenced by the stale
+         test_pddl_integration.py (issue #14/#19).
+       - problem_template.pddl — documentation example showing problem
+         structure. Never read by any code path.
+       - problem_generated.pddl — previously generated problem using the
+         old typed domain. Stale artifact from test_pddl_integration.py.
+       The pddl/ directory now contains ONLY the two files loaded at
+       runtime: domain_pddlstream.pddl (action schemas) and stream.pddl
+       (stream declarations). boxel_facts.pddl (project root) is kept —
+       it was fixed in #15 to use correct predicates and serves as a
+       valid debugging artifact.
 
 ================================================================================
 12. VISIBILITY CHECK — ALWAYS RETURNS TRUE (STUB)
@@ -805,6 +820,16 @@ What:  The domain is tailored to the hidden-object scenario rather than
          - Only senses boxels that are "shadows" cast by occluders
          - Cannot sense generic "unknown region" — the domain assumes the
            occlusion model (shadow vs occluder)
+
+       Additionally, is_occluder is applied to ALL BoxelType.OBJECT boxels —
+       both actual occluders and targets. The planner (create_problem()) and
+       generate_pddl_facts() both mark every object boxel as (is_occluder ...),
+       so the predicate really means "is a physical object", not "is an
+       occluder". The name is misleading and should be is_object or similar.
+       This cannot be fixed by gating on BoxelData.is_occluder because that
+       field is always False (issue #13: boxel_test_env.py's Boxel class
+       lacks is_occluder, so the hasattr fallback in create_boxel_registry
+       sets it to False for every boxel).
 
        Predicates like occluder_blocking, occluder_aside, casts_shadow, is_occluder
        are scenario-specific. They encode the hidden-object solution structure.

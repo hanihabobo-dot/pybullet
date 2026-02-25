@@ -193,6 +193,12 @@ def main(gui=True):
     planner = PDDLStreamPlanner(registry, robot_id=robot_id, 
                                  shadow_occluder_map=shadow_occluder_map)
     
+    problem_path = planner.export_problem_pddl(
+        target_objects=[target_name],
+        goal=('holding', target_name)
+    )
+    print(f"  Exported initial problem to {problem_path}")
+    
     # Get boxel centers for robot motion targets
     boxel_centers = {b.id: b.center for b in registry.boxels.values()}
     
