@@ -347,7 +347,7 @@ Fix:   Move to archive/. If the mock-planner execution path is still
        to match the current domain's actions and predicates.
 
 ================================================================================
-15. PDDL FACT GENERATOR USES WRONG PREDICATES
+15. PDDL FACT GENERATOR USES WRONG PREDICATES  [DONE]
 ================================================================================
 Where: boxel_data.py lines 283-337 (generate_pddl_facts / save_pddl_facts)
 What:  BoxelRegistry.generate_pddl_facts() produces facts using predicates
@@ -371,6 +371,19 @@ Fix:   Either remove generate_pddl_facts() entirely (since the problem
        predicates from domain_pddlstream.pddl: Boxel, Obj, Config,
        is_shadow, is_occluder, is_free_space, casts_shadow,
        occluder_blocking, obj_at_boxel_KIF, etc.
+
+Fixed: Rewrote generate_pddl_facts() to use the exact predicates from
+       domain_pddlstream.pddl. Now outputs only static scene structure:
+       (Boxel ?id) for every boxel, (is_shadow ?id), (is_occluder ?id),
+       (is_free_space ?id) for classification, and (casts_shadow ?occ ?shd)
+       for shadow-occluder relationships. Removed all 9 wrong predicates
+       (semantic_zone, boxel_type, neighbor, occludes, occluded_by,
+       reachable, observable, possibly_contains, confirmed_empty).
+       Dynamic state (occluder_blocking, obj_at_boxel_KIF, at_config, etc.)
+       is intentionally excluded — it depends on execution context and is
+       managed by PDDLStreamPlanner.create_problem(). The output now
+       matches the static subset of what create_problem() generates,
+       making boxel_facts.pddl a valid debugging artifact.
 
 ================================================================================
 16. REACHABILITY / OBSERVABILITY — NEVER COMPUTED, ALWAYS TRUE
@@ -846,7 +859,7 @@ The IMPLEMENTATION shortcuts every geometric step:
 The CODEBASE has significant organizational debt:
   - Two diverged BoxelTestEnv with Boxel field mismatch (#13)
   - Obsolete executor/problem_generator pipeline (#14)
-  - PDDL fact generator produces facts for wrong domain (#15)
+  - PDDL fact generator produces facts for wrong domain (#15 — done)
   - Fields that claim to be computed but are always default (#16)
   - Magic constants duplicated across files (#18, #31)
   - Stale files, temp copies, and unclear entry points (#11, #19)
