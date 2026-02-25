@@ -28,6 +28,7 @@ from pddlstream.language.generator import from_gen_fn, from_fn, from_test
 from pddlstream.utils import read
 
 from boxel_data import BoxelRegistry, BoxelType
+from streams import BoxelStreams, RobotConfig
 
 
 def read_pddl_file(filename: str) -> str:
@@ -47,89 +48,93 @@ class PDDLStreamPlanner:
     """
     
     def __init__(self, registry: BoxelRegistry, robot_id: int = None,
-                 shadow_occluder_map: Dict[str, str] = None):
+                 shadow_occluder_map: Dict[str, str] = None,
+                 physics_client: int = None):
         """
         Initialize the planner.
         
         Args:
             registry: BoxelRegistry with scene boxels
-            robot_id: PyBullet robot body ID (optional, for real IK)
+            robot_id: PyBullet robot body ID (for real IK; None = heuristic fallback)
             shadow_occluder_map: Dict mapping shadow_id -> occluder_id
+            physics_client: PyBullet physics client ID (None = default 0)
         """
         self.registry = registry
         self.robot_id = robot_id
         self.shadow_occluder_map = shadow_occluder_map or {}
-        
-        # Load PDDL files (use PDDLStream-compatible untyped domain)
+        self._shadow_ids = [b.id for b in registry.boxels.values()
+                            if b.boxel_type == BoxelType.SHADOW]
+
         self.domain_pddl = read_pddl_file('domain_pddlstream.pddl')
         self.stream_pddl = read_pddl_file('stream.pddl')
-        
-        # Counters for unique names
-        self._config_count = 0
-        self._grasp_count = 0
-        self._traj_count = 0
+
+        self.streams = BoxelStreams(
+            registry, robot_id=robot_id, physics_client=physics_client
+        )
     
+    def _init_stream_stats(self):
+        """Reset per-plan stream call counters."""
+        self._stream_stats = {
+            'sample-push-config': {'calls': 0, 'results': 0, 'by_input': {}},
+            'sample-sensing-config': {'calls': 0, 'results': 0, 'by_input': {}},
+            'sample-grasp': {'calls': 0, 'results': 0, 'by_input': {}},
+            'compute-kin': {'calls': 0, 'results': 0, 'by_input': {}},
+            'plan-motion': {'calls': 0, 'results': 0},
+        }
+
+    def _logged(self, name, gen_fn):
+        """Wrap a generator to count calls and results for diagnostics."""
+        stats = self._stream_stats[name]
+        def wrapper(*args):
+            key = str(args[0]) if args else ''
+            stats['calls'] += 1
+            count = 0
+            for result in gen_fn(*args):
+                count += 1
+                yield result
+            stats['results'] += count
+            if 'by_input' in stats:
+                stats['by_input'][key] = stats['by_input'].get(key, 0) + count
+        return wrapper
+
+    def _print_stream_stats(self):
+        """Print a summary of what each stream produced (for debugging)."""
+        print("\n  Stream results:")
+        for name, s in self._stream_stats.items():
+            line = f"    {name}: {s['results']} results from {s['calls']} calls"
+            if 'by_input' in s and s['by_input']:
+                details = ', '.join(f"{k}={v}" for k, v in sorted(s['by_input'].items()))
+                line += f"  [{details}]"
+            print(line)
+
     def _get_stream_map(self) -> Dict[str, Any]:
         """
         Create the stream map connecting stream names to Python generators.
+        
+        Each stream delegates to BoxelStreams, which computes real IK via
+        PyBullet (or heuristic fallback if no robot_id). The yielded values
+        are RobotConfig / Grasp / Trajectory objects that carry actual joint
+        angles, grasp poses, and trajectory waypoints.
+        
+        No caps — the incremental algorithm evaluates all streams eagerly
+        and searches one fully-grounded problem. More results = richer
+        search space = better chance of finding a plan.
         
         Returns:
             Dict mapping stream names to generator functions
         """
         return {
-            'sample-push-config': from_gen_fn(self._gen_push_config),
-            'sample-sensing-config': from_gen_fn(self._gen_sensing_config),
-            'sample-grasp': from_gen_fn(self._gen_grasp),
-            'plan-motion': from_gen_fn(self._gen_motion),
-            'compute-kin': from_gen_fn(self._gen_kin_solution),
+            'sample-push-config': from_gen_fn(self._logged('sample-push-config', self.streams.sample_push_config)),
+            'sample-sensing-config': from_gen_fn(self._logged('sample-sensing-config', self.streams.sample_sensing_config)),
+            'sample-grasp': from_gen_fn(self._logged('sample-grasp', self.streams.sample_grasp)),
+            'plan-motion': from_gen_fn(self._logged('plan-motion', self.streams.plan_motion)),
+            'compute-kin': from_gen_fn(self._logged('compute-kin', self.streams.compute_kin_solution)),
         }
-    
-    def _gen_push_config(self, occluder_id: str):
-        """Generator for push configurations (to move occluder aside)."""
-        boxel = self.registry.get_boxel(occluder_id)
-        if boxel is None:
-            return
-        
-        for i in range(2):
-            self._config_count += 1
-            config_name = f"q_push_{occluder_id}_{self._config_count}"
-            yield (config_name,)
-    
-    def _gen_sensing_config(self, boxel_id: str):
-        """Generator for sensing configurations."""
-        boxel = self.registry.get_boxel(boxel_id)
-        if boxel is None:
-            return
-        
-        # Generate a few viewing configurations
-        for i in range(3):
-            self._config_count += 1
-            config_name = f"q_sense_{boxel_id}_{self._config_count}"
-            yield (config_name,)
-    
-    def _gen_grasp(self, obj_id: str):
-        """Generator for grasp poses."""
-        for i in range(2):
-            self._grasp_count += 1
-            grasp_name = f"grasp_{obj_id}_{self._grasp_count}"
-            yield (grasp_name,)
-    
-    def _gen_motion(self, q1: str, q2: str):
-        """Generator for motion plans."""
-        self._traj_count += 1
-        traj_name = f"traj_{self._traj_count}"
-        yield (traj_name,)
-    
-    def _gen_kin_solution(self, obj_id: str, boxel_id: str, grasp: str):
-        """Generator for kinematic solutions."""
-        self._config_count += 1
-        config_name = f"q_pick_{obj_id}_{self._config_count}"
-        yield (config_name,)
     
     def create_problem(self, 
                        target_objects: List[str],
                        goal_expr: str,
-                       current_config: str = "q_home",
+                       current_config: Optional[RobotConfig] = None,
                        known_empty_shadows: List[str] = None,
                        moved_occluders: List[str] = None) -> PDDLProblem:
         """
@@ -138,13 +143,15 @@ class PDDLStreamPlanner:
         Args:
             target_objects: Objects to reason about
             goal_expr: Goal expression like "(holding target_1)"
-            current_config: Current robot configuration name
+            current_config: Robot configuration (None = home pose with real joint angles)
             known_empty_shadows: Shadows we've already checked (not containing target)
             moved_occluders: Occluders that have been pushed aside
             
         Returns:
             PDDLProblem for PDDLStream solver
         """
+        if current_config is None:
+            current_config = self.streams.home_config
         known_empty_shadows = known_empty_shadows or []
         moved_occluders = moved_occluders or []
         
@@ -232,7 +239,7 @@ class PDDLStreamPlanner:
     def plan(self,
              target_objects: List[str],
              goal: str,
-             current_config: str = "q_home",
+             current_config: Optional[RobotConfig] = None,
              known_empty_shadows: List[str] = None,
              moved_occluders: List[str] = None,
              max_time: float = 30.0,
@@ -243,7 +250,7 @@ class PDDLStreamPlanner:
         Args:
             target_objects: Objects to reason about
             goal: Goal expression
-            current_config: Current robot config
+            current_config: Robot configuration (None = home pose)
             known_empty_shadows: Shadows already checked (empty)
             moved_occluders: Occluders already pushed aside
             max_time: Maximum planning time in seconds
@@ -252,27 +259,41 @@ class PDDLStreamPlanner:
         Returns:
             List of action tuples, or None if planning fails
         """
+        self._init_stream_stats()
         problem = self.create_problem(target_objects, goal, current_config,
                                       known_empty_shadows, moved_occluders)
-        
+
+        known_empty_shadows = known_empty_shadows or []
+        moved_occluders_list = moved_occluders or []
+
         if verbose:
-            print(f"\n--- PDDLStream Planning ---")
-            print(f"Goal: {goal}")
-            print(f"Max time: {max_time}s")
-        
-        # Call PDDLStream solver
+            unknown = [s for s in self._shadow_ids if s not in known_empty_shadows]
+            print(f"  Init: {len(unknown)} unknown shadows, "
+                  f"{len(known_empty_shadows)} checked empty, "
+                  f"{len(moved_occluders_list)} occluders aside")
+            for s in unknown:
+                occ = self.shadow_occluder_map.get(s, '?')
+                aside = 'aside' if occ in moved_occluders_list else 'blocking'
+                print(f"    {s} <- {occ} ({aside})")
+
+        import time
+        t0 = time.time()
         solution = solve(
             problem,
-            algorithm='adaptive',  # Best for TAMP problems
+            algorithm='incremental',
             max_time=max_time,
-            verbose=verbose
+            unit_costs=True,
+            verbose=False
         )
-        
+        elapsed = time.time() - t0
+
         plan, cost, certificate = solution
-        
+
         if verbose:
-            print_solution(solution)
-        
+            status = "SOLVED" if plan else "FAILED"
+            print(f"  {status} in {elapsed:.1f}s (cost={cost})")
+            self._print_stream_stats()
+
         if plan is None:
             return None
         

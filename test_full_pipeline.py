@@ -82,37 +82,22 @@ class BeliefState:
 
 
 def main(gui=True):
-    print("=" * 60)
     print("FULL PIPELINE: PDDLStream + Replanning")
-    print("=" * 60)
-    
-    # =========================================================
-    # PHASE 1: Setup Environment
-    # =========================================================
-    print("\n--- Phase 1: Environment Setup ---")
+
+    # --- Setup environment ---
     env = BoxelTestEnv(gui=gui)
     robot_id = env.objects["robot"].object_id
-    print(f"Robot ID: {robot_id}")
-    
-    # Let settle (minimal)
+
     for _ in range(50):
         env.step_simulation()
-    
-    # =========================================================
-    # PHASE 2: Boxel Calculation (fast, no visualization)
-    # =========================================================
-    print("\n--- Phase 2: Calculating Boxels ---")
+
+    # --- Boxel calculation ---
     obs = env.get_camera_observation()
     all_known = obs.boxels
     free_boxels = env.generate_free_space(all_known, visualize=False)
     merged_free = merge_free_space_cells(free_boxels)
     all_boxels = all_known + merged_free
-    print(f"  Calculated {len(all_boxels)} boxels")
-    
-    # =========================================================
-    # PHASE 3: Create Registry
-    # =========================================================
-    print("\n--- Phase 3: Creating BoxelRegistry ---")
+
     registry = create_boxel_registry_from_boxels(all_boxels, env.table_surface_height)
     registry.save_to_json("boxel_data.json")
     
@@ -132,6 +117,7 @@ def main(gui=True):
     # PHASE 4: Hidden Object Scenario (ORACLE ONLY)
     # =========================================================
     print("\n--- Phase 4: Hidden Object Scenario ---")
+    print(f"Scene: {len(registry.boxels)} boxels, {len(shadows)} shadows, {len(occluders)} occluders")
     
     all_targets = [name for name in env.objects.keys() if name.startswith("target")]
     
@@ -157,22 +143,14 @@ def main(gui=True):
     target_pos = np.array(target_info.position)
     oracle_hidden_shadow = target_to_shadow[target_name]
     
-    print(f"  Target: {target_name}")
-    print(f"  ORACLE: Actually hidden in {oracle_hidden_shadow} (ground-truth AABB containment)")
-    print(f"  Robot must search to find it!")
-    
-    # Create shadow->occluder mapping from the registry's ground-truth data.
-    # Each shadow boxel knows which occluder created it (created_by_boxel_id).
+    print(f"Target: {target_name} (hidden in {oracle_hidden_shadow})")
+
     shadow_occluder_map = {}
     for shadow_id in shadows:
         shadow_boxel = registry.get_boxel(shadow_id)
         if shadow_boxel and shadow_boxel.created_by_boxel_id:
             shadow_occluder_map[shadow_id] = shadow_boxel.created_by_boxel_id
-        else:
-            print(f"  WARNING: Shadow {shadow_id} has no linked occluder — skipping")
-    
-    # Create mapping from boxel IDs to PyBullet object names and IDs
-    # Boxel IDs are like "obj_000", PyBullet names are like "occluder_1"
+
     boxel_to_pybullet = {}
     for boxel in registry.boxels.values():
         if boxel.object_name and boxel.object_name in env.objects:
@@ -181,13 +159,7 @@ def main(gui=True):
                 'pybullet_id': env.objects[boxel.object_name].object_id,
                 'position': np.array(env.objects[boxel.object_name].position)
             }
-    
-    print(f"  Boxel->PyBullet mapping: {len(boxel_to_pybullet)} objects")
-    
-    # =========================================================
-    # PHASE 5: Planning with Replanning Loop
-    # =========================================================
-    print("\n--- Phase 5: Planning with Replanning ---")
+    print(f"Shadow->Occluder: {shadow_occluder_map}")
     
     belief = BeliefState(shadows, target_name)
     planner = PDDLStreamPlanner(registry, robot_id=robot_id, 
@@ -204,30 +176,30 @@ def main(gui=True):
         unknown_shadows = belief.get_unknown_shadows()
         known_empty = belief.get_known_empty_shadows()
         
-        print(f"\n=== PLAN #{plan_count} ===")
-        print(f"Unknown shadows remaining: {len(unknown_shadows)}")
+        print(f"\n{'='*50}")
+        print(f"PLAN #{plan_count}  (unknown shadows: {len(unknown_shadows)})")
+        print(f"{'='*50}")
         
         if not unknown_shadows:
             print("ERROR: Searched all shadows but target not found!")
             break
         
-        # Call PDDLStream to plan with current belief state
         plan = planner.plan(
             target_objects=[target_name],
             goal=f'(holding {target_name})',
             known_empty_shadows=known_empty,
             moved_occluders=list(belief.occluders_moved),
             max_time=60.0,
-            verbose=False  # Quiet for replanning
+            verbose=True
         )
         
         if plan is None:
             print("ERROR: No plan found!")
             break
         
-        print(f"Plan: {len(plan)} actions")
+        print(f"\n  Plan: {len(plan)} actions")
         for i, action in enumerate(plan):
-            print(f"  {i+1}. {action[0]}")
+            print(f"    {i+1}. {action[0]} {action[1:]}")
         
         # Execute plan actions one by one
         for i, action in enumerate(plan):

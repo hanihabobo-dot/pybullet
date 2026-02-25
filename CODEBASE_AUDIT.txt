@@ -71,7 +71,7 @@ Fixed: Hardcoded +0.3 X replaced with compute_push_displacement(). The push
        as the motion mechanism — physics-based pushing is a separate improvement.
 
 ================================================================================
-4. STREAMS — RETURN STRING NAMES, NO GEOMETRY
+4. STREAMS — RETURN STRING NAMES, NO GEOMETRY  [DONE]
 ================================================================================
 Where: pddlstream_planner.py lines 87-127
 What:  All stream generators yield only string names like "q_push_obj_002_5".
@@ -88,6 +88,41 @@ Fix:   Streams should return real geometric data:
        The streams in streams.py already have partial implementations with real
        IK (using PyBullet's calculateInverseKinematics), but pddlstream_planner.py
        does NOT use them — it has its own stub generators.
+
+Fixed: Removed all five stub generators from pddlstream_planner.py. The planner
+       now creates a BoxelStreams instance and wires its methods directly into
+       the PDDLStream stream map. Plan values are now RobotConfig, Grasp, and
+       Trajectory objects carrying real joint angles, grasp poses, and waypoints
+       instead of opaque string labels.
+       - sample_push_config: IK for 4 approach angles around the occluder
+       - sample_sensing_config: IK for 8 angles × 3 heights around the shadow
+       - sample_grasp: top-down grasps at 4 yaw orientations
+       - plan_motion: linear interpolation in joint space (collision checking
+         is issue #5)
+       - compute_kin: IK for grasp pose at the boxel center
+       When robot_id is provided (full pipeline), real PyBullet IK is used.
+       When robot_id is None (standalone test), heuristic fallback produces
+       plausible configs. The initial config ("q_home") is now a RobotConfig
+       with real Panda rest-pose joint angles.
+       Added __hash__/__eq__/__repr__ to Grasp and Trajectory so PDDLStream
+       can store them in sets/dicts internally.
+
+       IK quality fix: _pybullet_ik had three bugs that caused ~95% of IK
+       solutions to be invalid:
+       (a) No rest-pose seeding: PyBullet's iterative IK uses the robot's
+           current joint state as the starting point. Without resetting to the
+           rest pose before each call, the solver started from whatever random
+           state the previous call left. Now resets to rest pose first.
+       (b) Missing null-space parameters: the IK call lacked lowerLimits,
+           upperLimits, jointRanges, restPoses — the same parameters used by
+           the execution code in test_full_pipeline.py. Added them.
+       (c) No FK verification: the IK solver can return non-converged results
+           within joint limits but with the end-effector far from the target.
+           Now sets the returned joints, reads actual EE position via
+           getLinkState, and rejects solutions with >5cm error.
+       After fix: FK-verified success rate jumped from 5% to 34%. All six
+       shadow boxels now have at least 6 valid sensing configs (previously
+       three had zero). test_streams.py: 24/24 tests pass.
 
 ================================================================================
 5. MOTION PLANNING — LINEAR INTERPOLATION, NO COLLISION CHECKING
@@ -234,13 +269,12 @@ The PLANNING ARCHITECTURE is sound:
   - Replanning loop correctly updates belief state
 
 The IMPLEMENTATION shortcuts every geometric step:
-  - Streams produce labels instead of geometry
+  - Streams: real IK for configs/grasps (done); motion planning is linear interp
   - Execution uses type-dependent offsets; pick/push ignore plan grasp/kin
   - Sensing: ray-casting from fixed camera (done)
   - Pushing is teleportation instead of physics
 
 Priority order for fixing:
-  1. Make streams return real geometric data (connects planning to geometry)
-  2. Fix execution to use plan parameters (removes hardcoding)
-  3. Implement physics-based or geometry-aware pushing
-  4. Add collision-free motion planning
+  1. Fix execution to use plan parameters (removes hardcoding)
+  2. Implement physics-based or geometry-aware pushing
+  3. Add collision-free motion planning

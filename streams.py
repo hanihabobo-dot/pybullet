@@ -30,7 +30,12 @@ class RobotConfig:
         return hash(self.name)
     
     def __eq__(self, other):
+        if not isinstance(other, RobotConfig):
+            return NotImplemented
         return self.name == other.name
+    
+    def __repr__(self):
+        return self.name if self.name else f"RobotConfig({self.joint_positions})"
 
 
 @dataclass 
@@ -38,6 +43,17 @@ class Trajectory:
     """Motion trajectory as sequence of configurations."""
     waypoints: List[RobotConfig]
     name: str = ""
+    
+    def __hash__(self):
+        return hash(self.name)
+    
+    def __eq__(self, other):
+        if not isinstance(other, Trajectory):
+            return NotImplemented
+        return self.name == other.name
+    
+    def __repr__(self):
+        return self.name if self.name else f"Trajectory({len(self.waypoints)} pts)"
 
 
 @dataclass
@@ -46,6 +62,17 @@ class Grasp:
     position: np.ndarray   # [x, y, z] offset
     orientation: np.ndarray  # [x, y, z, w] quaternion
     name: str = ""
+    
+    def __hash__(self):
+        return hash(self.name)
+    
+    def __eq__(self, other):
+        if not isinstance(other, Grasp):
+            return NotImplemented
+        return self.name == other.name
+    
+    def __repr__(self):
+        return self.name if self.name else f"Grasp({self.position})"
 
 
 class BoxelStreams:
@@ -83,6 +110,7 @@ class BoxelStreams:
         
         # Rest pose for null-space IK (helps get consistent solutions)
         self.rest_poses = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]
+        self.joint_ranges = (self.joint_limits_high - self.joint_limits_low).tolist()
         
         # Home configuration
         self.home_config = RobotConfig(
@@ -126,21 +154,20 @@ class BoxelStreams:
         # Generate push positions (approach from the side)
         occluder_center = boxel.center
         
-        for angle in np.linspace(0, 2*np.pi, 4, endpoint=False):
-            # Position to the side of the occluder
-            push_pos = occluder_center + np.array([
-                0.15 * np.cos(angle),
-                0.15 * np.sin(angle),
-                0.1  # Slightly above
-            ])
-            
-            # Compute IK
-            config = self._compute_sensing_ik(push_pos, occluder_center)
-            
-            if config is not None:
-                self._config_counter += 1
-                config.name = f"q_push_{occluder_id}_{self._config_counter}"
-                yield (config,)
+        for angle in np.linspace(0, 2*np.pi, 8, endpoint=False):
+            for height in [0.1, 0.2]:
+                push_pos = occluder_center + np.array([
+                    0.15 * np.cos(angle),
+                    0.15 * np.sin(angle),
+                    height
+                ])
+
+                config = self._compute_sensing_ik(push_pos, occluder_center)
+
+                if config is not None:
+                    self._config_counter += 1
+                    config.name = f"q_push_{occluder_id}_{self._config_counter}"
+                    yield (config,)
     
     # =========================================================================
     # STREAM: Sample Sensing Configuration
@@ -231,12 +258,22 @@ class BoxelStreams:
             RobotConfig if valid solution found, None otherwise
         """
         try:
-            # Simple IK call - more robust than null-space version
+            # Seed the iterative solver from the rest pose so it converges
+            # reliably regardless of what the robot's current joint state is.
+            for i, joint_idx in enumerate(self.ARM_JOINT_INDICES):
+                p.resetJointState(self.robot_id, joint_idx,
+                                  self.rest_poses[i],
+                                  physicsClientId=self.physics_client)
+
             joint_positions = p.calculateInverseKinematics(
                 bodyUniqueId=self.robot_id,
                 endEffectorLinkIndex=self.END_EFFECTOR_LINK,
                 targetPosition=ee_pos.tolist(),
                 targetOrientation=ee_orn.tolist(),
+                lowerLimits=self.joint_limits_low.tolist(),
+                upperLimits=self.joint_limits_high.tolist(),
+                jointRanges=self.joint_ranges,
+                restPoses=self.rest_poses,
                 maxNumIterations=self.ik_max_iterations,
                 residualThreshold=self.ik_residual_threshold,
                 physicsClientId=self.physics_client
@@ -256,8 +293,20 @@ class BoxelStreams:
             # Clamp to limits
             arm_joints = np.clip(arm_joints, self.joint_limits_low, self.joint_limits_high)
             
-            # Verify solution by checking forward kinematics error
-            # (skip for now to avoid state changes)
+            # Verify via FK: set joints, read EE pos, reject if too far from target.
+            # Save/restore state so the robot isn't left in a modified pose.
+            state_id = p.saveState(physicsClientId=self.physics_client)
+            for i, joint_idx in enumerate(self.ARM_JOINT_INDICES):
+                p.resetJointState(self.robot_id, joint_idx, arm_joints[i],
+                                  physicsClientId=self.physics_client)
+            actual_ee = p.getLinkState(self.robot_id, self.END_EFFECTOR_LINK,
+                                       physicsClientId=self.physics_client)[0]
+            p.restoreState(state_id, physicsClientId=self.physics_client)
+            p.removeState(state_id, physicsClientId=self.physics_client)
+            
+            fk_error = np.linalg.norm(np.array(actual_ee) - ee_pos)
+            if fk_error > 0.08:
+                return None
             
             return RobotConfig(joint_positions=arm_joints)
             
@@ -457,17 +506,28 @@ class BoxelStreams:
         boxel = self.registry.get_boxel(boxel_id)
         if boxel is None:
             return
-        
-        # Target end-effector position: boxel center + grasp offset
-        target_pos = boxel.center + grasp.position
-        
-        # Compute IK
-        config = self._compute_sensing_ik(target_pos, boxel.center)
-        
-        if config is not None:
-            self._config_counter += 1
-            config.name = f"q_pick_{obj_id}_{self._config_counter}"
-            yield (config,)
+
+        base_pos = boxel.center + grasp.position
+        offsets = [
+            np.zeros(3),
+            np.array([0.03, 0, 0]),
+            np.array([-0.03, 0, 0]),
+            np.array([0, 0.03, 0]),
+            np.array([0, -0.03, 0]),
+        ]
+
+        for off in offsets:
+            target_pos = base_pos + off
+            if self.robot_id is not None:
+                config = self._pybullet_ik(target_pos, grasp.orientation)
+            else:
+                config = self._heuristic_ik(target_pos, boxel.center)
+
+            if config is not None:
+                self._config_counter += 1
+                config.name = f"q_pick_{obj_id}_{self._config_counter}"
+                yield (config,)
+                return
     
     # =========================================================================
     # TEST: Check Visibility
