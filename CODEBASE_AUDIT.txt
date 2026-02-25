@@ -71,7 +71,7 @@ Fixed: Hardcoded +0.3 X replaced with compute_push_displacement(). The push
        as the motion mechanism — physics-based pushing is a separate improvement.
 
 ================================================================================
-4. STREAMS — RETURN STRING NAMES, NO GEOMETRY
+4. STREAMS — RETURN STRING NAMES, NO GEOMETRY  [DONE]
 ================================================================================
 Where: pddlstream_planner.py lines 87-127
 What:  All stream generators yield only string names like "q_push_obj_002_5".
@@ -528,7 +528,7 @@ Fixed: All three dummy `np.array([0.3, 0.0, 0.0])` returns replaced with
        replan instead of silently reverting to the old hardcoded +0.3 X push.
 
 ================================================================================
-22. push_aside — SILENT SKIP WHEN OCCLUDER NOT IN MAPPING
+22. push_aside — SILENT SKIP WHEN OCCLUDER NOT IN MAPPING  [DONE]
 ================================================================================
 Where: test_full_pipeline.py lines 245-279
 What:  The push_aside block is wrapped in "if occluder_id in boxel_to_pybullet".
@@ -540,6 +540,14 @@ What:  The push_aside block is wrapped in "if occluder_id in boxel_to_pybullet".
 
 Fix:   Add an else branch: print error, break to replan, or at minimum
        log that the occluder could not be mapped to PyBullet.
+
+Fixed: Added an else branch to the `if occluder_id in boxel_to_pybullet` check.
+       When the occluder has no PyBullet mapping, the else branch:
+       (1) looks up the boxel in the registry to report its object_name for
+       diagnostics, (2) prints an ERROR message identifying the unmapped
+       occluder, and (3) breaks out of the action loop, which triggers the
+       outer replanning loop. This prevents downstream actions (sense_shadow,
+       pick) from executing under the false assumption that the push succeeded.
 
 ================================================================================
 23. push_aside COLLISION CHECK INCOMPLETE
@@ -578,7 +586,7 @@ Fix:   Make plan() / create_problem() accept a structured goal expression
        ad-hoc strings.
 
 ================================================================================
-25. OBJECT POSITIONS NEVER UPDATED AFTER PHYSICS SETTLING
+25. OBJECT POSITIONS NEVER UPDATED AFTER PHYSICS SETTLING  [DONE]
 ================================================================================
 Where: boxel_test_env.py, test_full_pipeline.py
 What:  ObjectInfo.position is set at creation time (hardcoded spawn
@@ -597,6 +605,24 @@ What:  ObjectInfo.position is set at creation time (hardcoded spawn
 Fix:   After physics settling, call p.getBasePositionAndOrientation()
        for each object and update ObjectInfo.position/orientation.
        Or query PyBullet positions on demand rather than caching.
+
+Fixed: Added update_object_positions() to BoxelTestEnv — queries
+       p.getBasePositionAndOrientation() for every dynamic object
+       (skipping plane/table/robot) and writes back to ObjectInfo.
+       Called in three places:
+       (1) End of _setup_scene() after the 10-step settling loop,
+           so positions are correct before any external code runs.
+       (2) After the 50-step settling in test_full_pipeline.py,
+           so AABB containment checks use actual post-settle positions.
+       (3) After push physics steps (30 steps), which also syncs
+           ALL boxel_to_pybullet entries from env.objects — not just
+           the pushed occluder. This catches cases where a push
+           bumps nearby objects.
+       Additionally, the pick action now reads a fresh position from
+       env.objects immediately before execution instead of using a
+       value captured once at scenario setup. The old manual
+       occ_info['position'] = new_pos single-object update is replaced
+       by the bulk sync from env.objects.
 
 ================================================================================
 26. heuristic_ik() — MEANINGLESS FAKE IK FALLBACK
@@ -800,7 +826,7 @@ The IMPLEMENTATION shortcuts every geometric step:
   - Execution uses type-dependent offsets; pick/push ignore plan (#6, #7)
   - Sensing: ray-casting from fixed camera (done)
   - Pushing is teleportation with silent fallbacks to old behavior (#3, #21)
-  - Push skips silently if occluder missing from mapping (#22)
+  - Push skips silently if occluder missing from mapping (#22 — done)
   - Push collision check misses targets and robot (#23)
   - Visibility check is a stub returning True (#12)
   - Heuristic IK produces meaningless configs (#26)

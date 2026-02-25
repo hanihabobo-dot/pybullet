@@ -97,6 +97,7 @@ def main(gui=True):
     # Let settle (minimal)
     for _ in range(50):
         env.step_simulation()
+    env.update_object_positions()
     
     # =========================================================
     # PHASE 2: Boxel Calculation (fast, no visualization)
@@ -154,7 +155,6 @@ def main(gui=True):
     
     target_name = random.choice(list(target_to_shadow.keys()))
     target_info = env.objects[target_name]
-    target_pos = np.array(target_info.position)
     oracle_hidden_shadow = target_to_shadow[target_name]
     
     print(f"  Target: {target_name}")
@@ -263,10 +263,14 @@ def main(gui=True):
                         occ_pybullet_id, new_pos.tolist(), [0, 0, 0, 1]
                     )
                     
-                    occ_info['position'] = new_pos
-                    
                     for _ in range(30):
                         p.stepSimulation()
+                    
+                    env.update_object_positions()
+                    for bid, binfo in boxel_to_pybullet.items():
+                        obj_name = binfo['name']
+                        if obj_name in env.objects:
+                            binfo['position'] = np.array(env.objects[obj_name].position)
                     
                     belief.mark_occluder_moved(occluder_id)
                     
@@ -276,6 +280,12 @@ def main(gui=True):
                           f"dist={np.linalg.norm(push_disp[:2]):.3f}m "
                           f"from [{occ_pos[0]:.2f},{occ_pos[1]:.2f}] "
                           f"to [{new_pos[0]:.2f},{new_pos[1]:.2f}]")
+                else:
+                    occ_boxel = registry.get_boxel(occluder_id)
+                    occ_name = occ_boxel.object_name if occ_boxel else None
+                    print(f"    ERROR: Occluder '{occluder_id}' (object_name={occ_name}) "
+                          f"has no PyBullet mapping — cannot execute push. Replanning...")
+                    break
                     
             elif action_name == 'move':
                 q1, q2, dest_boxel_id, traj = params
@@ -325,8 +335,8 @@ def main(gui=True):
                 obj, boxel_id, grasp, config = params
                 print(f"    Picking {obj}...")
                 
-                # Execute pick
-                execute_pick(robot_id, env, target_name, target_pos, gui)
+                fresh_target_pos = np.array(env.objects[target_name].position)
+                execute_pick(robot_id, env, target_name, fresh_target_pos, gui)
                 print(f"    *** {obj} PICKED UP! ***")
     
     # =========================================================
