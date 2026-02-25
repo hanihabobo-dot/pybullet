@@ -386,7 +386,7 @@ Fixed: Rewrote generate_pddl_facts() to use the exact predicates from
        making boxel_facts.pddl a valid debugging artifact.
 
 ================================================================================
-16. REACHABILITY / OBSERVABILITY — NEVER COMPUTED, ALWAYS TRUE
+16. REACHABILITY / OBSERVABILITY — NEVER COMPUTED, ALWAYS TRUE  [DONE]
 ================================================================================
 Where: boxel_data.py lines 69-71
 What:  BoxelData has fields is_reachable (default True) and is_observable
@@ -401,6 +401,19 @@ Fix:   Either remove these fields (since they provide no information), or
        - is_observable: check if a ray from the camera can reach the boxel
          without being blocked (when occluder is present, shadow is not
          observable until pushed)
+
+Fixed: Removed both fields entirely from BoxelData. They carried no real
+       information (always True for every boxel) yet were serialized to
+       boxel_data.json, giving the false impression that reachability and
+       observability had been verified. Removed from: class definition,
+       to_dict() serialization, and from_dict() deserialization. No code
+       anywhere read these fields for logic — grep confirmed they were
+       only referenced in boxel_data.py itself. Old JSON files that still
+       contain these keys load fine (from_dict uses data.get(), extra keys
+       are ignored). If proper reachability/observability analysis is needed
+       in the future, it should be a separate analysis pass with access to
+       the robot (for IK) and camera (for ray-casting), not default-True
+       fields baked into the data structure.
 
 ================================================================================
 17. SCENE IS FULLY HARDCODED  [NOT AN ISSUE — BY DESIGN]
@@ -860,7 +873,7 @@ The CODEBASE has significant organizational debt:
   - Two diverged BoxelTestEnv with Boxel field mismatch (#13)
   - Obsolete executor/problem_generator pipeline (#14)
   - PDDL fact generator produces facts for wrong domain (#15 — done)
-  - Fields that claim to be computed but are always default (#16)
+  - Fields that claim to be computed but are always default (#16 — done)
   - Magic constants duplicated across files (#18, #31)
   - Stale files, temp copies, and unclear entry points (#11, #19)
   - config.py exists but is never used; paths hardcoded (#30)

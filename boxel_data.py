@@ -65,9 +65,6 @@ class BoxelData:
     observed: bool = False                      # Has this been sensed?
     last_observation_time: Optional[float] = None
     
-    # === REACHABILITY & MANIPULATION ===
-    is_reachable: bool = True                   # Can robot gripper reach?
-    is_observable: bool = True                  # Can camera see this boxel?
     # Note: blocking_boxels removed - use created_by_boxel_id for shadows
     
     @property
@@ -109,8 +106,6 @@ class BoxelData:
             "confirmed_empty": self.confirmed_empty,
             "observed": self.observed,
             "last_observation_time": self.last_observation_time,
-            "is_reachable": self.is_reachable,
-            "is_observable": self.is_observable,
         }
     
     @classmethod
@@ -134,8 +129,6 @@ class BoxelData:
             confirmed_empty=data.get("confirmed_empty", False),
             observed=data.get("observed", False),
             last_observation_time=data.get("last_observation_time"),
-            is_reachable=data.get("is_reachable", True),
-            is_observable=data.get("is_observable", True),
         )
 
 
