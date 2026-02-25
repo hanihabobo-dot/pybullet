@@ -351,6 +351,8 @@ class BoxelTestEnv:
         # Step simulation a few times to let objects settle on table
         for _ in range(10):
             p.stepSimulation()
+        
+        self.update_object_positions()
     
     def generate_boxels(self, visible_objects: List[str]) -> List[Boxel]:
         """
@@ -1415,6 +1417,21 @@ class BoxelTestEnv:
         ])
         return rotation_matrix
     
+    def update_object_positions(self):
+        """
+        Synchronise every dynamic object's ObjectInfo with its current PyBullet
+        pose.  Call this after any batch of physics steps (settling, pushing,
+        etc.) so that downstream code never uses stale spawn-time positions.
+
+        Static bodies (plane, table, robot) are skipped — they cannot move.
+        """
+        for name, obj_info in self.objects.items():
+            if name in ("plane", "table", "robot"):
+                continue
+            pos, orn = p.getBasePositionAndOrientation(obj_info.object_id)
+            obj_info.position = np.array(pos)
+            obj_info.orientation = np.array(orn)
+
     def step_simulation(self, num_steps: int = 1):
         """
         Step the simulation forward.

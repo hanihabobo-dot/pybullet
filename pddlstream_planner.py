@@ -128,7 +128,7 @@ class PDDLStreamPlanner:
     
     def create_problem(self, 
                        target_objects: List[str],
-                       goal_expr: str,
+                       goal: Tuple,
                        current_config: str = "q_home",
                        known_empty_shadows: List[str] = None,
                        moved_occluders: List[str] = None) -> PDDLProblem:
@@ -137,7 +137,8 @@ class PDDLStreamPlanner:
         
         Args:
             target_objects: Objects to reason about
-            goal_expr: Goal expression like "(holding target_1)"
+            goal: Goal as a tuple, e.g. ('holding', 'target_1').
+                  Passed directly to PDDLStream — must match domain predicates.
             current_config: Current robot configuration name
             known_empty_shadows: Shadows we've already checked (not containing target)
             moved_occluders: Occluders that have been pushed aside
@@ -208,14 +209,6 @@ class PDDLStreamPlanner:
         init.append(('at_config', current_config))
         init.append(('handempty',))
         
-        # Parse goal - simple for now
-        # Assuming goal like "(holding target_1)"
-        if 'holding' in goal_expr:
-            obj_name = goal_expr.replace('(', '').replace(')', '').split()[1]
-            goal = ('holding', obj_name)
-        else:
-            goal = goal_expr  # Use as-is
-        
         # Create problem
         constant_map = {}  # No constants
         stream_map = self._get_stream_map()
@@ -231,7 +224,7 @@ class PDDLStreamPlanner:
     
     def plan(self,
              target_objects: List[str],
-             goal: str,
+             goal: Tuple,
              current_config: str = "q_home",
              known_empty_shadows: List[str] = None,
              moved_occluders: List[str] = None,
@@ -242,7 +235,7 @@ class PDDLStreamPlanner:
         
         Args:
             target_objects: Objects to reason about
-            goal: Goal expression
+            goal: Goal as a tuple, e.g. ('holding', 'target_1')
             current_config: Current robot config
             known_empty_shadows: Shadows already checked (empty)
             moved_occluders: Occluders already pushed aside
@@ -317,7 +310,7 @@ def test_planner():
     print("\nPlanning to find and hold target_1...")
     plan = planner.plan(
         target_objects=['target_1'],
-        goal='(holding target_1)',
+        goal=('holding', 'target_1'),
         max_time=60.0,
         verbose=True
     )

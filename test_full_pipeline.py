@@ -214,7 +214,7 @@ def main(gui=True):
         # Call PDDLStream to plan with current belief state
         plan = planner.plan(
             target_objects=[target_name],
-            goal=f'(holding {target_name})',
+            goal=('holding', target_name),
             known_empty_shadows=known_empty,
             moved_occluders=list(belief.occluders_moved),
             max_time=60.0,

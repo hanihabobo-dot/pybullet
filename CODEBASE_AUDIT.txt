@@ -568,7 +568,7 @@ Fix:   Check against all PyBullet bodies (or at least all objects
        in env.objects) rather than just boxel_to_pybullet.
 
 ================================================================================
-24. GOAL PARSING IS STRING-BASED AND BRITTLE
+24. GOAL PARSING IS STRING-BASED AND BRITTLE  [DONE]
 ================================================================================
 Where: pddlstream_planner.py create_problem(), lines 211-217
 What:  Goal handling is a string shortcut:
@@ -584,6 +584,16 @@ What:  Goal handling is a string shortcut:
 Fix:   Make plan() / create_problem() accept a structured goal expression
        directly (tuple/list form expected by PDDLStream) instead of parsing
        ad-hoc strings.
+
+Fixed: Both plan() and create_problem() now accept the goal as a tuple
+       (e.g. ('holding', 'target_1')) instead of a string. The string
+       parsing block (replace/split) was removed entirely. Callers in
+       test_full_pipeline.py and pddlstream_planner.py's test_planner()
+       updated to pass tuple goals directly. This matches PDDLStream's
+       native goal format — tuples flow straight through to the solver
+       with no intermediate parsing that could silently produce malformed
+       goals. Conjunctive goals like ('and', ('holding', 'obj1'),
+       ('at', 'obj2', 'boxel_3')) now work without any special handling.
 
 ================================================================================
 25. OBJECT POSITIONS NEVER UPDATED AFTER PHYSICS SETTLING  [DONE]
@@ -830,7 +840,7 @@ The IMPLEMENTATION shortcuts every geometric step:
   - Push collision check misses targets and robot (#23)
   - Visibility check is a stub returning True (#12)
   - Heuristic IK produces meaningless configs (#26)
-  - Goal parsing is brittle string manipulation (#24)
+  - Goal parsing is brittle string manipulation (#24 — done)
   - Object positions stale after physics settling (#25)
 
 The CODEBASE has significant organizational debt:
