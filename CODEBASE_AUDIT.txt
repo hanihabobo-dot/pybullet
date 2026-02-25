@@ -718,6 +718,59 @@ Fix:   - Delete get_stream_definitions() from streams.py.
        - Inline IK calls should use the shared constants.
 
 ================================================================================
+32. PDDL DOMAIN MODELS SOLUTION, NOT ROBOT CAPABILITIES [SUPERVISOR CRITIQUE]
+================================================================================
+Where: pddl/domain_pddlstream.pddl
+What:  The domain is tailored to the hidden-object scenario rather than
+       expressing the robot's fundamental capabilities. Actions and predicates
+       are solution-specific, not reusable:
+
+       push_aside:
+         - Requires (is_occluder ?occ), (occluder_blocking ?occ), (occluder_aside ?occ)
+         - Only works for "occluders" — cannot push arbitrary objects
+         - The action name and preconditions encode the scenario: "push aside
+           to reveal shadow" — not the generic capability "push object from A to B"
+
+       sense_shadow:
+         - Requires (is_shadow ?shd), (casts_shadow ?occ ?shd), (occluder_aside ?occ)
+         - Only senses boxels that are "shadows" cast by occluders
+         - Cannot sense generic "unknown region" — the domain assumes the
+           occlusion model (shadow vs occluder)
+
+       Predicates like occluder_blocking, occluder_aside, casts_shadow, is_occluder
+       are scenario-specific. They encode the hidden-object solution structure.
+       The domain is essentially hardcoded — it cannot be reused for:
+         - Rearrangement (move object from boxel A to boxel B, no occlusion)
+         - General search (sense any region, not just shadow regions)
+         - Pushing any object for any reason (e.g., clear obstacle, make space)
+
+Fix:   Refactor the domain to model CAPABILITIES, not the solution:
+
+       - Replace push_aside with a generic push(?o ?b_from ?b_to ?q) or
+         move_object(?o ?b_from ?b_to): move object from boxel A to boxel B.
+         No precondition that the object is an occluder. Works for any object,
+         any boxels (subject to reachability, collision, etc.).
+
+       - Replace sense_shadow with a generic sense(?b ?q): observe boxel ?b
+         from config ?q. The boxel can be any type — shadow, free space, or
+         object region. The occlusion semantics (what blocks what) can be
+         modeled separately via predicates if needed, but the action itself
+         should be generic.
+
+       - Keep pick/place as generic (they already are: obj_at_boxel, no
+         occluder requirement). The place action's (is_free_space ?b) is
+         reasonable — it restricts where objects can be placed.
+
+       - The "occluder blocks shadow" relationship can be modeled as a
+         separate predicate (occludes ?occ ?region) or similar, used by the
+         *problem* or *goal* to express the scenario, not baked into the
+         action preconditions.
+
+       The planner should then compose these generic actions to solve the
+       hidden-object task. The domain stays reusable; the problem defines
+       the specific scenario (which objects occlude which regions, etc.).
+
+================================================================================
 FOR LATER
 ================================================================================
 - Incremental boxel recomputation after actions (without redoing everything
@@ -727,10 +780,12 @@ FOR LATER
 ================================================================================
 SUMMARY
 ================================================================================
-The PLANNING ARCHITECTURE is sound:
-  - PDDL domain correctly models partial observability with KIF fluents
+The PLANNING ARCHITECTURE has a design flaw:
+  - PDDL domain models the solution (hidden-object scenario) not robot
+    capabilities — actions are scenario-specific, not reusable (#32)
   - PDDLStream correctly uses streams for geometric reasoning
   - Replanning loop correctly updates belief state
+  - KIF fluents for partial observability are sound
 
 The IMPLEMENTATION shortcuts every geometric step:
   - Streams produce labels instead of geometry (#4)
@@ -759,10 +814,11 @@ The CODEBASE has significant organizational debt:
 
 Priority order for fixing:
   1. Archive stale files, unify BoxelTestEnv (#11, #13, #14, #19)
-  2. Wire BoxelStreams into the planner — THE critical fix (#20, #4, #12)
-  3. Fix execution to use plan parameters (#6, #7)
-  4. Fix push edge cases: fallbacks, silent skip, collision (#21, #22, #23)
-  5. Consolidate shared constants and utilities (#18, #30, #31)
-  6. Fix goal parsing (#24), update positions after settle (#25)
-  7. Implement physics-based pushing (#3)
-  8. Add collision-free motion planning (#5)
+  2. Refactor PDDL domain to model capabilities, not solution (#32) — enables reuse
+  3. Wire BoxelStreams into the planner — THE critical fix (#20, #4, #12)
+  4. Fix execution to use plan parameters (#6, #7)
+  5. Fix push edge cases: fallbacks, silent skip, collision (#21, #22, #23)
+  6. Consolidate shared constants and utilities (#18, #30, #31)
+  7. Fix goal parsing (#24), update positions after settle (#25)
+  8. Implement physics-based pushing (#3)
+  9. Add collision-free motion planning (#5)
