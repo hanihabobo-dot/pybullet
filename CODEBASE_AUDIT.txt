@@ -1,7 +1,7 @@
 ================================================================================
 CODEBASE AUDIT: What is fake/hardcoded and how to fix it
 ================================================================================
-Date: 2026-02-06
+Date: 2026-02-25 (merged from 3 audit passes)
 
 ================================================================================
 1. OBJECT HIDING — FAKE ORACLE  [DONE]
@@ -296,6 +296,7 @@ What:  Two files define the same class BoxelTestEnv with different internals:
            all in one file
          - Has save_point_cloud_to_ply() at the bottom
          - Used by: test_full_pipeline.py, run_tamp_demo.py
+         - MISSING: `is_occluder` field in Boxel class (lines 38-53)
 
        boxel_env.py (REFACTORED):
          - Imports from boxel_types.py, shadow_calculator.py, free_space.py,
@@ -303,6 +304,7 @@ What:  Two files define the same class BoxelTestEnv with different internals:
          - Has additional features: set_debug_camera(), handle_keyboard_camera(),
            merge_free_space(), fill_opacity parameter in draw_boxels()
          - Used by: run_demo.py, hidden_object_scenario.py
+         - Boxel class from boxel_types.py HAS `is_occluder`
 
        The two have diverged. Features added to one are missing from the other.
        Data classes (Boxel, ObjectInfo, etc.) are duplicated between
@@ -602,11 +604,17 @@ What:  compute_push_displacement() checks collision against
          boxel_to_pybullet if they're small/hidden)
        - The robot itself
 
-       If pushing an occluder into a target, the target could be
-       knocked off the table with no detection.
+       ROOT CAUSE: hidden targets do NOT have boxels generated for them
+       initially — BoxelTestEnv.generate_boxels() only processes VISIBLE
+       objects. Therefore, hidden targets are missing from boxel_to_pybullet
+       entirely. If the robot pushes an occluder into a hidden target, the
+       collision check will pass (false negative), and the physical push
+       might crush or displace the hidden target.
 
-Fix:   Check against all PyBullet bodies (or at least all objects
-       in env.objects) rather than just boxel_to_pybullet.
+Fix:   Collision check should iterate over ALL bodies in the PyBullet
+       simulation (using p.getNumBodies() and p.getBodyInfo/p.getAABB),
+       or at minimum iterate over all objects in env.objects (which
+       includes hidden targets).
 
 ================================================================================
 24. GOAL PARSING IS STRING-BASED AND BRITTLE  [DONE]
@@ -711,20 +719,31 @@ Fix:   Document the heuristic. Consider increasing to 2*len(shadows) + 1
        but target not found!" which is wrong if max_replans ran out early).
 
 ================================================================================
-28. TARGETS NEVER GENERATE SHADOWS EVEN WHEN VISIBLE
+28. TARGETS GENERATE SHADOWS — is_occluder NEVER CHECKED  [AUDIT CORRECTION]
 ================================================================================
-Where: boxel_test_env.py lines 306-349
-What:  All targets have is_occluder=False, so they NEVER generate shadow
-       boxels — even targets that are fully visible in front of other
-       objects. A visible target CAN block line of sight to regions
-       behind it, but the system ignores this.
+Where: boxel_test_env.py lines 406-413, boxel_env.py lines 241-249
+What:  CORRECTION: The original audit stated "All targets have
+       is_occluder=False, so they NEVER generate shadow boxels."
+       This is FACTUALLY WRONG. The is_occluder field is NEVER checked
+       during shadow calculation. generate_boxels() iterates ALL visible
+       solid_boxels and calls calculate_shadow_boxel() for each one —
+       occluders AND targets alike. There is no gate on is_occluder.
 
-       This means shadows are only cast by objects named "occluder_*".
-       If a target happens to block view of another area, the planner
-       doesn't know about it.
+       So targets (8cm cubes) DO cast shadow boxels, named
+       "shadow_of_target_N". These shadows enter the registry, produce
+       (casts_shadow target_boxel shadow_boxel) facts, and the planner
+       may generate push_aside + sense_shadow actions for target objects.
 
-       NOT AN ISSUE — MODELING SIMPLIFICATION. Acceptable because all
-       targets are small (8cm) vs occluders (15cm). Document explicitly.
+       Consequences:
+       - Wasted planning effort: the planner may push a visible target
+         aside to check its tiny shadow, even though the target is not
+         an occluder hiding anything.
+       - Target boxels get (is_occluder ...) in the PDDL init (because
+         ALL object boxels do — see #32), so push_aside's precondition
+         (is_occluder ?occ) is satisfied.
+
+       STILL ACCEPTABLE as a modeling simplification (target shadows are
+       tiny), but the audit description was wrong about the mechanism.
 
 ================================================================================
 29. STREAM PDDL MISMATCH — obj_graspable PREDICATE
@@ -865,6 +884,308 @@ Fix:   Refactor the domain to model CAPABILITIES, not the solution:
        the specific scenario (which objects occlude which regions, etc.).
 
 ================================================================================
+33. BoxelData HAS 5 UNUSED BELIEF-STATE FIELDS
+================================================================================
+Where: boxel_data.py lines 62-66
+What:  BoxelData defines five belief-state fields that are serialized to
+       JSON but never managed by any code path:
+
+         possibly_contains: List[str]       — always []
+         confirmed_contains: Optional[str]  — always None
+         confirmed_empty: bool              — always False
+         observed: bool                     — set at creation time, never updated
+         last_observation_time: float       — always None
+
+       These are identical in spirit to the removed is_reachable /
+       is_observable (issue #16): they carry no real information yet
+       appear in boxel_data.json, giving the false impression that belief
+       tracking has been implemented. The BeliefState class in
+       test_full_pipeline.py manages beliefs separately using its own
+       shadow_status dict — it does not touch BoxelData at all.
+
+Fix:   Remove all five fields from BoxelData, to_dict(), and from_dict().
+       Belief tracking belongs in the execution-level BeliefState, not in
+       the persistent data structure. If fine-grained per-boxel belief is
+       needed later, it should be a separate overlay, not default-value
+       fields baked into BoxelData.
+
+================================================================================
+34. REPLANNING ALWAYS ASSUMES ROBOT IS AT q_home
+================================================================================
+Where: test_full_pipeline.py lines 221-228, pddlstream_planner.py line 132
+What:  planner.plan() is called without a current_config parameter, so it
+       defaults to "q_home" every time — including on replans. After the
+       first plan executes, the robot is at some other configuration (the
+       last q2 from a move action), but the second plan's init state
+       still says (at_config q_home). The planner produces a trajectory
+       from q_home that doesn't match reality.
+
+       This does not crash because execution ignores the plan's q1 — it
+       just does IK to the target position. But the symbolic plan is
+       wrong: the planner thinks it needs to move FROM q_home, potentially
+       choosing a suboptimal trajectory or different boxel ordering.
+
+Fix:   Track the current config name (q2 from the last move) and pass it
+       as current_config on each replan. Alternatively, move the robot
+       back to home between plans.
+
+================================================================================
+35. push_aside REDUNDANTLY MOVES THE ROBOT
+================================================================================
+Where: test_full_pipeline.py line 257
+What:  The PDDL plan contains separate move + push_aside actions:
+         1. move(q_home, q_push, occ_boxel, traj) — move to push position
+         2. push_aside(occ, q_push) — push the occluder
+
+       The move action (lines 296-322) moves the robot to the occluder's
+       boxel center + type-dependent offset [0, -0.2, 0.15]. Then the
+       push_aside handler (line 257) ALSO calls:
+         move_robot_to_pos(robot_id, occ_pos + [0, 0, 0.15])
+
+       The robot is repositioned twice to potentially different targets.
+       The push_aside handler should not need to move the robot — the
+       preceding move action should have already positioned it. This is a
+       leftover from when push_aside was a standalone action without a
+       preceding move.
+
+Fix:   Remove the move_robot_to_pos call from inside push_aside execution.
+       Or keep it as a "fine positioning" step but make the offset
+       consistent with the move action's approach offset.
+
+================================================================================
+36. sense_shadow IGNORES ROBOT POSITION — USES FIXED CAMERA
+================================================================================
+Where: test_full_pipeline.py lines 324-338
+What:  The PDDL plan moves the robot to a sensing config before sensing:
+         1. move(q, q_sense, shadow_boxel, traj)
+         2. sense_shadow(obj, shadow, occ, q_sense)
+
+       But sense_shadow_raycasting() (line 330) casts rays from the FIXED
+       camera position (env.camera_position), not from the robot's
+       end-effector or any config-dependent viewpoint. The robot's actual
+       position has zero effect on sensing.
+
+       Consequences:
+       (a) The move-to-sensing-config step is wasted motion — the robot
+           could stay at home and sensing would produce identical results.
+       (b) The architecture pretends the robot needs to be positioned for
+           sensing (the domain requires at_config + sensing_config), but
+           execution completely ignores it.
+       (c) If the robot's arm is between the camera and the shadow after
+           moving to the sensing config, it could physically block the
+           camera's rays, causing false negatives. The shadow type-offset
+           [0, -0.3, 0.2] tries to avoid this, but it's a heuristic.
+
+Fix:   Either:
+       (a) Make sensing robot-dependent: cast rays from the end-effector
+           camera (attached to the wrist) at the sensing config. This is
+           the architecturally correct approach.
+       (b) If fixed camera is the intended sensor, remove the
+           sensing_config stream and the move-to-sense step from the PDDL
+           domain. The plan should not pretend to move for sensing.
+
+       DECISION: do (b) — we have a fixed camera.
+
+================================================================================
+37. NO open_gripper BEFORE PICK
+================================================================================
+Where: test_full_pipeline.py execute_pick() lines 474-491
+What:  execute_pick() moves above target, lowers, closes gripper, attaches
+       via constraint, and lifts. But it never opens the gripper before
+       lowering. If the gripper was closed from a previous operation
+       (e.g., a prior close_gripper call, or initial state), it stays
+       closed while the robot descends. The constraint-based attachment
+       (line 487) works regardless of gripper state, masking this in
+       simulation, but it would fail on a real robot.
+
+Fix:   Call open_gripper (or add an open step) before lowering to grasp.
+
+================================================================================
+38. p.createConstraint IN PICK IS NEVER CLEANED UP
+================================================================================
+Where: test_full_pipeline.py line 487
+What:  p.createConstraint() creates a JOINT_FIXED constraint between the
+       robot's end-effector and the target object. The returned constraint
+       ID is not stored anywhere, so it can never be removed. If:
+         - The scenario loops (env.reset() does NOT remove constraints)
+         - A replan triggers another pick attempt
+         - The target needs to be placed later (issue #9 place action)
+       the constraint persists and causes unexpected physics behavior.
+
+Fix:   Store the constraint ID returned by p.createConstraint(). Remove
+       it when placing the object or resetting the environment.
+
+================================================================================
+39. oracle_detect_objects HAS REDUNDANT DISTANCE CHECK
+================================================================================
+Where: boxel_test_env.py lines 1329-1338
+What:  When a ray from camera to object hits something with
+       hit_fraction < 0.95, the code performs a secondary check:
+         occluder_pos, _ = p.getBasePositionAndOrientation(hit_object_id)
+         occluder_dist = np.linalg.norm(occluder_pos - ray_from)
+         obj_dist = np.linalg.norm(position - ray_from)
+         if occluder_dist < obj_dist: is_visible = False
+
+       This is always true when hit_fraction < 0.95. The hit_fraction is
+       the ratio of hit distance to total ray length (camera → object).
+       A fraction < 0.95 means the hit is closer than the target by
+       definition. Lines 1332-1338 are dead logic.
+
+Fix:   Remove the secondary distance check. The hit_fraction < 0.95 test
+       is sufficient. Or if the check is meant to handle edge cases
+       (e.g., objects overlapping in projection), document the intent.
+
+================================================================================
+40. boxel_env.py MISSING update_object_positions()
+================================================================================
+Where: boxel_env.py (the refactored version)
+What:  Fix #25 added update_object_positions() to boxel_test_env.py, but
+       the refactored boxel_env.py does NOT have this method. Since the
+       two environments have diverged (issue #13), the fix was only
+       applied to the version used by the pipeline.
+
+       If the codebase is unified to use boxel_env.py (as #13 recommends),
+       update_object_positions() would be missing and object positions
+       would remain stale after physics settling and pushing.
+
+Fix:   Add update_object_positions() to boxel_env.py. Or better: when
+       unifying per #13, ensure all fixes from boxel_test_env.py are
+       ported to the surviving version.
+
+================================================================================
+41. NO VERIFICATION THAT PUSH CLEARED LINE OF SIGHT
+================================================================================
+Where: test_full_pipeline.py lines 259-288
+What:  After pushing an occluder (teleportation + 30 physics steps), the
+       code proceeds to the next action without verifying that camera
+       rays can now penetrate the shadow region. If the push
+       displacement was insufficient, or physics settling moved the
+       occluder back partially, the subsequent sense_shadow will fail to
+       detect the target even if it IS there.
+
+       Currently the push distance is computed as half-width + 10cm
+       clearance, which should be sufficient. But there is no runtime
+       check, so silent failures are possible (e.g., if the occluder
+       slides on the table after teleportation, or if another object
+       partially blocks the view corridor).
+
+Fix:   After push + physics settling, cast a quick verification ray from
+       the camera through the shadow volume center. If the occluder
+       still blocks, either push again or log a warning and replan.
+
+================================================================================
+42. generate_pddl_facts IS INCONSISTENT WITH _build_init FOR OBJECT BOXELS
+================================================================================
+Where: boxel_data.py lines 295-296, pddlstream_planner.py lines 283-290
+What:  Both generate_pddl_facts() and _build_init() mark ALL BoxelType.OBJECT
+       boxels with (is_occluder ...), regardless of whether the object is
+       actually an occluder or a target.
+
+       generate_pddl_facts() line 296:
+         if boxel.boxel_type == BoxelType.OBJECT:
+             facts.append(f"(is_occluder {boxel.id})")
+
+       _build_init() line 284:
+         elif boxel.boxel_type == BoxelType.OBJECT:
+             init.append(('is_occluder', boxel.id))
+
+       This is because BoxelData.is_occluder is always False (issue #13:
+       the pipeline's Boxel class lacks the field), and the code never
+       checks it — it uses boxel_type == OBJECT as a proxy.
+
+       Result: target boxels (target_1, target_2, ...) are marked as
+       occluders. The planner could generate push_aside actions for
+       target boxels. push_aside's precondition (is_occluder ?occ) is
+       satisfied. This was noted in #32 but the specific code paths
+       in generate_pddl_facts() and _build_init() were not identified.
+
+Fix:   Check BoxelData.is_occluder (once #13 is fixed so the field is
+       populated correctly) and only emit (is_occluder ...) for actual
+       occluders. Or rename the predicate to (is_object ...) to match
+       its actual semantics.
+
+       DECISION: rename to (is_object ...) — matches the actual semantics.
+
+================================================================================
+43. push_aside TELEPORTATION RESETS ORIENTATION TO IDENTITY
+================================================================================
+Where: test_full_pipeline.py line 268-269
+What:  p.resetBasePositionAndOrientation(occ_pybullet_id, new_pos.tolist(),
+       [0, 0, 0, 1]) always resets the occluder's orientation to the
+       identity quaternion, regardless of its current orientation. If the
+       occluder had rotated during physics settling (e.g., fell on an
+       edge), the push snaps it back to axis-aligned. This changes the
+       occluder's AABB and could affect downstream shadow calculations.
+
+       Since the scene uses cubes (rotationally symmetric AABBs), this
+       has no practical effect right now. But it would break for
+       non-cubic objects.
+
+Fix:   Read the current orientation before pushing and preserve it:
+         cur_pos, cur_orn = p.getBasePositionAndOrientation(occ_pybullet_id)
+         p.resetBasePositionAndOrientation(occ_pybullet_id, new_pos, cur_orn)
+
+================================================================================
+44. SHADOWS NOT RECOMPUTED AFTER PUSH — STALE REGISTRY
+================================================================================
+Where: test_full_pipeline.py lines 259-288, boxel_data.py
+What:  After pushing an occluder, the BoxelRegistry is NOT updated. The
+       shadow boxels (their AABBs, centers, extents) still reflect the
+       pre-push geometry. Since the occluder has moved:
+       - Its shadow should shift or disappear
+       - Free space should expand where the occluder used to be
+       - Neighboring relationships may change
+
+       The pipeline continues using the stale registry for all subsequent
+       actions (sensing, pick position lookup, etc.). The sensing
+       function (sense_shadow_raycasting) uses the shadow boxel's AABB
+       to determine where to cast rays — but that AABB is for the
+       pre-push shadow, not the actual post-push geometry.
+
+       This is noted in the "FOR LATER" section as "incremental boxel
+       recomputation", but it's worth flagging as a concrete bug: the
+       ray-cast grid targets the WRONG region after a push.
+
+Fix:   After pushing, either:
+       (a) Recompute shadows for the pushed occluder only (incremental).
+       (b) Re-run the full boxel computation (expensive but correct).
+           NOT doing this for now.
+       (c) At minimum, use the target's actual PyBullet position for
+           ray-casting rather than the stale shadow AABB.
+       Option (c) is partially in place — sense_shadow_raycasting does
+       use the shadow AABB, but the target is detected by body ID, so
+       it works if any ray happens to hit the target. The stale AABB
+       just means rays may not cover the right area.
+
+================================================================================
+45. KEYBOARD INTERRUPT SILENTLY SWALLOWED
+================================================================================
+Where: test_full_pipeline.py line 368
+What:  `except KeyboardInterrupt: pass` silently catches the interrupt.
+       While this is likely intentional to allow clean exit during the
+       keep-alive loop, it masks interrupts if they happen elsewhere in
+       the try block (though the try block only contains the while loop).
+
+Fix:   Add a comment explicitly stating this is for clean exit during the
+       keep-alive loop. Or replace with a proper shutdown sequence that
+       logs "Shutting down..." before exiting.
+
+================================================================================
+46. UNUSED IMPORTS
+================================================================================
+Where: test_full_pipeline.py
+What:  `from streams import BoxelStreams` is imported but BoxelStreams is
+       never instantiated or used. The import persists from when someone
+       intended to wire BoxelStreams into the planner (#20) but never did.
+
+       Other files (run_tamp_demo.py, run_gui_demo.py, executor.py)
+       also import symbols they don't use, but those are archive
+       candidates anyway (#14, #19).
+
+Fix:   Remove unused imports in active files. In test_full_pipeline.py,
+       remove the BoxelStreams import until #20 is actually implemented.
+
+================================================================================
 FOR LATER
 ================================================================================
 - Incremental boxel recomputation after actions (without redoing everything
@@ -885,34 +1206,57 @@ The IMPLEMENTATION shortcuts every geometric step:
   - Streams produce labels instead of geometry (#4)
   - Real stream class (BoxelStreams) exists but is never wired to planner (#20)
   - Execution uses type-dependent offsets; pick/push ignore plan (#6, #7)
-  - Sensing: ray-casting from fixed camera (done)
-  - Pushing is teleportation with silent fallbacks to old behavior (#3, #21)
+  - Sensing uses fixed camera regardless of robot config (#36) — the
+    plan moves the robot to a sensing config, but execution ignores it
+  - Pushing is teleportation; resets orientation; no post-push
+    verification (#3, #41, #43)
   - Push skips silently if occluder missing from mapping (#22 — done)
-  - Push collision check misses targets and robot (#23)
+  - Push collision check misses hidden targets (not in boxel_to_pybullet
+    because generate_boxels skips invisible objects) and robot (#23)
   - Visibility check is a stub returning True (#12)
   - Heuristic IK produces meaningless configs (#26)
   - Goal parsing is brittle string manipulation (#24 — done)
-  - Object positions stale after physics settling (#25)
+  - Object positions stale after physics settling (#25 — done)
+  - push_aside redundantly moves robot after preceding move (#35)
+  - No open_gripper before pick; leaked p.createConstraint (#37, #38)
+  - Replanning always assumes robot at q_home (#34) — symbolic/
+    execution mismatch
+  - Shadow/registry not recomputed after push (#44) — ray-cast
+    targets stale AABB
 
 The CODEBASE has significant organizational debt:
-  - Two diverged BoxelTestEnv with Boxel field mismatch (#13)
+  - Two diverged BoxelTestEnv with Boxel field mismatch (#13);
+    refactored version missing update_object_positions (#40)
   - Obsolete executor/problem_generator pipeline (#14)
   - PDDL fact generator produces facts for wrong domain (#15 — done)
   - Fields that claim to be computed but are always default (#16 — done)
+  - BoxelData carries 5 unused belief-state fields serialized to JSON
+    but never managed (#33) — same anti-pattern as removed #16 fields
+  - generate_pddl_facts AND _build_init both mark target boxels as
+    (is_occluder) because is_occluder field is always False (#42, #32)
   - Magic constants duplicated across files (#18, #31)
   - Stale files, temp copies, and unclear entry points (#11, #19)
   - config.py exists but is never used; paths hardcoded (#30)
   - Dead code: get_stream_definitions(), config.py (#31, #30)
   - Duplicate utility functions with inconsistent params (#31)
   - Stream PDDL predicate inconsistency (#29)
+  - oracle_detect_objects has dead logic in distance check (#39)
+  - Targets DO generate shadow boxels — #28 factual correction
+  - Unused imports in active files (#46)
+  - KeyboardInterrupt silently swallowed (#45)
 
 Priority order for fixing:
-  1. Archive stale files, unify BoxelTestEnv (#11, #13, #14, #19)
-  2. Refactor PDDL domain to model capabilities, not solution (#32) — enables reuse
-  3. Wire BoxelStreams into the planner — THE critical fix (#20, #4, #12)
-  4. Fix execution to use plan parameters (#6, #7)
-  5. Fix push edge cases: fallbacks, silent skip, collision (#21, #22, #23)
-  6. Consolidate shared constants and utilities (#18, #30, #31)
-  7. Fix goal parsing (#24), update positions after settle (#25)
-  8. Implement physics-based pushing (#3)
-  9. Add collision-free motion planning (#5)
+  1. Archive stale files, unify BoxelTestEnv (#11, #13, #14, #19, #40)
+  2. Clean BoxelData: remove unused fields (#33), fix is_occluder (#42)
+  3. Refactor PDDL domain to model capabilities, not solution (#32)
+  4. Wire BoxelStreams into the planner — THE critical fix (#20, #4, #12)
+  5. Fix execution to use plan parameters (#6, #7)
+  6. Fix symbolic/execution mismatches: at_config tracking (#34),
+     sensing ignores robot (#36), redundant push move (#35)
+  7. Fix push edge cases: collision (#23), post-push verification (#41),
+     orientation reset (#43), stale registry (#44)
+  8. Fix pick robustness: open_gripper (#37), constraint cleanup (#38)
+  9. Consolidate shared constants and utilities (#18, #30, #31)
+ 10. Clean up minor issues: unused imports (#46), keyboard interrupt (#45)
+ 11. Implement physics-based pushing (#3)
+ 12. Add collision-free motion planning (#5)
