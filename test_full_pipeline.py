@@ -497,7 +497,8 @@ def compute_push_displacement(camera_pos, occluder_id, registry, boxel_to_pybull
     """
     occluder_boxel = registry.get_boxel(occluder_id)
     if occluder_boxel is None:
-        return np.array([0.3, 0.0, 0.0])
+        print(f"    WARNING: compute_push_displacement — occluder '{occluder_id}' not found in registry")
+        return None
 
     occ_extent = occluder_boxel.extent
 
@@ -506,7 +507,8 @@ def compute_push_displacement(camera_pos, occluder_id, registry, boxel_to_pybull
                      if registry.get_boxel(sid) is not None]
 
     if not shadow_boxels:
-        return np.array([0.3, 0.0, 0.0])
+        print(f"    WARNING: compute_push_displacement — no shadow boxels linked to occluder '{occluder_id}'")
+        return None
 
     shadow_center = np.mean([sb.center for sb in shadow_boxels], axis=0)
 
@@ -516,7 +518,8 @@ def compute_push_displacement(camera_pos, occluder_id, registry, boxel_to_pybull
     ])
     view_len = np.linalg.norm(cam_to_shadow_xy)
     if view_len < 1e-6:
-        return np.array([0.3, 0.0, 0.0])
+        print(f"    WARNING: compute_push_displacement — degenerate camera-to-shadow direction for '{occluder_id}'")
+        return None
     cam_to_shadow_xy /= view_len
 
     perp = np.array([-cam_to_shadow_xy[1], cam_to_shadow_xy[0]])

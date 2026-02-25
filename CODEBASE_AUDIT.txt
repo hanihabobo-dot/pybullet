@@ -504,7 +504,7 @@ Fix:   Wire BoxelStreams generators into pddlstream_planner.py's
        for making the planner geometry-aware.
 
 ================================================================================
-21. compute_push_displacement — DUMMY FALLBACK RETURNS [0.3, 0, 0]
+21. compute_push_displacement — DUMMY FALLBACK RETURNS [0.3, 0, 0]  [DONE]
 ================================================================================
 Where: test_full_pipeline.py lines 500, 509, 519
 What:  When compute_push_displacement() cannot compute a valid direction, it
@@ -519,6 +519,13 @@ What:  When compute_push_displacement() cannot compute a valid direction, it
 
 Fix:   Return None in all failure cases. The caller already handles None
        by breaking to replan. Remove the dummy [0.3, 0, 0] returns.
+
+Fixed: All three dummy `np.array([0.3, 0.0, 0.0])` returns replaced with
+       `return None`. Each failure path now prints a warning identifying the
+       specific reason (occluder not in registry, no shadow boxels linked,
+       or degenerate camera-to-shadow direction). The caller's existing
+       `if push_disp is None: break` logic triggers correctly, causing a
+       replan instead of silently reverting to the old hardcoded +0.3 X push.
 
 ================================================================================
 22. push_aside — SILENT SKIP WHEN OCCLUDER NOT IN MAPPING
