@@ -1171,7 +1171,7 @@ Fix:   Add a comment explicitly stating this is for clean exit during the
        logs "Shutting down..." before exiting.
 
 ================================================================================
-46. UNUSED IMPORTS
+46. UNUSED IMPORTS  [DONE]
 ================================================================================
 Where: test_full_pipeline.py
 What:  `from streams import BoxelStreams` is imported but BoxelStreams is
@@ -1184,6 +1184,12 @@ What:  `from streams import BoxelStreams` is imported but BoxelStreams is
 
 Fix:   Remove unused imports in active files. In test_full_pipeline.py,
        remove the BoxelStreams import until #20 is actually implemented.
+
+Fixed: Removed `from streams import BoxelStreams` from test_full_pipeline.py.
+       The planner uses its own stub generators; BoxelStreams will be
+       wired in when issue #20 is addressed. No other active files were
+       modified — run_tamp_demo, run_gui_demo, executor are archive
+       candidates per #14/#19.
 
 ================================================================================
 FOR LATER
@@ -1242,7 +1248,7 @@ The CODEBASE has significant organizational debt:
   - Stream PDDL predicate inconsistency (#29)
   - oracle_detect_objects has dead logic in distance check (#39)
   - Targets DO generate shadow boxels — #28 factual correction
-  - Unused imports in active files (#46)
+  - Unused imports in active files (#46 — done)
   - KeyboardInterrupt silently swallowed (#45)
 
 Priority order for fixing:
@@ -1257,6 +1263,6 @@ Priority order for fixing:
      orientation reset (#43), stale registry (#44)
   8. Fix pick robustness: open_gripper (#37), constraint cleanup (#38)
   9. Consolidate shared constants and utilities (#18, #30, #31)
- 10. Clean up minor issues: unused imports (#46), keyboard interrupt (#45)
+ 10. Clean up minor issues: unused imports (#46 — done), keyboard interrupt (#45)
  11. Implement physics-based pushing (#3)
  12. Add collision-free motion planning (#5)
