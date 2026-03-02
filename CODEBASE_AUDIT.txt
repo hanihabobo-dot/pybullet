@@ -987,7 +987,7 @@ Fix:   Either:
        DECISION: do (b) — we have a fixed camera.
 
 ================================================================================
-37. NO open_gripper BEFORE PICK
+37. NO open_gripper BEFORE PICK  [DONE]
 ================================================================================
 Where: test_full_pipeline.py execute_pick() lines 474-491
 What:  execute_pick() moves above target, lowers, closes gripper, attaches
@@ -999,6 +999,12 @@ What:  execute_pick() moves above target, lowers, closes gripper, attaches
        simulation, but it would fail on a real robot.
 
 Fix:   Call open_gripper (or add an open step) before lowering to grasp.
+
+Fixed: Added open_gripper(robot_id, gui) function mirroring close_gripper
+       (Franka Panda fingers: 0.04 open, 0.01 closed). execute_pick() now
+       calls open_gripper after moving above target and before lowering to
+       grasp. This ensures the gripper is open when descending — required
+       on real robots; the constraint-based attachment masked this in sim.
 
 ================================================================================
 38. p.createConstraint IN PICK IS NEVER CLEANED UP
@@ -1224,7 +1230,7 @@ The IMPLEMENTATION shortcuts every geometric step:
   - Goal parsing is brittle string manipulation (#24 — done)
   - Object positions stale after physics settling (#25 — done)
   - push_aside redundantly moves robot after preceding move (#35)
-  - No open_gripper before pick; leaked p.createConstraint (#37, #38)
+  - No open_gripper before pick (#37 — done); leaked p.createConstraint (#38)
   - Replanning always assumes robot at q_home (#34) — symbolic/
     execution mismatch
   - Shadow/registry not recomputed after push (#44) — ray-cast
@@ -1261,7 +1267,7 @@ Priority order for fixing:
      sensing ignores robot (#36), redundant push move (#35)
   7. Fix push edge cases: collision (#23), post-push verification (#41),
      orientation reset (#43), stale registry (#44)
-  8. Fix pick robustness: open_gripper (#37), constraint cleanup (#38)
+  8. Fix pick robustness: open_gripper (#37 — done), constraint cleanup (#38)
   9. Consolidate shared constants and utilities (#18, #30, #31)
  10. Clean up minor issues: unused imports (#46 — done), keyboard interrupt (#45)
  11. Implement physics-based pushing (#3)

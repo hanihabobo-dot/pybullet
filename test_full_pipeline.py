@@ -414,6 +414,17 @@ def move_robot_smooth(robot_id, target_joints, gui=True, steps=60):
             time.sleep(1/120)  # Real-time visualization (120 Hz)
 
 
+def open_gripper(robot_id, gui=True):
+    """Open gripper (Franka Panda fingers: 0.04 = open, 0.01 = closed)."""
+    import time
+    for _ in range(30):
+        p.setJointMotorControl2(robot_id, 9, p.POSITION_CONTROL, targetPosition=0.04, force=50)
+        p.setJointMotorControl2(robot_id, 10, p.POSITION_CONTROL, targetPosition=0.04, force=50)
+        p.stepSimulation()
+        if gui:
+            time.sleep(1/120)
+
+
 def close_gripper(robot_id, gui=True):
     """Close gripper."""
     import time
@@ -474,7 +485,11 @@ def execute_pick(robot_id, env, target_name, target_pos, gui):
     """Execute pick action with robot."""
     # Move above target
     move_robot_to_pos(robot_id, target_pos + np.array([0, 0, 0.15]), gui)
-    
+
+    # Open gripper before lowering — required for real robots; constraint-based
+    # attachment works regardless in simulation but would fail if gripper stayed closed
+    open_gripper(robot_id, gui)
+
     # Lower to grasp
     move_robot_to_pos(robot_id, target_pos + np.array([0, 0, 0.05]), gui)
     
