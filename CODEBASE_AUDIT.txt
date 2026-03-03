@@ -783,7 +783,7 @@ What:  CORRECTION: The original audit stated "All targets have
        tiny), but the audit description was wrong about the mechanism.
 
 ================================================================================
-29. STREAM PDDL MISMATCH — obj_graspable PREDICATE
+29. STREAM PDDL MISMATCH — obj_graspable PREDICATE  [DONE]
 ================================================================================
 Where: pddl/stream.pddl line 24, pddl/domain_pddlstream.pddl
 What:  stream.pddl declares sample-grasp with:
@@ -800,6 +800,23 @@ What:  stream.pddl declares sample-grasp with:
 Fix:   Decide whether obj_graspable is needed. If yes, add it to
        pddlstream_planner.py's init state for each target. If no,
        remove the predicate from the domain entirely to avoid confusion.
+
+Fixed: Decision: obj_graspable is NOT needed. The actual stream.pddl
+       already uses (Obj ?o), and the planner correctly adds ('Obj', obj)
+       to init for each target. Two changes:
+       (1) Removed get_stream_definitions() from streams.py — dead code
+           that was never called by any file. It used typed syntax
+           (?b - boxel, ?o - obj), referenced the stale obj_graspable
+           predicate, and omitted sample-push-config entirely. The real
+           source of truth is pddl/stream.pddl, not a Python string.
+           This also addresses the dead-code part of issue #31.
+       (2) Fixed sample_grasp() docstring in BoxelStreams to match the
+           actual stream.pddl declaration: (Obj ?o) instead of
+           (obj_graspable ?o), untyped syntax, and correct certified
+           facts including (Grasp ?g).
+       All remaining obj_graspable references are in archived files
+       (problem_generator.py, domain_boxel_tamp.pddl, problem_template.pddl,
+       problem_generated.pddl) — no active code references it.
 
 ================================================================================
 30. config.py DEAD — HARDCODED USER-SPECIFIC PATHS  [NOT AN ISSUE]
@@ -1321,9 +1338,9 @@ The CODEBASE has significant organizational debt:
   - Magic constants duplicated across files (#18, #31)
   - Stale files, temp copies, and unclear entry points (#11 — done, #19 — done)
   - config.py exists but is never used; paths hardcoded (#30 — not an issue)
-  - Dead code: get_stream_definitions(), config.py (#31, #30)
+  - Dead code: config.py (#30); get_stream_definitions() removed (#29 fix)
   - Duplicate utility functions with inconsistent params (#31)
-  - Stream PDDL predicate inconsistency (#29)
+  - Stream PDDL predicate inconsistency (#29 — done)
   - oracle_detect_objects had dead/buggy distance check (#39 — done)
   - Targets DO generate shadow boxels — #28 factual correction
   - Unused imports in active files (#46 — done)

@@ -365,6 +365,7 @@ def main(gui=True):
         end_time = time.time() + 4
         while time.time() < end_time:
             env.step_simulation()
+            time.sleep(1.0 / 240.0)
     
     env.close()
     return belief.is_target_found()

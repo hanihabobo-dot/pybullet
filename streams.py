@@ -353,12 +353,12 @@ class BoxelStreams:
         """
         Generate valid grasp poses for an object.
         
-        PDDLStream declaration:
+        PDDLStream declaration (see pddl/stream.pddl):
             (:stream sample-grasp
-              :inputs (?o - obj)
-              :domain (obj_graspable ?o)
-              :outputs (?g - grasp)
-              :certified (valid_grasp ?o ?g))
+              :inputs (?o)
+              :domain (Obj ?o)
+              :outputs (?g)
+              :certified (and (Grasp ?g) (valid_grasp ?o ?g)))
         
         Args:
             obj_id: ID of the object to grasp
@@ -486,45 +486,3 @@ class BoxelStreams:
         # TODO: Implement actual visibility check with ray casting
         # For now, always return True for mock testing
         return True
-
-
-# =============================================================================
-# PDDLStream Stream Definitions (for integration)
-# =============================================================================
-
-def get_stream_definitions():
-    """
-    Return PDDLStream stream definitions as a string.
-    
-    These are used by PDDLStream to know what streams are available
-    and how they relate inputs to outputs.
-    """
-    return """
-    (:stream sample-sensing-config
-      :inputs (?b - boxel)
-      :domain (is_shadow ?b)
-      :outputs (?q - config)
-      :certified (and (sensing_config ?b ?q) (config_for_boxel ?q ?b))
-    )
-    
-    (:stream sample-grasp
-      :inputs (?o - obj)
-      :domain (obj_graspable ?o)
-      :outputs (?g - grasp)
-      :certified (valid_grasp ?o ?g)
-    )
-    
-    (:stream plan-motion
-      :inputs (?q1 ?q2 - config)
-      :domain (at_config ?q1)
-      :outputs (?t - trajectory)
-      :certified (motion_plan ?q1 ?q2 ?t)
-    )
-    
-    (:stream compute-kin
-      :inputs (?o - obj ?b - boxel ?g - grasp)
-      :domain (and (obj_at_boxel ?o ?b) (valid_grasp ?o ?g))
-      :outputs (?q - config)
-      :certified (and (kin_solution ?o ?b ?g ?q) (config_for_boxel ?q ?b))
-    )
-    """
