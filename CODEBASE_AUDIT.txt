@@ -84,7 +84,7 @@ Fix:   Wire BoxelStreams generators into pddlstream_planner.py's
        for making the planner geometry-aware.
 
 ================================================================================
-26. heuristic_ik() — MEANINGLESS FAKE IK FALLBACK
+26. heuristic_ik() — MEANINGLESS FAKE IK FALLBACK  [DONE]
 ================================================================================
 Where: streams.py lines 268-285
 What:  When robot_id is None (no PyBullet robot loaded),
@@ -99,9 +99,15 @@ What:  When robot_id is None (no PyBullet robot loaded),
        tests run without a robot, but they could silently corrupt
        results if used when a robot IS expected.
 
-Fix:   If used for testing, explicitly mark configs as "heuristic"
-       (e.g., set a flag). Log a warning when falling back to heuristic
-       IK. Never use heuristic IK when robot_id should be available.
+Fixed: (1) Added is_heuristic flag to RobotConfig (default False). Configs
+       from _heuristic_ik() are marked is_heuristic=True so downstream
+       code can detect and reject them when real IK is expected.
+       (2) BoxelStreams.__init__ logs a WARNING when robot_id is None,
+       alerting early that all IK will use the heuristic fallback.
+       (3) _heuristic_ik() logs a WARNING on every call with the
+       requested ee_pos, making it impossible to miss silently.
+       (4) Docstring rewritten to honestly describe what the function
+       does (arbitrary perturbation, NOT inverse kinematics).
 
 ================================================================================
 31. DEAD CODE AND DUPLICATE UTILITIES  [DONE]
@@ -248,7 +254,7 @@ The IMPLEMENTATION shortcuts every geometric step:
   - Sensing uses fixed camera regardless of robot config (#36)
   - Pushing is teleportation; no post-push verification (#41)
   - Visibility check is a stub returning True (#12)
-  - Heuristic IK produces meaningless configs (#26)
+  - Heuristic IK produces meaningless configs (#26 — done, now flagged+warned)
   - Shadow/registry not recomputed after push (#44)
 
 The CODEBASE organizational debt is largely resolved:
@@ -260,4 +266,4 @@ Priority order for remaining fixes:
   3. Fix execution to use plan parameters (#6, #7)
   4. Fix sensing: remove move-to-sense since we use fixed camera (#36)
   5. Fix push edge cases: post-push verification (#41), stale registry (#44)
-  6. Improve heuristic IK fallback (#26)
+  6. Improve heuristic IK fallback (#26 — done)

@@ -12,10 +12,13 @@ Streams:
     - test_visibility: Check if boxel is observable from config
 """
 
+import logging
 import numpy as np
 import pybullet as p
 from typing import List, Tuple, Optional, Generator, Iterator
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 from boxel_data import BoxelRegistry, BoxelData, BoxelType
 from robot_utils import (ARM_JOINT_INDICES, END_EFFECTOR_LINK, FINGER_JOINTS,
@@ -27,6 +30,7 @@ class RobotConfig:
     """Robot configuration (joint angles for Franka Panda)."""
     joint_positions: np.ndarray  # 7 DOF
     name: str = ""
+    is_heuristic: bool = False
     
     def __hash__(self):
         return hash(self.name)
@@ -71,6 +75,12 @@ class BoxelStreams:
         self.registry = registry
         self.robot_id = robot_id
         self.physics_client = physics_client if physics_client is not None else 0
+        
+        if self.robot_id is None:
+            logger.warning(
+                "BoxelStreams created without robot_id — all IK will use "
+                "heuristic fallback (configs will NOT be kinematically valid)"
+            )
         
         # Home configuration
         self.home_config = RobotConfig(
@@ -199,11 +209,9 @@ class BoxelStreams:
         # Use rotation to align with downward-looking pose
         ee_orn = self._direction_to_quat(-direction)
         
-        # Try real IK if robot is available
         if self.robot_id is not None:
             return self._pybullet_ik(ee_pos, ee_orn)
         
-        # Fallback: heuristic for testing without robot
         return self._heuristic_ik(ee_pos, look_at)
     
     def _pybullet_ik(self, ee_pos: np.ndarray, 
@@ -256,21 +264,28 @@ class BoxelStreams:
     def _heuristic_ik(self, ee_pos: np.ndarray, 
                       look_at: np.ndarray) -> Optional[RobotConfig]:
         """
-        Heuristic IK for testing without robot.
+        Fake IK fallback for testing without a loaded robot.
         
-        Generates plausible joint configurations based on target position.
+        WARNING: This is NOT inverse kinematics. It perturbs the home config
+        by an arbitrary function of the target position. The resulting joint
+        angles have no guaranteed relationship to the requested end-effector
+        pose. Configs produced here are marked with is_heuristic=True so
+        downstream code can detect and reject them when real IK is expected.
         """
-        # Simple heuristic: perturb home config based on target
+        logger.warning(
+            "Using heuristic IK (ee_pos=%s) — result is NOT a valid IK "
+            "solution. Config will be marked is_heuristic=True.",
+            ee_pos.tolist()
+        )
+        
         offset = (ee_pos - np.array([0.5, 0, 0.5])) * 0.5
         joint_offsets = np.array([offset[1], offset[2], offset[0], 
                                   0, offset[1], offset[2], 0])
         
         new_joints = self.home_config.joint_positions + joint_offsets * 0.3
-        
-        # Clamp to limits
         new_joints = np.clip(new_joints, JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH)
         
-        return RobotConfig(joint_positions=new_joints)
+        return RobotConfig(joint_positions=new_joints, is_heuristic=True)
     
     def _direction_to_quat(self, direction: np.ndarray) -> np.ndarray:
         """
