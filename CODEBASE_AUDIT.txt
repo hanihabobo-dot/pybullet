@@ -148,12 +148,13 @@ Fixed: Created robot_utils.py as the single source of truth for all Panda
        move_robot_smooth (motor interpolation), open_gripper, close_gripper.
 
 ================================================================================
-32. PDDL DOMAIN MODELS SOLUTION, NOT ROBOT CAPABILITIES [SUPERVISOR CRITIQUE]
+32. PDDL DOMAIN MODELS SOLUTION, NOT ROBOT CAPABILITIES  [DONE]
 ================================================================================
 Where: pddl/domain_pddlstream.pddl
-What:  The domain is tailored to the hidden-object scenario rather than
+What:  The domain was tailored to the hidden-object scenario rather than
        expressing the robot's fundamental capabilities. Actions and predicates
-       are solution-specific, not reusable:
+       were solution-specific, not reusable (push_aside, sense_shadow,
+       occluder_blocking, occluder_aside, casts_shadow).
 
        push_aside:
          - Requires (is_object ?occ), (occluder_blocking ?occ), (occluder_aside ?occ)
@@ -170,6 +171,29 @@ Fix:   Refactor the domain to model CAPABILITIES, not the solution:
        - Replace sense_shadow with generic sense(?b ?q)
        - Keep pick/place as generic (they already are)
        - Model "occluder blocks shadow" as problem-level predicates
+Fixed: Refactored domain to model CAPABILITIES, not the solution.
+       Actions now express physical consequences, not scenario logic:
+       (1) push_aside(?occ ?q) → push(?obj ?region ?q). Push an object to
+           clear the camera's line of sight to a specific region. Effect
+           directly modifies the spatial relationship: removes
+           (blocks_view ?obj ?region), adds (view_clear ?region). No
+           solution-specific "pushed" flag — the domain models what
+           PHYSICALLY CHANGED, not what action was taken.
+       (2) sense_shadow(?o ?shd ?occ ?q) → sense(?o ?region ?q). Generic
+           sensing of any region with a clear line of sight. No blocker
+           parameter needed — sense just requires (view_clear ?region).
+       (3) Predicates: casts_shadow → blocks_view (dynamic, removed by
+           push). occluder_blocking/occluder_aside → eliminated entirely.
+           Added view_clear (set by push; also set in init for regions
+           whose blockers were already moved at replan time).
+       (4) pick, place, move unchanged (already generic).
+       (5) Updated pddlstream_planner.py _build_init(): emits blocks_view
+           for active blockers, view_clear for already-cleared regions.
+       (6) Updated test_full_pipeline.py execution dispatch for new action
+           signatures (push has 3 params, sense has 3 params).
+       (7) Updated boxel_data.py generate_pddl_facts() to emit blocks_view.
+       stream.pddl unchanged — stream names and certified facts were
+       already generic (push_config, sensing_config, etc.).
 
 ================================================================================
 36. sense_shadow IGNORES ROBOT POSITION — USES FIXED CAMERA
@@ -250,9 +274,8 @@ FOR LATER
 ================================================================================
 SUMMARY
 ================================================================================
-The PLANNING ARCHITECTURE has a design flaw:
-  - PDDL domain models the solution (hidden-object scenario) not robot
-    capabilities — actions are scenario-specific, not reusable (#32)
+The PLANNING ARCHITECTURE:
+  - PDDL domain now models capabilities, not the scenario (#32 — done)
   - PDDLStream correctly uses streams for geometric reasoning
   - Replanning loop correctly updates belief state
   - KIF fluents for partial observability are sound
@@ -270,9 +293,8 @@ The CODEBASE organizational debt is largely resolved:
   - Duplicate robot constants and utility functions (#31 — done)
 
 Priority order for remaining fixes:
-  1. Refactor PDDL domain to model capabilities, not solution (#32)
-  2. Wire BoxelStreams into the planner — THE critical fix (#20, #12)
-  3. Fix execution to use plan parameters (#6, #7)
-  4. Fix sensing: remove move-to-sense since we use fixed camera (#36)
-  5. Fix push edge cases: post-push verification (#41 — done), stale registry (#44)
-  6. Improve heuristic IK fallback (#26 — done)
+  1. Wire BoxelStreams into the planner — THE critical fix (#20, #12)
+  2. Fix execution to use plan parameters (#6, #7)
+  3. Fix sensing: remove move-to-sense since we use fixed camera (#36)
+  4. Fix push edge cases: post-push verification (#41 — done), stale registry (#44)
+  5. Improve heuristic IK fallback (#26 — done)

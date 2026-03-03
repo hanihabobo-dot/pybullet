@@ -207,10 +207,10 @@ def main(gui=True):
     boxel_centers = {b.id: b.center for b in registry.boxels.values()}
     
     plan_count = 0
-    # Worst case: one plan per shadow (push + sense, not found → replan) +
-    # one for the final pick. Doubled to tolerate failed plans (planner
-    # returns None) that consume a plan count without progress.
-    max_replans = 2 * len(shadows) + 1
+    # Budget: each shadow may need multiple push attempts before the view
+    # clears (push verification can fail due to insufficient displacement).
+    # Allow up to 4 attempts per shadow + 1 for the final pick.
+    max_replans = 4 * len(shadows) + 1
     grasp_constraint_id = None
     exit_reason = None
     current_config = "q_home"
@@ -255,10 +255,11 @@ def main(gui=True):
             
             print(f"\n  Executing: {action_name}")
             
-            if action_name == 'push_aside':
+            if action_name == 'push':
                 occluder_id = params[0]
-                config_name = params[1]
-                print(f"    Pushing {occluder_id} aside...")
+                region_id = params[1]
+                config_name = params[2]
+                print(f"    Pushing {occluder_id} (clearing view to {region_id})...")
                 
                 # Actually move the occluder in PyBullet
                 if occluder_id in boxel_to_pybullet:
@@ -354,8 +355,8 @@ def main(gui=True):
                 current_config = str(q2)
                 print(f"    -> Moved to {dest_boxel_id} (offset {offset.tolist()})")
                     
-            elif action_name == 'sense_shadow':
-                obj, shadow_id, occluder_id, config = params
+            elif action_name == 'sense':
+                obj, shadow_id, config = params
                 print(f"    Sensing {shadow_id}...")
                 
                 shadow_boxel = registry.get_boxel(str(shadow_id))

@@ -285,10 +285,6 @@ class PDDLStreamPlanner:
 
             elif boxel.boxel_type == BoxelType.OBJECT:
                 init.append(('is_object', boxel.id))
-                if boxel.id not in moved_occluders:
-                    init.append(('occluder_blocking', boxel.id))
-                else:
-                    init.append(('occluder_aside', boxel.id))
                 for obj in target_objects:
                     init.append(('obj_at_boxel_KIF', obj, boxel.id))
 
@@ -299,12 +295,19 @@ class PDDLStreamPlanner:
 
         if self.shadow_occluder_map:
             for shadow_id, occluder_id in self.shadow_occluder_map.items():
-                init.append(('casts_shadow', occluder_id, shadow_id))
+                if occluder_id in moved_occluders:
+                    init.append(('view_clear', shadow_id))
+                else:
+                    init.append(('blocks_view', occluder_id, shadow_id))
         else:
             for shadow_id in shadows:
                 shadow_boxel = self.registry.get_boxel(shadow_id)
                 if shadow_boxel and shadow_boxel.created_by_boxel_id:
-                    init.append(('casts_shadow', shadow_boxel.created_by_boxel_id, shadow_id))
+                    occ_id = shadow_boxel.created_by_boxel_id
+                    if occ_id in moved_occluders:
+                        init.append(('view_clear', shadow_id))
+                    else:
+                        init.append(('blocks_view', occ_id, shadow_id))
 
         for obj in target_objects:
             init.append(('Obj', obj))

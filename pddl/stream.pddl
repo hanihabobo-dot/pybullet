@@ -10,7 +10,7 @@
   )
   
   ;; Sample a robot configuration for sensing a shadow boxel
-  ;; (Only valid after occluder is pushed aside - checked at action level)
+  ;; (Sensing requires view_clear - checked at action level)
   (:stream sample-sensing-config
     :inputs (?b)
     :domain (is_shadow ?b)

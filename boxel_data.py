@@ -264,9 +264,9 @@ class BoxelRegistry:
         Generate PDDL facts using predicates from domain_pddlstream.pddl.
 
         Produces static scene structure facts only (type predicates and
-        relationships). Dynamic state (occluder_blocking, obj_at_boxel_KIF,
-        at_config, etc.) depends on execution context and is managed by
-        PDDLStreamPlanner.create_problem().
+        relationships). Dynamic state (blocks_view, view_clear,
+        obj_at_boxel_KIF, at_config, etc.) depends on execution context
+        and is managed by PDDLStreamPlanner.create_problem().
 
         Returns:
             List of PDDL fact strings matching domain_pddlstream.pddl.
@@ -285,7 +285,7 @@ class BoxelRegistry:
 
             if boxel.boxel_type == BoxelType.OBJECT:
                 for shadow_id in boxel.shadow_boxel_ids:
-                    facts.append(f"(casts_shadow {boxel.id} {shadow_id})")
+                    facts.append(f"(blocks_view {boxel.id} {shadow_id})")
 
         return facts
     
@@ -293,9 +293,9 @@ class BoxelRegistry:
         """Save PDDL facts to a file.
 
         Output uses predicates from domain_pddlstream.pddl.  Only static
-        scene structure is included; dynamic state (occluder_blocking,
-        obj_at_boxel_KIF, at_config, etc.) is added at planning time by
-        PDDLStreamPlanner.create_problem().
+        scene structure is included; dynamic state (blocks_view,
+        view_clear, obj_at_boxel_KIF, at_config, etc.) is added at
+        planning time by PDDLStreamPlanner.create_problem().
         """
         facts = self.generate_pddl_facts()
         with open(filepath, 'w') as f:

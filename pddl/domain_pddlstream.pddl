@@ -2,10 +2,12 @@
 ;; Semantic Boxel TAMP Domain - PDDLStream Compatible (Untyped, No Derived)
 ;; =============================================================================
 ;; 
-;; Uses Know-If fluents for partial observability.
-;; Key insight: Shadows are BLOCKED by their occluders. Must push occluder aside
-;; before sensing the shadow region.
+;; Models the robot's CAPABILITIES (push, sense, move, pick, place) rather
+;; than any specific scenario. Scenario-specific spatial relationships
+;; (e.g., which objects block which regions) are expressed as problem-level
+;; init facts using generic predicates like blocks_view.
 ;;
+;; Uses Know-If fluents for partial observability.
 ;; Object types are encoded as predicates: (Boxel ?x), (Obj ?x), etc.
 
 (define (domain boxel-tamp)
@@ -19,15 +21,14 @@
     (Trajectory ?x)
     (Grasp ?x)
     
-    ;; --- Boxel structure ---
-    (is_shadow ?b)           ; This boxel is a shadow region
-    (is_object ?b)           ; This boxel is a physical object
-    (is_free_space ?b)       ; This boxel is free space
-    (casts_shadow ?occ ?shd) ; Occluder ?occ casts shadow ?shd
+    ;; --- Boxel classification ---
+    (is_shadow ?b)           ; Region not directly visible from the camera
+    (is_object ?b)           ; Physical object (can be pushed, picked)
+    (is_free_space ?b)       ; Known empty space
     
-    ;; --- Occluder state ---
-    (occluder_blocking ?occ) ; Occluder is in its original position (blocking)
-    (occluder_aside ?occ)    ; Occluder has been pushed aside (shadow revealed)
+    ;; --- Visibility (dynamic) ---
+    (blocks_view ?obj ?region) ; Object ?obj blocks the camera's view to ?region
+    (view_clear ?region)       ; Camera has clear line of sight to ?region
     
     ;; --- Ground truth (actual world state) ---
     (obj_at_boxel ?o ?b)     ; Object ?o is physically at boxel ?b
@@ -43,7 +44,7 @@
     
     ;; --- Stream certified facts ---
     (sensing_config ?b ?q)        ; Config ?q can sense boxel ?b
-    (push_config ?occ ?q)         ; Config ?q can push occluder ?occ
+    (push_config ?obj ?q)         ; Config ?q can push object ?obj
     (valid_grasp ?o ?g)           ; Grasp ?g valid for object ?o
     (motion ?q1 ?q2 ?t)           ; Trajectory ?t from ?q1 to ?q2
     (kin_solution ?o ?b ?g ?q)    ; Config ?q for picking ?o from ?b with ?g
@@ -51,48 +52,48 @@
   )
   
   ;; =========================================================================
-  ;; PUSH_ASIDE: Move an occluder to reveal its shadow
+  ;; PUSH: Push an object to clear the camera's line of sight to a region
   ;; =========================================================================
-  ;; This must be done BEFORE sensing the shadow region
-  (:action push_aside
-    :parameters (?occ ?q)
+  ;; The ?region parameter identifies which viewing corridor to clear.
+  ;; Effect models the physical consequence: the object no longer blocks
+  ;; the view, and the region becomes observable.
+  (:action push
+    :parameters (?obj ?region ?q)
     :precondition (and
-      (Boxel ?occ)
+      (Boxel ?obj)
+      (Boxel ?region)
       (Config ?q)
-      (is_object ?occ)
-      (occluder_blocking ?occ)
+      (is_object ?obj)
+      (blocks_view ?obj ?region)
       (at_config ?q)
-      (push_config ?occ ?q)
+      (push_config ?obj ?q)
       (handempty)
     )
     :effect (and
-      (occluder_aside ?occ)
-      (not (occluder_blocking ?occ))
+      (not (blocks_view ?obj ?region))
+      (view_clear ?region)
     )
   )
   
   ;; =========================================================================
-  ;; SENSE_SHADOW: Observe a shadow boxel to check for object
+  ;; SENSE: Observe a region to check for an object
   ;; =========================================================================
-  ;; REQUIRES: The occluder must be pushed aside first!
+  ;; Requires clear line of sight to the region.
   ;; OPTIMISTIC: Assumes object will be found (replanning handles failures)
-  (:action sense_shadow
-    :parameters (?o ?shd ?occ ?q)
+  (:action sense
+    :parameters (?o ?region ?q)
     :precondition (and
       (Obj ?o)
-      (Boxel ?shd)
-      (Boxel ?occ)
+      (Boxel ?region)
       (Config ?q)
-      (is_shadow ?shd)
-      (casts_shadow ?occ ?shd)
-      (occluder_aside ?occ)           ; MUST have pushed occluder aside!
+      (view_clear ?region)
       (at_config ?q)
-      (sensing_config ?shd ?q)
-      (not (obj_at_boxel_KIF ?o ?shd)) ; Only sense if unknown
+      (sensing_config ?region ?q)
+      (not (obj_at_boxel_KIF ?o ?region))  ; Only sense if unknown
     )
     :effect (and
-      (obj_at_boxel_KIF ?o ?shd)       ; Now we know
-      (obj_at_boxel ?o ?shd)           ; OPTIMISTIC: assume found
+      (obj_at_boxel_KIF ?o ?region)        ; Now we know
+      (obj_at_boxel ?o ?region)            ; OPTIMISTIC: assume found
       (obj_pose_known ?o)
     )
   )
@@ -146,7 +147,7 @@
   ;; =========================================================================
   ;; PLACE: Place an object in a boxel
   ;; =========================================================================
-  ;; Destination must be free space — cannot place inside an occluder or shadow.
+  ;; Destination must be free space
   (:action place
     :parameters (?o ?b ?g ?q)
     :precondition (and
