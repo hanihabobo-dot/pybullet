@@ -328,7 +328,7 @@ Fix:   Keep only boxel_env.py (the refactored version) and delete
        and ensure all creation sites set is_occluder properly.
 
 ================================================================================
-14. OBSOLETE EXECUTOR / PROBLEM GENERATOR / HIDDEN OBJECT SCENARIO
+14. OBSOLETE EXECUTOR / PROBLEM GENERATOR / HIDDEN OBJECT SCENARIO  [DONE]
 ================================================================================
 Where: executor.py, problem_generator.py, hidden_object_scenario.py
 What:  These three files form a complete but OBSOLETE execution pipeline
@@ -362,6 +362,23 @@ What:  These three files form a complete but OBSOLETE execution pipeline
 Fix:   Move to archive/. If the mock-planner execution path is still
        wanted for quick testing without PDDLStream, update executor.py
        to match the current domain's actions and predicates.
+
+Fixed: Moved all three files to archive/:
+       - executor.py — old executor using sense_boxel, no push_aside,
+         3-param move, oracle string sensing, mock planner. None of
+         these match the current domain or pipeline.
+       - problem_generator.py — typed PDDL generator with wrong
+         predicates (semantic_zone, is_object_boxel, occludes,
+         obj_graspable). Incompatible with domain_pddlstream.pddl.
+       - hidden_object_scenario.py — demo script wired to the obsolete
+         executor/problem_generator. Uses random.choice for target
+         hiding (issue #1's old bug).
+       The only root-level files that imported from these are
+       test_robot_control.py and test_pddl_integration.py, which are
+       themselves archive candidates (#19) and not used by the active
+       pipeline. No active pipeline file (test_full_pipeline.py,
+       pddlstream_planner.py, streams.py, boxel_data.py) references
+       any of these three.
 
 ================================================================================
 15. PDDL FACT GENERATOR USES WRONG PREDICATES  [DONE]
@@ -1271,7 +1288,7 @@ The IMPLEMENTATION shortcuts every geometric step:
 The CODEBASE has significant organizational debt:
   - Two diverged BoxelTestEnv with Boxel field mismatch (#13);
     refactored version missing update_object_positions (#40)
-  - Obsolete executor/problem_generator pipeline (#14)
+  - Obsolete executor/problem_generator pipeline (#14 — done)
   - PDDL fact generator produces facts for wrong domain (#15 — done)
   - Fields that claim to be computed but are always default (#16 — done)
   - BoxelData carries 5 unused belief-state fields serialized to JSON
