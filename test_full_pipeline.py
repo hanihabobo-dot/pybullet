@@ -34,7 +34,7 @@ import numpy as np
 import pybullet as p
 import pybullet_data
 
-from boxel_test_env import BoxelTestEnv
+from boxel_env import BoxelTestEnv
 from boxel_data import BoxelRegistry, BoxelType, create_boxel_registry_from_boxels
 from cell_merger import merge_free_space_cells
 from pddlstream_planner import PDDLStreamPlanner

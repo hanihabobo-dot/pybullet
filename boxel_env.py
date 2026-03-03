@@ -157,6 +157,8 @@ class BoxelTestEnv:
         # Let objects settle
         for _ in range(10):
             p.stepSimulation()
+        
+        self.update_object_positions()
     
     def _create_occluders(self):
         """Create occluder cubes on the table."""
@@ -537,6 +539,21 @@ class BoxelTestEnv:
             cameraPitch=self.debug_camera_pitch,
             cameraTargetPosition=self.debug_camera_target
         )
+
+    def update_object_positions(self):
+        """
+        Synchronise every dynamic object's ObjectInfo with its current PyBullet
+        pose.  Call this after any batch of physics steps (settling, pushing,
+        etc.) so that downstream code never uses stale spawn-time positions.
+
+        Static bodies (plane, table, robot) are skipped — they cannot move.
+        """
+        for name, obj_info in self.objects.items():
+            if name in ("plane", "table", "robot"):
+                continue
+            pos, orn = p.getBasePositionAndOrientation(obj_info.object_id)
+            obj_info.position = np.array(pos)
+            obj_info.orientation = np.array(orn)
 
     def step_simulation(self, num_steps: int = 1):
         """Step the simulation forward."""

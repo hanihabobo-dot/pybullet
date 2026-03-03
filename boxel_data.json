@@ -1,214 +1,7 @@
 {
   "boxels": [
     {
-      "id": "obj_000",
-      "boxel_type": "object",
-      "min_corner": [
-        0.4247672952532793,
-        0.12503419765650592,
-        0.32498747624929136
-      ],
-      "max_corner": [
-        0.5751842606960931,
-        0.2754538430241263,
-        0.474990213614246
-      ],
-      "center": [
-        0.4999757779746862,
-        0.2002440203403161,
-        0.3999888449317687
-      ],
-      "extent": [
-        0.0752084827214069,
-        0.07520982268381018,
-        0.07500136868247731
-      ],
-      "volume": 0.0033939119245840724,
-      "object_name": "occluder_1",
-      "is_occluder": false,
-      "shadow_boxel_ids": [
-        "shadow_004"
-      ],
-      "created_by_boxel_id": null,
-      "created_by_object": null,
-      "neighbor_ids": {
-        "x_pos": [
-          "shadow_005"
-        ],
-        "x_neg": [
-          "shadow_007"
-        ],
-        "y_pos": [
-          "shadow_004"
-        ],
-        "y_neg": [
-          "shadow_006",
-          "shadow_008"
-        ],
-        "z_pos": [
-          "free_030",
-          "free_034",
-          "free_041",
-          "free_049"
-        ],
-        "z_neg": []
-      },
-      "on_surface": "table",
-      "surface_z": 0.325
-    },
-    {
-      "id": "obj_001",
-      "boxel_type": "object",
-      "min_corner": [
-        0.5247608853169449,
-        -0.1749760174339652,
-        0.324983203923797
-      ],
-      "max_corner": [
-        0.6751851302498241,
-        -0.024545862608636393,
-        0.47499042151954807
-      ],
-      "center": [
-        0.5999730077833845,
-        -0.0997609400213008,
-        0.3999868127216725
-      ],
-      "extent": [
-        0.0752121224664396,
-        0.07521507741266441,
-        0.07500360879787554
-      ],
-      "volume": 0.0033944146904387857,
-      "object_name": "occluder_2",
-      "is_occluder": false,
-      "shadow_boxel_ids": [
-        "shadow_005",
-        "shadow_006"
-      ],
-      "created_by_boxel_id": null,
-      "created_by_object": null,
-      "neighbor_ids": {
-        "x_pos": [
-          "shadow_009"
-        ],
-        "x_neg": [],
-        "y_pos": [
-          "shadow_005",
-          "shadow_006"
-        ],
-        "y_neg": [
-          "obj_003"
-        ],
-        "z_pos": [
-          "free_021",
-          "free_041"
-        ],
-        "z_neg": []
-      },
-      "on_surface": "table",
-      "surface_z": 0.325
-    },
-    {
-      "id": "obj_002",
-      "boxel_type": "object",
-      "min_corner": [
-        0.3249984293399084,
-        -0.2753919554360973,
-        0.3249878279364889
-      ],
-      "max_corner": [
-        0.475000449850148,
-        -0.12539065006372196,
-        0.47498985525488996
-      ],
-      "center": [
-        0.3999994395950282,
-        -0.20039130274990963,
-        0.3999888415956894
-      ],
-      "extent": [
-        0.0750010102551198,
-        0.07500065268618766,
-        0.07500101365920053
-      ],
-      "volume": 0.0033751204484298862,
-      "object_name": "occluder_3",
-      "is_occluder": false,
-      "shadow_boxel_ids": [
-        "shadow_007",
-        "shadow_008"
-      ],
-      "created_by_boxel_id": null,
-      "created_by_object": null,
-      "neighbor_ids": {
-        "x_pos": [],
-        "x_neg": [],
-        "y_pos": [
-          "shadow_007",
-          "shadow_008"
-        ],
-        "y_neg": [
-          "free_053"
-        ],
-        "z_pos": [
-          "free_029",
-          "free_033"
-        ],
-        "z_neg": []
-      },
-      "on_surface": "table",
-      "surface_z": 0.325
-    },
-    {
-      "id": "obj_003",
-      "boxel_type": "object",
-      "min_corner": [
-        0.6558231509510555,
-        -0.2561590312299708,
-        0.3249841947569067
-      ],
-      "max_corner": [
-        0.7445301341743167,
-        -0.1674545661854112,
-        0.40499836454288557
-      ],
-      "center": [
-        0.7001766425626861,
-        -0.211806798707691,
-        0.36499127964989614
-      ],
-      "extent": [
-        0.0443534916116306,
-        0.044352232522279794,
-        0.04000708489298943
-      ],
-      "volume": 0.0006296079372756485,
-      "object_name": "target_4",
-      "is_occluder": false,
-      "shadow_boxel_ids": [
-        "shadow_009"
-      ],
-      "created_by_boxel_id": null,
-      "created_by_object": null,
-      "neighbor_ids": {
-        "x_pos": [
-          "free_042"
-        ],
-        "x_neg": [],
-        "y_pos": [
-          "obj_001",
-          "shadow_009"
-        ],
-        "y_neg": [],
-        "z_pos": [],
-        "z_neg": []
-      },
-      "on_surface": "table",
-      "surface_z": 0.325
-    },
-    {
-      "id": "shadow_004",
+      "id": "shadow_000",
       "boxel_type": "shadow",
       "min_corner": [
         0.26595287623439334,
@@ -234,14 +27,14 @@
       "object_name": null,
       "is_occluder": false,
       "shadow_boxel_ids": [],
-      "created_by_boxel_id": "obj_000",
+      "created_by_boxel_id": "obj_006",
       "created_by_object": "occluder_1",
       "neighbor_ids": {
         "x_pos": [],
         "x_neg": [],
         "y_pos": [],
         "y_neg": [
-          "obj_000"
+          "obj_006"
         ],
         "z_pos": [
           "free_030",
@@ -257,7 +50,7 @@
       "surface_z": 0.325
     },
     {
-      "id": "shadow_005",
+      "id": "shadow_001",
       "boxel_type": "shadow",
       "min_corner": [
         0.5751842606960931,
@@ -283,17 +76,17 @@
       "object_name": null,
       "is_occluder": false,
       "shadow_boxel_ids": [],
-      "created_by_boxel_id": "obj_001",
+      "created_by_boxel_id": "obj_007",
       "created_by_object": "occluder_2",
       "neighbor_ids": {
         "x_pos": [],
         "x_neg": [
-          "obj_000",
-          "shadow_006"
+          "shadow_002",
+          "obj_006"
         ],
         "y_pos": [],
         "y_neg": [
-          "obj_001",
+          "obj_007",
           "free_039",
           "free_056"
         ],
@@ -311,7 +104,7 @@
       "surface_z": 0.325
     },
     {
-      "id": "shadow_006",
+      "id": "shadow_002",
       "boxel_type": "shadow",
       "min_corner": [
         0.524760885316945,
@@ -337,18 +130,18 @@
       "object_name": null,
       "is_occluder": false,
       "shadow_boxel_ids": [],
-      "created_by_boxel_id": "obj_001",
+      "created_by_boxel_id": "obj_007",
       "created_by_object": "occluder_2",
       "neighbor_ids": {
         "x_pos": [
-          "shadow_005"
+          "shadow_001"
         ],
         "x_neg": [],
         "y_pos": [
-          "obj_000"
+          "obj_006"
         ],
         "y_neg": [
-          "obj_001"
+          "obj_007"
         ],
         "z_pos": [
           "free_041"
@@ -359,7 +152,7 @@
       "surface_z": 0.325
     },
     {
-      "id": "shadow_007",
+      "id": "shadow_003",
       "boxel_type": "shadow",
       "min_corner": [
         0.2083438656871469,
@@ -385,17 +178,17 @@
       "object_name": null,
       "is_occluder": false,
       "shadow_boxel_ids": [],
-      "created_by_boxel_id": "obj_002",
+      "created_by_boxel_id": "obj_008",
       "created_by_object": "occluder_3",
       "neighbor_ids": {
         "x_pos": [
-          "obj_000",
-          "shadow_008"
+          "shadow_004",
+          "obj_006"
         ],
         "x_neg": [],
         "y_pos": [],
         "y_neg": [
-          "obj_002"
+          "obj_008"
         ],
         "z_pos": [
           "free_029",
@@ -407,7 +200,7 @@
       "surface_z": 0.325
     },
     {
-      "id": "shadow_008",
+      "id": "shadow_004",
       "boxel_type": "shadow",
       "min_corner": [
         0.4247672952532793,
@@ -433,18 +226,18 @@
       "object_name": null,
       "is_occluder": false,
       "shadow_boxel_ids": [],
-      "created_by_boxel_id": "obj_002",
+      "created_by_boxel_id": "obj_008",
       "created_by_object": "occluder_3",
       "neighbor_ids": {
         "x_pos": [],
         "x_neg": [
-          "shadow_007"
+          "shadow_003"
         ],
         "y_pos": [
-          "obj_000"
+          "obj_006"
         ],
         "y_neg": [
-          "obj_002"
+          "obj_008"
         ],
         "z_pos": [
           "free_029",
@@ -457,7 +250,7 @@
       "surface_z": 0.325
     },
     {
-      "id": "shadow_009",
+      "id": "shadow_005",
       "boxel_type": "shadow",
       "min_corner": [
         0.6751851302498242,
@@ -483,7 +276,7 @@
       "object_name": null,
       "is_occluder": false,
       "shadow_boxel_ids": [],
-      "created_by_boxel_id": "obj_003",
+      "created_by_boxel_id": "obj_009",
       "created_by_object": "target_4",
       "neighbor_ids": {
         "x_pos": [
@@ -491,12 +284,219 @@
           "free_045"
         ],
         "x_neg": [
-          "obj_001"
+          "obj_007"
         ],
         "y_pos": [],
         "y_neg": [
-          "obj_003"
+          "obj_009"
         ],
+        "z_pos": [],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325
+    },
+    {
+      "id": "obj_006",
+      "boxel_type": "object",
+      "min_corner": [
+        0.4247672952532793,
+        0.12503419765650592,
+        0.32498747624929136
+      ],
+      "max_corner": [
+        0.5751842606960931,
+        0.2754538430241263,
+        0.474990213614246
+      ],
+      "center": [
+        0.4999757779746862,
+        0.2002440203403161,
+        0.3999888449317687
+      ],
+      "extent": [
+        0.0752084827214069,
+        0.07520982268381018,
+        0.07500136868247731
+      ],
+      "volume": 0.0033939119245840724,
+      "object_name": "occluder_1",
+      "is_occluder": true,
+      "shadow_boxel_ids": [
+        "shadow_000"
+      ],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [
+          "shadow_001"
+        ],
+        "x_neg": [
+          "shadow_003"
+        ],
+        "y_pos": [
+          "shadow_000"
+        ],
+        "y_neg": [
+          "shadow_002",
+          "shadow_004"
+        ],
+        "z_pos": [
+          "free_030",
+          "free_034",
+          "free_041",
+          "free_049"
+        ],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325
+    },
+    {
+      "id": "obj_007",
+      "boxel_type": "object",
+      "min_corner": [
+        0.5247608853169449,
+        -0.1749760174339652,
+        0.324983203923797
+      ],
+      "max_corner": [
+        0.6751851302498241,
+        -0.024545862608636393,
+        0.47499042151954807
+      ],
+      "center": [
+        0.5999730077833845,
+        -0.0997609400213008,
+        0.3999868127216725
+      ],
+      "extent": [
+        0.0752121224664396,
+        0.07521507741266441,
+        0.07500360879787554
+      ],
+      "volume": 0.0033944146904387857,
+      "object_name": "occluder_2",
+      "is_occluder": true,
+      "shadow_boxel_ids": [
+        "shadow_001",
+        "shadow_002"
+      ],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [
+          "shadow_005"
+        ],
+        "x_neg": [],
+        "y_pos": [
+          "shadow_001",
+          "shadow_002"
+        ],
+        "y_neg": [
+          "obj_009"
+        ],
+        "z_pos": [
+          "free_021",
+          "free_041"
+        ],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325
+    },
+    {
+      "id": "obj_008",
+      "boxel_type": "object",
+      "min_corner": [
+        0.3249984293399084,
+        -0.2753919554360973,
+        0.3249878279364889
+      ],
+      "max_corner": [
+        0.475000449850148,
+        -0.12539065006372196,
+        0.47498985525488996
+      ],
+      "center": [
+        0.3999994395950282,
+        -0.20039130274990963,
+        0.3999888415956894
+      ],
+      "extent": [
+        0.0750010102551198,
+        0.07500065268618766,
+        0.07500101365920053
+      ],
+      "volume": 0.0033751204484298862,
+      "object_name": "occluder_3",
+      "is_occluder": true,
+      "shadow_boxel_ids": [
+        "shadow_003",
+        "shadow_004"
+      ],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [],
+        "x_neg": [],
+        "y_pos": [
+          "shadow_003",
+          "shadow_004"
+        ],
+        "y_neg": [
+          "free_053"
+        ],
+        "z_pos": [
+          "free_029",
+          "free_033"
+        ],
+        "z_neg": []
+      },
+      "on_surface": "table",
+      "surface_z": 0.325
+    },
+    {
+      "id": "obj_009",
+      "boxel_type": "object",
+      "min_corner": [
+        0.6558231509510555,
+        -0.2561590312299708,
+        0.3249841947569067
+      ],
+      "max_corner": [
+        0.7445301341743167,
+        -0.1674545661854112,
+        0.40499836454288557
+      ],
+      "center": [
+        0.7001766425626861,
+        -0.211806798707691,
+        0.36499127964989614
+      ],
+      "extent": [
+        0.0443534916116306,
+        0.044352232522279794,
+        0.04000708489298943
+      ],
+      "volume": 0.0006296079372756485,
+      "object_name": "target_4",
+      "is_occluder": true,
+      "shadow_boxel_ids": [
+        "shadow_005"
+      ],
+      "created_by_boxel_id": null,
+      "created_by_object": null,
+      "neighbor_ids": {
+        "x_pos": [
+          "free_042"
+        ],
+        "x_neg": [],
+        "y_pos": [
+          "shadow_005",
+          "obj_007"
+        ],
+        "y_neg": [],
         "z_pos": [],
         "z_neg": []
       },
@@ -1133,8 +1133,8 @@
           "free_010"
         ],
         "z_neg": [
-          "obj_001",
-          "shadow_005",
+          "shadow_001",
+          "obj_007",
           "free_038",
           "free_039"
         ]
@@ -1562,9 +1562,9 @@
           "free_015"
         ],
         "z_neg": [
-          "obj_002",
-          "shadow_007",
-          "shadow_008",
+          "shadow_003",
+          "shadow_004",
+          "obj_008",
           "free_052"
         ]
       },
@@ -1618,10 +1618,10 @@
           "free_015"
         ],
         "z_neg": [
-          "obj_000",
+          "shadow_000",
+          "shadow_003",
           "shadow_004",
-          "shadow_007",
-          "shadow_008",
+          "obj_006",
           "free_054"
         ]
       },
@@ -1781,7 +1781,7 @@
           "free_017"
         ],
         "z_neg": [
-          "obj_002",
+          "obj_008",
           "free_053"
         ]
       },
@@ -1837,9 +1837,9 @@
           "free_015"
         ],
         "z_neg": [
-          "obj_000",
+          "shadow_000",
           "shadow_004",
-          "shadow_008"
+          "obj_006"
         ]
       },
       "on_surface": null,
@@ -1890,7 +1890,7 @@
           "free_015"
         ],
         "z_neg": [
-          "shadow_004"
+          "shadow_000"
         ]
       },
       "on_surface": null,
@@ -1942,8 +1942,8 @@
           "free_026"
         ],
         "z_neg": [
-          "shadow_004",
-          "shadow_005"
+          "shadow_000",
+          "shadow_001"
         ]
       },
       "on_surface": null,
@@ -2092,7 +2092,7 @@
         ],
         "x_neg": [],
         "y_pos": [
-          "shadow_005"
+          "shadow_001"
         ],
         "y_neg": [
           "free_038"
@@ -2205,10 +2205,10 @@
           "free_015"
         ],
         "z_neg": [
-          "obj_000",
-          "obj_001",
-          "shadow_005",
-          "shadow_006"
+          "shadow_001",
+          "shadow_002",
+          "obj_006",
+          "obj_007"
         ]
       },
       "on_surface": null,
@@ -2248,7 +2248,7 @@
           "free_022"
         ],
         "x_neg": [
-          "obj_003",
+          "obj_009",
           "free_038"
         ],
         "y_pos": [
@@ -2300,7 +2300,7 @@
           "free_022"
         ],
         "x_neg": [
-          "shadow_009"
+          "shadow_005"
         ],
         "y_pos": [
           "free_045"
@@ -2403,7 +2403,7 @@
           "free_022"
         ],
         "x_neg": [
-          "shadow_009",
+          "shadow_005",
           "free_056"
         ],
         "y_pos": [],
@@ -2524,7 +2524,7 @@
           "free_026"
         ],
         "z_neg": [
-          "shadow_005",
+          "shadow_001",
           "free_046",
           "free_048",
           "free_056"
@@ -2634,9 +2634,9 @@
           "free_026"
         ],
         "z_neg": [
-          "obj_000",
-          "shadow_004",
-          "shadow_005"
+          "shadow_000",
+          "shadow_001",
+          "obj_006"
         ]
       },
       "on_surface": null,
@@ -2691,8 +2691,8 @@
           "free_026"
         ],
         "z_neg": [
-          "shadow_004",
-          "shadow_005",
+          "shadow_000",
+          "shadow_001",
           "free_048"
         ]
       },
@@ -2834,7 +2834,7 @@
           "free_031"
         ],
         "y_pos": [
-          "obj_002"
+          "obj_008"
         ],
         "y_neg": [
           "free_032"
@@ -2979,7 +2979,7 @@
           "free_039"
         ],
         "y_pos": [
-          "shadow_005"
+          "shadow_001"
         ],
         "y_neg": [
           "free_046"

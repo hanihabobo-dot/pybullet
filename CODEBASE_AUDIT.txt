@@ -285,7 +285,7 @@ Fix:   Implement ray-cast visibility check using PyBullet. Given a robot
        the planner (issue #4), but will matter once real streams are wired in.
 
 ================================================================================
-13. TWO DIVERGED VERSIONS OF BoxelTestEnv
+13. TWO DIVERGED VERSIONS OF BoxelTestEnv  [DONE]
 ================================================================================
 Where: boxel_test_env.py (~1600 lines) and boxel_env.py (~530 lines)
 What:  Two files define the same class BoxelTestEnv with different internals:
@@ -326,6 +326,27 @@ Fix:   Keep only boxel_env.py (the refactored version) and delete
        boxel_env. Ensure all features from the monolithic version are
        present in the modular one. Unify Boxel into boxel_types.py only
        and ensure all creation sites set is_occluder properly.
+
+Fixed: Kept boxel_env.py (modular version) as the sole BoxelTestEnv.
+       Moved boxel_test_env.py to archive/. Changes:
+       (1) Added update_object_positions() to boxel_env.py — the method
+           from fix #25 that syncs ObjectInfo with PyBullet poses after
+           physics steps. Called at the end of _setup_scene() after the
+           10-step settling loop.
+       (2) Changed test_full_pipeline.py to import from boxel_env instead
+           of boxel_test_env.
+       (3) Archived boxel_test_env.py — verified that no active pipeline
+           file references it (only archive/run_tamp_demo.py, already
+           archived).
+       The Boxel class is now unified in boxel_types.py. The is_occluder
+       field is present and correctly set by boxel_env.py's generate_boxels()
+       (marks objects as is_occluder=True when they cast shadow boxels).
+       The hasattr workaround in boxel_data.py is no longer needed but
+       remains harmless. Data types (ObjectInfo, Boxel, OctreeNode,
+       CameraObservation) are defined once in boxel_types.py. Shadow
+       calculation, free space generation, and visualization are in their
+       respective modules (shadow_calculator.py, free_space.py,
+       visualization.py). This also fixes #40.
 
 ================================================================================
 14. OBSOLETE EXECUTOR / PROBLEM GENERATOR / HIDDEN OBJECT SCENARIO  [DONE]
@@ -1143,7 +1164,7 @@ Fixed: Removed the secondary center-to-center distance check from both
        the object is occluded. No secondary check.
 
 ================================================================================
-40. boxel_env.py MISSING update_object_positions()
+40. boxel_env.py MISSING update_object_positions()  [DONE]
 ================================================================================
 Where: boxel_env.py (the refactored version)
 What:  Fix #25 added update_object_positions() to boxel_test_env.py, but
@@ -1158,6 +1179,12 @@ What:  Fix #25 added update_object_positions() to boxel_test_env.py, but
 Fix:   Add update_object_positions() to boxel_env.py. Or better: when
        unifying per #13, ensure all fixes from boxel_test_env.py are
        ported to the surviving version.
+
+Fixed: Resolved as part of #13 unification. update_object_positions()
+       added to boxel_env.py with the same implementation from fix #25.
+       Called at end of _setup_scene() after the 10-step settling loop.
+       test_full_pipeline.py's existing calls to env.update_object_positions()
+       (after 50-step settling and after push physics) work unchanged.
 
 ================================================================================
 41. NO VERIFICATION THAT PUSH CLEARED LINE OF SIGHT
@@ -1351,8 +1378,8 @@ The IMPLEMENTATION shortcuts every geometric step:
     targets stale AABB
 
 The CODEBASE has significant organizational debt:
-  - Two diverged BoxelTestEnv with Boxel field mismatch (#13);
-    refactored version missing update_object_positions (#40)
+  - Two diverged BoxelTestEnv with Boxel field mismatch (#13 — done);
+    refactored version missing update_object_positions (#40 — done)
   - Obsolete executor/problem_generator pipeline (#14 — done)
   - PDDL fact generator produces facts for wrong domain (#15 — done)
   - Fields that claim to be computed but are always default (#16 — done)
@@ -1372,7 +1399,7 @@ The CODEBASE has significant organizational debt:
   - KeyboardInterrupt silently swallowed (#45 — done)
 
 Priority order for fixing:
-  1. Archive stale files, unify BoxelTestEnv (#11 — done, #13, #14 — done, #19 — done, #40)
+  1. Archive stale files, unify BoxelTestEnv (#11 — done, #13 — done, #14 — done, #19 — done, #40 — done)
   2. Clean BoxelData: remove unused fields (#33), fix is_occluder (#42)
   3. Refactor PDDL domain to model capabilities, not solution (#32)
   4. Wire BoxelStreams into the planner — THE critical fix (#20, #4, #12)
