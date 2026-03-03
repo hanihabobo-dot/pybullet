@@ -52,17 +52,17 @@
     free_054
     free_055
     free_056
-    obj_000
-    obj_001
-    obj_002
-    obj_003
+    obj_006
+    obj_007
+    obj_008
+    obj_009
     q_home
+    shadow_000
+    shadow_001
+    shadow_002
+    shadow_003
     shadow_004
     shadow_005
-    shadow_006
-    shadow_007
-    shadow_008
-    shadow_009
     target_3
   )
 
@@ -114,25 +114,25 @@
     (Boxel free_054)
     (Boxel free_055)
     (Boxel free_056)
-    (Boxel obj_000)
-    (Boxel obj_001)
-    (Boxel obj_002)
-    (Boxel obj_003)
+    (Boxel obj_006)
+    (Boxel obj_007)
+    (Boxel obj_008)
+    (Boxel obj_009)
+    (Boxel shadow_000)
+    (Boxel shadow_001)
+    (Boxel shadow_002)
+    (Boxel shadow_003)
     (Boxel shadow_004)
     (Boxel shadow_005)
-    (Boxel shadow_006)
-    (Boxel shadow_007)
-    (Boxel shadow_008)
-    (Boxel shadow_009)
     (Config q_home)
     (Obj target_3)
     (at_config q_home)
-    (casts_shadow obj_000 shadow_004)
-    (casts_shadow obj_001 shadow_005)
-    (casts_shadow obj_001 shadow_006)
-    (casts_shadow obj_002 shadow_007)
-    (casts_shadow obj_002 shadow_008)
-    (casts_shadow obj_003 shadow_009)
+    (casts_shadow obj_006 shadow_000)
+    (casts_shadow obj_007 shadow_001)
+    (casts_shadow obj_007 shadow_002)
+    (casts_shadow obj_008 shadow_003)
+    (casts_shadow obj_008 shadow_004)
+    (casts_shadow obj_009 shadow_005)
     (handempty)
     (is_free_space free_010)
     (is_free_space free_011)
@@ -181,16 +181,16 @@
     (is_free_space free_054)
     (is_free_space free_055)
     (is_free_space free_056)
-    (is_occluder obj_000)
-    (is_occluder obj_001)
-    (is_occluder obj_002)
-    (is_occluder obj_003)
+    (is_object obj_006)
+    (is_object obj_007)
+    (is_object obj_008)
+    (is_object obj_009)
+    (is_shadow shadow_000)
+    (is_shadow shadow_001)
+    (is_shadow shadow_002)
+    (is_shadow shadow_003)
     (is_shadow shadow_004)
     (is_shadow shadow_005)
-    (is_shadow shadow_006)
-    (is_shadow shadow_007)
-    (is_shadow shadow_008)
-    (is_shadow shadow_009)
     (obj_at_boxel_KIF target_3 free_010)
     (obj_at_boxel_KIF target_3 free_011)
     (obj_at_boxel_KIF target_3 free_012)
@@ -238,14 +238,14 @@
     (obj_at_boxel_KIF target_3 free_054)
     (obj_at_boxel_KIF target_3 free_055)
     (obj_at_boxel_KIF target_3 free_056)
-    (obj_at_boxel_KIF target_3 obj_000)
-    (obj_at_boxel_KIF target_3 obj_001)
-    (obj_at_boxel_KIF target_3 obj_002)
-    (obj_at_boxel_KIF target_3 obj_003)
-    (occluder_blocking obj_000)
-    (occluder_blocking obj_001)
-    (occluder_blocking obj_002)
-    (occluder_blocking obj_003)
+    (obj_at_boxel_KIF target_3 obj_006)
+    (obj_at_boxel_KIF target_3 obj_007)
+    (obj_at_boxel_KIF target_3 obj_008)
+    (obj_at_boxel_KIF target_3 obj_009)
+    (occluder_blocking obj_006)
+    (occluder_blocking obj_007)
+    (occluder_blocking obj_008)
+    (occluder_blocking obj_009)
   )
 
   (:goal (holding target_3))

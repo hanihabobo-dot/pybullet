@@ -279,7 +279,7 @@ class BoxelRegistry:
             if boxel.boxel_type == BoxelType.SHADOW:
                 facts.append(f"(is_shadow {boxel.id})")
             elif boxel.boxel_type == BoxelType.OBJECT:
-                facts.append(f"(is_occluder {boxel.id})")
+                facts.append(f"(is_object {boxel.id})")
             elif boxel.boxel_type == BoxelType.FREE_SPACE:
                 facts.append(f"(is_free_space {boxel.id})")
 

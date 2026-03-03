@@ -918,18 +918,10 @@ What:  The domain is tailored to the hidden-object scenario rather than
          - Cannot sense generic "unknown region" — the domain assumes the
            occlusion model (shadow vs occluder)
 
-       Additionally, is_occluder is applied to ALL BoxelType.OBJECT boxels —
-       both actual occluders and targets. The planner (create_problem()) and
-       generate_pddl_facts() both mark every object boxel as (is_occluder ...),
-       so the predicate really means "is a physical object", not "is an
-       occluder". The name is misleading and should be is_object or similar.
-       This cannot be fixed by gating on BoxelData.is_occluder because that
-       field is always False (issue #13: boxel_test_env.py's Boxel class
-       lacks is_occluder, so the hasattr fallback in create_boxel_registry
-       sets it to False for every boxel).
-
-       Predicates like occluder_blocking, occluder_aside, casts_shadow, is_occluder
-       are scenario-specific. They encode the hidden-object solution structure.
+       Note: is_occluder was renamed to is_object in #42 (done). The
+       remaining scenario-specific predicates are:
+       occluder_blocking, occluder_aside, casts_shadow.
+       These encode the hidden-object solution structure.
        The domain is essentially hardcoded — it cannot be reused for:
          - Rearrangement (move object from boxel A to boxel B, no occlusion)
          - General search (sense any region, not just shadow regions)
@@ -1208,37 +1200,40 @@ Fix:   After push + physics settling, cast a quick verification ray from
        still blocks, either push again or log a warning and replan.
 
 ================================================================================
-42. generate_pddl_facts IS INCONSISTENT WITH _build_init FOR OBJECT BOXELS
+42. PDDL PREDICATE is_occluder MISNAMES WHAT IT MEANS  [DONE]
 ================================================================================
-Where: boxel_data.py lines 295-296, pddlstream_planner.py lines 283-290
-What:  Both generate_pddl_facts() and _build_init() mark ALL BoxelType.OBJECT
-       boxels with (is_occluder ...), regardless of whether the object is
-       actually an occluder or a target.
+Where: domain_pddlstream.pddl, stream.pddl, pddlstream_planner.py, boxel_data.py
+What:  The PDDL predicate (is_occluder ?b) was applied to ALL
+       BoxelType.OBJECT boxels — occluders AND targets alike. This is
+       actually CORRECT behavior: every physical object can occlude
+       other regions and cast shadows. The predicate really means
+       "is a physical object", not "is specifically an occluder."
 
-       generate_pddl_facts() line 296:
-         if boxel.boxel_type == BoxelType.OBJECT:
-             facts.append(f"(is_occluder {boxel.id})")
+       The issue is naming, not logic. The domain should not model
+       "occluder" as a distinct concept — all objects are objects.
+       An object that happens to block a view is just an object in the
+       way, not a special type. The is_occluder name baked a scenario-
+       specific interpretation into a general-purpose predicate.
 
-       _build_init() line 284:
-         elif boxel.boxel_type == BoxelType.OBJECT:
-             init.append(('is_occluder', boxel.id))
+Fix:   Rename the PDDL predicate from (is_occluder ...) to (is_object ...).
+       This matches the actual semantics: it marks physical object boxels.
+       The Python-level BoxelData.is_occluder field (which tracks whether
+       an object casts shadows) is a separate concern and stays as-is.
 
-       This is because BoxelData.is_occluder is always False (issue #13:
-       the pipeline's Boxel class lacks the field), and the code never
-       checks it — it uses boxel_type == OBJECT as a proxy.
-
-       Result: target boxels (target_1, target_2, ...) are marked as
-       occluders. The planner could generate push_aside actions for
-       target boxels. push_aside's precondition (is_occluder ?occ) is
-       satisfied. This was noted in #32 but the specific code paths
-       in generate_pddl_facts() and _build_init() were not identified.
-
-Fix:   Check BoxelData.is_occluder (once #13 is fixed so the field is
-       populated correctly) and only emit (is_occluder ...) for actual
-       occluders. Or rename the predicate to (is_object ...) to match
-       its actual semantics.
-
-       DECISION: rename to (is_object ...) — matches the actual semantics.
+Fixed: Renamed (is_occluder ?b) to (is_object ?b) in six locations:
+       (1) domain_pddlstream.pddl — predicate declaration and push_aside
+           precondition.
+       (2) stream.pddl — sample-push-config domain condition.
+       (3) pddlstream_planner.py _build_init() — init fact generation.
+       (4) boxel_data.py generate_pddl_facts() — PDDL fact output.
+       (5) streams.py — sample_push_config() docstring (kept in sync
+           with the actual stream.pddl declaration).
+       (6) pddl/problem_debug.pddl — generated debug file.
+       The predicate now says what it means: this boxel is a physical
+       object. No filtering by "is it really an occluder?" is needed
+       because every object IS an object. The broader domain refactoring
+       (renaming occluder_blocking/occluder_aside, generalizing actions)
+       remains in #32.
 
 ================================================================================
 43. push_aside TELEPORTATION RESETS ORIENTATION TO IDENTITY  [DONE]
@@ -1385,8 +1380,8 @@ The CODEBASE has significant organizational debt:
   - Fields that claim to be computed but are always default (#16 — done)
   - BoxelData carries 5 unused belief-state fields serialized to JSON
     but never managed (#33 — done) — same anti-pattern as removed #16 fields
-  - generate_pddl_facts AND _build_init both mark target boxels as
-    (is_occluder) because is_occluder field is always False (#42, #32)
+  - PDDL predicate is_occluder renamed to is_object (#42 — done);
+    broader occluder-specific predicate cleanup remains in #32
   - Magic constants duplicated across files (#18, #31)
   - Stale files, temp copies, and unclear entry points (#11 — done, #19 — done)
   - config.py exists but is never used; paths hardcoded (#30 — not an issue)
@@ -1400,7 +1395,7 @@ The CODEBASE has significant organizational debt:
 
 Priority order for fixing:
   1. Archive stale files, unify BoxelTestEnv (#11 — done, #13 — done, #14 — done, #19 — done, #40 — done)
-  2. Clean BoxelData: remove unused fields (#33), fix is_occluder (#42)
+  2. Clean BoxelData: remove unused fields (#33 — done), rename is_occluder predicate (#42 — done)
   3. Refactor PDDL domain to model capabilities, not solution (#32)
   4. Wire BoxelStreams into the planner — THE critical fix (#20, #4, #12)
   5. Fix execution to use plan parameters (#6, #7)

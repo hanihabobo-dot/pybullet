@@ -21,7 +21,7 @@
     
     ;; --- Boxel structure ---
     (is_shadow ?b)           ; This boxel is a shadow region
-    (is_occluder ?b)         ; This boxel is an occluder object
+    (is_object ?b)           ; This boxel is a physical object
     (is_free_space ?b)       ; This boxel is free space
     (casts_shadow ?occ ?shd) ; Occluder ?occ casts shadow ?shd
     
@@ -59,7 +59,7 @@
     :precondition (and
       (Boxel ?occ)
       (Config ?q)
-      (is_occluder ?occ)
+      (is_object ?occ)
       (occluder_blocking ?occ)
       (at_config ?q)
       (push_config ?occ ?q)

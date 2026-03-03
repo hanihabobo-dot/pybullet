@@ -4,7 +4,7 @@
   ;; Certifies config_for_boxel so the move action knows the destination
   (:stream sample-push-config
     :inputs (?occ)
-    :domain (is_occluder ?occ)
+    :domain (is_object ?occ)
     :outputs (?q)
     :certified (and (Config ?q) (push_config ?occ ?q) (config_for_boxel ?q ?occ))
   )

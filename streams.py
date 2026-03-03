@@ -109,7 +109,7 @@ class BoxelStreams:
         PDDLStream declaration:
             (:stream sample-push-config
               :inputs (?occ)
-              :domain (is_occluder ?occ)
+              :domain (is_object ?occ)
               :outputs (?q)
               :certified (and (Config ?q) (push_config ?occ ?q)))
         

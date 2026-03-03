@@ -281,7 +281,7 @@ class PDDLStreamPlanner:
                         init.append(('obj_at_boxel_KIF', obj, boxel.id))
 
             elif boxel.boxel_type == BoxelType.OBJECT:
-                init.append(('is_occluder', boxel.id))
+                init.append(('is_object', boxel.id))
                 if boxel.id not in moved_occluders:
                     init.append(('occluder_blocking', boxel.id))
                 else:
