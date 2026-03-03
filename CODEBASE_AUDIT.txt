@@ -1124,7 +1124,7 @@ Fix:   Check BoxelData.is_occluder (once #13 is fixed so the field is
        DECISION: rename to (is_object ...) — matches the actual semantics.
 
 ================================================================================
-43. push_aside TELEPORTATION RESETS ORIENTATION TO IDENTITY
+43. push_aside TELEPORTATION RESETS ORIENTATION TO IDENTITY  [DONE]
 ================================================================================
 Where: test_full_pipeline.py line 268-269
 What:  p.resetBasePositionAndOrientation(occ_pybullet_id, new_pos.tolist(),
@@ -1141,6 +1141,14 @@ What:  p.resetBasePositionAndOrientation(occ_pybullet_id, new_pos.tolist(),
 Fix:   Read the current orientation before pushing and preserve it:
          cur_pos, cur_orn = p.getBasePositionAndOrientation(occ_pybullet_id)
          p.resetBasePositionAndOrientation(occ_pybullet_id, new_pos, cur_orn)
+
+Fixed: Before teleporting the occluder, the current orientation is now
+       read via p.getBasePositionAndOrientation() and passed back to
+       p.resetBasePositionAndOrientation() instead of the hardcoded
+       identity quaternion [0,0,0,1]. This preserves any rotation the
+       object acquired during physics settling. The AABB, shadow
+       calculations, and downstream ray-casting all remain consistent
+       with the object's actual orientation.
 
 ================================================================================
 44. SHADOWS NOT RECOMPUTED AFTER PUSH — STALE REGISTRY
@@ -1231,8 +1239,8 @@ The IMPLEMENTATION shortcuts every geometric step:
   - Execution uses type-dependent offsets; pick/push ignore plan (#6, #7)
   - Sensing uses fixed camera regardless of robot config (#36) — the
     plan moves the robot to a sensing config, but execution ignores it
-  - Pushing is teleportation; resets orientation; no post-push
-    verification (#3, #41, #43)
+  - Pushing is teleportation; no post-push
+    verification (#3, #41); orientation reset fixed (#43 — done)
   - Push skips silently if occluder missing from mapping (#22 — done)
   - Push collision check misses hidden targets (not in boxel_to_pybullet
     because generate_boxels skips invisible objects) and robot (#23)

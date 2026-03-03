@@ -264,8 +264,9 @@ def main(gui=True):
                         break
 
                     new_pos = occ_pos + push_disp
+                    _, cur_orn = p.getBasePositionAndOrientation(occ_pybullet_id)
                     p.resetBasePositionAndOrientation(
-                        occ_pybullet_id, new_pos.tolist(), [0, 0, 0, 1]
+                        occ_pybullet_id, new_pos.tolist(), cur_orn
                     )
                     
                     for _ in range(30):
