@@ -147,85 +147,33 @@ Fixed: Created robot_utils.py as the single source of truth for all Panda
        move_robot_smooth (motor interpolation), open_gripper, close_gripper.
 
 ================================================================================
-32. PDDL DOMAIN MODELS SOLUTION, NOT ROBOT CAPABILITIES  [REOPENED]
+32. PDDL DOMAIN MODELS SOLUTION, NOT ROBOT CAPABILITIES
 ================================================================================
 Where: pddl/domain_pddlstream.pddl, test_full_pipeline.py, stream.pddl
 
-Previously done (cosmetic):
-       Renamed push_aside → push, sense_shadow → sense. Replaced
-       scenario-specific predicates (occluder_blocking, occluder_aside,
-       casts_shadow) with spatial predicates (blocks_view, view_clear).
-       These were naming improvements, not structural fixes.
+  PHASE 1 — Track occluder positions:  [DONE]
+       _build_init() now adds (obj_at_boxel ?occ ?occ) for every
+       OBJECT boxel not in moved_occluders. generate_pddl_facts()
+       updated to match.
 
-What's STILL wrong:
+  PHASE 2 — Rewrite push as spatial + derived predicates:  [DONE]
+       Push is now push(?obj ?b_from ?b_to ?q_start ?q_end ?traj)
+       with purely spatial effects (obj moves, config updates).
+       blocks_view and view_clear are derived predicates computed
+       from obj_at_boxel + static blocks_view_at geometry facts.
+       Push stream outputs destination + configs + trajectory.
+       Stream domain uses is_object (static) for both inputs;
+       the push action precondition (obj_at_boxel ?obj ?b_from)
+       enforces the fluent constraint at plan time.
 
-  (A) push(?obj ?region ?q) is "push to clear a view", not a capability.
-       The action does NOT track where the object moves. It has no
-       ?b_from or ?b_to. Its effects only flip view predicates:
-         (not (blocks_view ?obj ?region))
-         (view_clear ?region)
-       The object's position is never updated — no (obj_at_boxel ?obj ...)
-       change. Push is "clear the camera's line of sight," not "move an
-       object from here to there." That is the scenario encoded as an action.
+  (B) STILL WRONG: Execution embeds sensing inside push.
+       verify_push_cleared_view() casts rays from the camera after
+       every push to check if the view was cleared — this is a
+       sensing action that the planner never planned. It hardcodes
+       that every push must be followed by a view check. The planner
+       should decide what to verify and when.
 
-  (B) Execution embeds sensing inside push. verify_push_cleared_view()
-       casts rays from the camera after every push to check if the view
-       was cleared — this is a sensing action that the planner never
-       planned. It hardcodes that every push must be followed by a
-       view check. The planner should decide what to verify and when.
-
-  (C) Occluder positions are not tracked. The init state has no
-       (obj_at_boxel ?occ ?b) for occluders, so the planner cannot
-       reason about where occluders are or where they will end up.
-
-Fix:   Make push a SPATIAL CAPABILITY — "move object from A to B."
-
-       No other open issues need to be solved first. #20 (wiring
-       BoxelStreams) is independent — the domain structure can change
-       while generators still produce string placeholders. #5, #6,
-       #7, #44 are all independent.
-
-       Break into three phases to avoid regressions:
-
-  PHASE 1 — Track occluder positions (additive, nothing breaks):
-       Add (obj_at_boxel ?occ ?b) for every occluder in the init
-       state. Currently only the target's position is tracked. No
-       action uses this yet, so nothing changes in behavior.
-
-  PHASE 2 — Rewrite push as spatial + derived predicates:
-
-       Push action requirements:
-         - Parameters: the object, where it is now, where it should
-           go, the robot start config, end config, and the push
-           trajectory. Pushing is a MOTION — the robot moves while
-           contacting the object.
-         - Preconditions: object must be at source, robot at start
-           config, valid push trajectory exists, hand empty.
-         - Effects: PURELY SPATIAL. Object moves from source to
-           destination. Robot config updates from start to end.
-           No view predicates.
-
-       Derived predicates (PDDLStream/Fast Downward support these):
-         - blocks_view(?obj, ?region): derived from object positions.
-           True when ?obj is at a location that geometrically blocks
-           the camera's view to ?region.
-         - view_clear(?region): derived as the negation — true when
-           no object blocks the view to ?region.
-         Push does NOT mention views at all. The planner automatically
-         computes view state from spatial positions.
-
-       Push stream requirements:
-         - Input: the object and its current location.
-         - Output: destination, robot start config, end config,
-           and push trajectory.
-         - The stream computes WHERE and HOW to push based on
-           geometry. Destination is an output, not hardcoded.
-
-       Execution:
-         - Push moves the object from source to destination.
-         - Keep verify_push_cleared_view() as a safety net for now.
-
-  PHASE 3 — Move verification from push to sense:
+  PHASE 3 — Move verification from push to sense:  [TODO]
        Remove verify_push_cleared_view() from push execution. Sense
        needs a third outcome: "view still blocked" (rays hit the
        occluder, not the target and not empty space). If blocked,
@@ -314,6 +262,95 @@ Fix:   After pushing, either:
        means rays may not cover the right area.
 
 ================================================================================
+45. OCCLUDER POSITION DESYNCS AFTER FAILED PUSH
+================================================================================
+Where: test_full_pipeline.py (push execution + replanning loop)
+What:  When verify_push_cleared_view() fails, the occluder IS physically
+       moved in PyBullet (via teleportation + physics settling), but
+       belief.mark_occluder_moved() is NOT called. On replan the init
+       still has (obj_at_boxel occ occ) and (blocks_view_at occ occ shadow),
+       so the planner plans to push the same occluder "from its original
+       position" again. But execution reads the actual PyBullet position
+       (via boxel_to_pybullet), which has drifted. Additionally, robot arm
+       movements during intervening move/push actions step the physics
+       simulation, which can further displace previously-pushed objects
+       through collisions or settling. The result is objects appearing to
+       "return" to near their original positions or moving unpredictably
+       between replans.
+
+       Observed: occluder_2 (obj_007) was pushed to [0.42,-0.08] in
+       Plan #8 (failed verification). By Plan #11, its physical position
+       had drifted to [0.61,-0.02] — nearly back to original [0.60,-0.10].
+       It was then pushed again from that drifted position.
+
+================================================================================
+46. PLANNER CANNOT DETECT PHYSICALLY CLEAR VIEWS
+================================================================================
+Where: pddlstream_planner.py (_build_init), test_full_pipeline.py
+What:  After multiple push attempts, occluders may be physically displaced
+       enough that all targets become visible (confirmed by user observing
+       the PyBullet GUI). But the planner keeps planning push actions
+       because its symbolic state still shows views as blocked:
+         - Occluders that failed verification are never marked as moved
+         - (obj_at_boxel occ occ) remains in the init
+         - Derived blocks_view(occ, shadow) remains true
+         - Derived view_clear(shadow) remains false
+       The planner has no mechanism to discover that a view is physically
+       clear without going through the mark_occluder_moved path.
+
+       Observed: Plans #12-25 repeatedly attempted to push obj_006
+       (occluder_1). compute_push_displacement() returned None every
+       time (object was already at the table edge from Plan #10's
+       partial push). The planner kept generating the same plan because
+       its symbolic state never changed. Meanwhile, all target objects
+       were visually unobstructed in the simulation.
+
+       This is related to #44 (stale registry) and #32 Phase 3 (moving
+       verification to sense). The core issue: the planner's only path
+       to learning "view is clear" is mark_occluder_moved(), which
+       requires push verification to succeed — a catch-22 when the view
+       IS clear but verification logic doesn't know it.
+
+================================================================================
+47. PUSH STREAM DOMAIN USES is_object AS HACK TO BIND ?b_from
+================================================================================
+Where: pddl/stream.pddl, pddlstream_planner.py, streams.py
+What:  The push stream's domain condition is:
+         (and (is_object ?obj) (is_object ?b_from))
+       ?b_from is a LOCATION (the boxel where the object sits), not an
+       object. The correct condition would be (obj_at_boxel ?obj ?b_from),
+       but PDDLStream cannot bind stream inputs from fluent predicates
+       (obj_at_boxel appears in action effects). Using is_object exploits
+       the coincidence that occluders initially sit at their own
+       object-typed boxels. The generators guard against invalid pairs
+       (b_from != occluder_id → return), and the push action precondition
+       (obj_at_boxel ?obj ?b_from) enforces the real constraint at plan
+       time.
+
+       Problems:
+         - Semantically wrong: a location is not "an object."
+         - Over-instantiates the stream for all object×object pairs.
+         - Breaks if an occluder is pushed to a non-object boxel and
+           needs to be pushed again from there.
+
+Fix:   Use PDDLStream's fluent stream support. Declare obj_at_boxel as
+       a fluent predicate in the stream definition so PDDLStream can
+       bind ?b_from from the current state at each planning iteration:
+
+         (:stream sample-push-config
+           :inputs (?obj ?b_from)
+           :domain (is_object ?obj)
+           :fluents (obj_at_boxel)
+           :outputs (?b_to ?q_start ?q_end ?traj)
+           :certified (...))
+
+       This requires calling compile_fluent_streams() from
+       pddlstream.language.fluent when building the PDDLStream problem.
+       The stream generator would receive the current obj_at_boxel facts
+       as an extra argument and bind ?b_from correctly from the current
+       state — no hack, no over-instantiation.
+
+================================================================================
 FOR LATER
 ================================================================================
 - Incremental boxel recomputation after actions (without redoing everything
@@ -325,12 +362,20 @@ FOR LATER
 ================================================================================
 SUMMARY
 ================================================================================
-The PLANNING ARCHITECTURE still models the solution, not capabilities:
-  - Push action is "clear a view", not "move an object" (#32 — reopened)
-  - Push execution embeds sensing (verify_push_cleared_view) (#32, #41)
-  - Occluder positions not tracked in planner state (#32)
+The PLANNING ARCHITECTURE models spatial capabilities:
+  - Push is "move object from A to B" with derived views (#32 Ph1+2 done)
+  - Push execution still embeds sensing (#32 Ph3, #41)
+  - Occluder positions tracked in planner state (#32 Ph1 — done)
   - Sensing uses fixed camera correctly (#36 — done)
   - KIF fluents for partial observability are sound
+
+The STATE SYNCHRONIZATION between planner and physics is broken:
+  - Failed push moves object physically but not symbolically (#45)
+  - Planner cannot detect that views are already clear (#46)
+  - Shadow/registry not recomputed after push (#44)
+  - These three issues interact: #45 causes desync, #44 prevents
+    registry from reflecting reality, #46 means the planner loops
+    endlessly on stale symbolic state
 
 The IMPLEMENTATION shortcuts every geometric step:
   - Streams produce labels instead of geometry (#4 — done, #20 to wire)
@@ -338,14 +383,14 @@ The IMPLEMENTATION shortcuts every geometric step:
   - Pushing is teleportation (#32 execution, FOR LATER)
   - Visibility check removed (was stub; no longer needed) (#12 — resolved)
   - Heuristic IK produces meaningless configs (#26 — done, now flagged+warned)
-  - Shadow/registry not recomputed after push (#44)
 
 The CODEBASE organizational debt is largely resolved:
   - Duplicate robot constants and utility functions (#31 — done)
 
 Priority order for remaining fixes:
-  1. Fix push to model spatial movement, not view-clearing (#32)
+  1. Move verification from push to sense (#32 Phase 3)
   2. Wire BoxelStreams into the planner (#20)
-  3. Fix execution to use plan parameters (#6, #7)
-  4. Fix stale registry after push (#44)
-  5. Add collision-free motion planning (#5)
+  3. Fix state desync after failed push (#45, #46)
+  4. Fix execution to use plan parameters (#6, #7)
+  5. Fix stale registry after push (#44)
+  6. Add collision-free motion planning (#5)

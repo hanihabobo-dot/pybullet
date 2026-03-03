@@ -9,7 +9,7 @@ Sensing uses the fixed scene camera (not the robot's end-effector), so there
 is no sensing_config stream. See issue #36 in CODEBASE_AUDIT.txt.
 
 Streams:
-    - sample_push_config: Generate robot configs to push an occluder
+    - sample_push_config: Generate push solutions (destination, configs, trajectory)
     - sample_grasp: Generate grasp poses for an object
     - plan_motion: Plan collision-free trajectory between configs
     - compute_kin_solution: Compute IK for pick/place
@@ -101,47 +101,73 @@ class BoxelStreams:
         self.ik_residual_threshold = 1e-4
     
     # =========================================================================
-    # STREAM: Sample Push Configuration (for moving occluders aside)
+    # STREAM: Sample Push Solution (spatial push planning)
     # =========================================================================
-    def sample_push_config(self, occluder_id: str) -> Iterator[Tuple[RobotConfig]]:
+    def sample_push_config(self, occluder_id: str, b_from: str) -> Iterator[Tuple]:
         """
-        Generate robot configurations for pushing an occluder aside.
-        
-        PDDLStream declaration:
+        Generate push solutions: destination, start/end configs, and trajectory.
+
+        PDDLStream declaration (see pddl/stream.pddl):
             (:stream sample-push-config
-              :inputs (?occ)
-              :domain (is_object ?occ)
-              :outputs (?q)
-              :certified (and (Config ?q) (push_config ?occ ?q)))
-        
+              :inputs (?obj ?b_from)
+              :domain (and (is_object ?obj) (obj_at_boxel ?obj ?b_from))
+              :outputs (?b_to ?q_start ?q_end ?traj)
+              :certified (and (Boxel ?b_to) (Config ?q_start) (Config ?q_end)
+                              (Trajectory ?traj)
+                              (push_solution ?obj ?b_from ?b_to ?q_start ?q_end ?traj)
+                              (config_for_boxel ?q_start ?b_from)))
+
         Args:
             occluder_id: ID of the occluder boxel to push
-            
+            b_from: ID of the boxel where the occluder currently is
+                    (bound from is_object; only valid when b_from == occluder_id)
+
         Yields:
-            Tuples of (config,) that can push the occluder
+            Tuples of (b_to, q_start, q_end, traj) for pushing the occluder
         """
+        if b_from != occluder_id:
+            return
         boxel = self.registry.get_boxel(occluder_id)
         if boxel is None:
             return
-        
-        # Generate push positions (approach from the side)
+
         occluder_center = boxel.center
-        
+
         for angle in np.linspace(0, 2*np.pi, 4, endpoint=False):
-            # Position to the side of the occluder
             push_pos = occluder_center + np.array([
                 0.15 * np.cos(angle),
                 0.15 * np.sin(angle),
-                0.1  # Slightly above
+                0.1
             ])
-            
-            # Compute IK
-            config = self._compute_sensing_ik(push_pos, occluder_center)
-            
-            if config is not None:
-                self._config_counter += 1
-                config.name = f"q_push_{occluder_id}_{self._config_counter}"
-                yield (config,)
+
+            q_start_config = self._compute_sensing_ik(push_pos, occluder_center)
+            if q_start_config is None:
+                continue
+
+            self._config_counter += 1
+            q_start_config.name = f"q_push_start_{occluder_id}_{self._config_counter}"
+
+            # Push destination: offset along the push direction from the occluder
+            push_direction = np.array([np.cos(angle), np.sin(angle), 0.0])
+            push_dist = np.max(boxel.extent[:2]) + 0.10
+            dest_center = occluder_center + push_direction * push_dist
+            dest_pos = dest_center + np.array([0.0, 0.0, 0.1])
+            q_end_config = self._compute_sensing_ik(dest_pos, dest_center)
+            if q_end_config is None:
+                continue
+
+            self._config_counter += 1
+            q_end_config.name = f"q_push_end_{occluder_id}_{self._config_counter}"
+
+            self._traj_counter += 1
+            traj = Trajectory(
+                waypoints=[q_start_config, q_end_config],
+                name=f"traj_push_{occluder_id}_{self._traj_counter}"
+            )
+
+            b_to_name = f"push_dest_{occluder_id}_{self._config_counter}"
+
+            yield (b_to_name, q_start_config, q_end_config, traj)
     
     def _compute_sensing_ik(self, ee_pos: np.ndarray, 
                             look_at: np.ndarray) -> Optional[RobotConfig]:

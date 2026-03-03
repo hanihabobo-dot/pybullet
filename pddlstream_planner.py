@@ -86,16 +86,33 @@ class PDDLStreamPlanner:
             'compute-kin': from_gen_fn(self._gen_kin_solution),
         }
     
-    def _gen_push_config(self, occluder_id: str):
-        """Generator for push configurations (to move occluder aside)."""
+    def _gen_push_config(self, occluder_id: str, b_from: str):
+        """
+        Generator for push solutions (destination + configs + trajectory).
+
+        Matches stream signature: inputs (?obj ?b_from), outputs (?b_to ?q_start ?q_end ?traj).
+        Currently produces string placeholders; real geometry comes from BoxelStreams (#20).
+
+        The stream domain binds ?b_from to all is_object boxels (static).
+        Only the pair where b_from matches the occluder's own boxel is valid;
+        the push action precondition (obj_at_boxel ?obj ?b_from) filters the rest.
+        We skip invalid pairs here to avoid wasted generator calls.
+        """
+        if b_from != occluder_id:
+            return
         boxel = self.registry.get_boxel(occluder_id)
         if boxel is None:
             return
         
         for i in range(2):
             self._config_count += 1
-            config_name = f"q_push_{occluder_id}_{self._config_count}"
-            yield (config_name,)
+            self._traj_count += 1
+            count = self._config_count
+            b_to = f"push_dest_{occluder_id}_{count}"
+            q_start = f"q_push_start_{occluder_id}_{count}"
+            q_end = f"q_push_end_{occluder_id}_{count}"
+            traj = f"traj_push_{occluder_id}_{self._traj_count}"
+            yield (b_to, q_start, q_end, traj)
     
     def _gen_grasp(self, obj_id: str):
         """Generator for grasp poses."""
@@ -165,7 +182,7 @@ class PDDLStreamPlanner:
         planner receives, without running PDDLStream. The output file matches
         domain_pddlstream.pddl's untyped format.
 
-        Note: stream-certified predicates (push_config, kin_solution, etc.)
+        Note: stream-certified predicates (push_solution, kin_solution, etc.)
         are populated at runtime by PDDLStream streams and will NOT appear in
         this file. The problem is therefore not solvable by a plain PDDL
         planner — it's a snapshot of the static init state for inspection.
@@ -272,6 +289,8 @@ class PDDLStreamPlanner:
 
             elif boxel.boxel_type == BoxelType.OBJECT:
                 init.append(('is_object', boxel.id))
+                if boxel.id not in moved_occluders:
+                    init.append(('obj_at_boxel', boxel.id, boxel.id))
                 for obj in target_objects:
                     init.append(('obj_at_boxel_KIF', obj, boxel.id))
 
@@ -280,21 +299,19 @@ class PDDLStreamPlanner:
                 for obj in target_objects:
                     init.append(('obj_at_boxel_KIF', obj, boxel.id))
 
+        # Static geometric facts: blocks_view_at(occ, occ_boxel, shadow).
+        # Always added regardless of moved status — they describe geometry,
+        # not current state. The derived predicate blocks_view combines these
+        # with obj_at_boxel to determine actual view blockage.
         if self.shadow_occluder_map:
             for shadow_id, occluder_id in self.shadow_occluder_map.items():
-                if occluder_id in moved_occluders:
-                    init.append(('view_clear', shadow_id))
-                else:
-                    init.append(('blocks_view', occluder_id, shadow_id))
+                init.append(('blocks_view_at', occluder_id, occluder_id, shadow_id))
         else:
             for shadow_id in shadows:
                 shadow_boxel = self.registry.get_boxel(shadow_id)
                 if shadow_boxel and shadow_boxel.created_by_boxel_id:
                     occ_id = shadow_boxel.created_by_boxel_id
-                    if occ_id in moved_occluders:
-                        init.append(('view_clear', shadow_id))
-                    else:
-                        init.append(('blocks_view', occ_id, shadow_id))
+                    init.append(('blocks_view_at', occ_id, occ_id, shadow_id))
 
         for obj in target_objects:
             init.append(('Obj', obj))

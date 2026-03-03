@@ -1,17 +1,21 @@
 ;; =============================================================================
-;; Semantic Boxel TAMP Domain - PDDLStream Compatible (Untyped, No Derived)
+;; Semantic Boxel TAMP Domain - PDDLStream Compatible (Untyped)
 ;; =============================================================================
 ;; 
 ;; Models the robot's CAPABILITIES (push, sense, move, pick, place) rather
 ;; than any specific scenario. Scenario-specific spatial relationships
 ;; (e.g., which objects block which regions) are expressed as problem-level
-;; init facts using generic predicates like blocks_view.
+;; init facts using generic predicates like blocks_view_at.
+;;
+;; Uses derived predicates for visibility: blocks_view and view_clear are
+;; computed automatically from object positions — actions only need to
+;; update spatial state (obj_at_boxel), not view predicates.
 ;;
 ;; Uses Know-If fluents for partial observability.
 ;; Object types are encoded as predicates: (Boxel ?x), (Obj ?x), etc.
 
 (define (domain boxel-tamp)
-  (:requirements :strips :equality)
+  (:requirements :strips :equality :derived-predicates)
   
   (:predicates
     ;; --- Type predicates ---
@@ -26,9 +30,13 @@
     (is_object ?b)           ; Physical object (can be pushed, picked)
     (is_free_space ?b)       ; Known empty space
     
-    ;; --- Visibility (dynamic) ---
-    (blocks_view ?obj ?region) ; Object ?obj blocks the camera's view to ?region
-    (view_clear ?region)       ; Camera has clear line of sight to ?region
+    ;; --- Visibility geometry (static) ---
+    (blocks_view_at ?obj ?b ?region) ; When ?obj is at ?b, it blocks view to ?region
+    
+    ;; --- Visibility state (derived — DO NOT use in action effects) ---
+    (blocks_view ?obj ?region) ; ?obj currently blocks view to ?region
+    (view_blocked ?region)     ; Some object blocks view to ?region
+    (view_clear ?region)       ; No object blocks view to ?region
     
     ;; --- Ground truth (actual world state) ---
     (obj_at_boxel ?o ?b)     ; Object ?o is physically at boxel ?b
@@ -43,7 +51,7 @@
     (obj_pose_known ?o)
     
     ;; --- Stream certified facts ---
-    (push_config ?obj ?q)         ; Config ?q can push object ?obj
+    (push_solution ?obj ?b_from ?b_to ?q_start ?q_end ?traj) ; Valid push plan
     (valid_grasp ?o ?g)           ; Grasp ?g valid for object ?o
     (motion ?q1 ?q2 ?t)           ; Trajectory ?t from ?q1 to ?q2
     (kin_solution ?o ?b ?g ?q)    ; Config ?q for picking ?o from ?b with ?g
@@ -51,26 +59,55 @@
   )
   
   ;; =========================================================================
-  ;; PUSH: Push an object to clear the camera's line of sight to a region
+  ;; DERIVED PREDICATES: Visibility from object positions
   ;; =========================================================================
-  ;; The ?region parameter identifies which viewing corridor to clear.
-  ;; Effect models the physical consequence: the object no longer blocks
-  ;; the view, and the region becomes observable.
+  ;; blocks_view_at is a static geometric fact in the init state.
+  ;; blocks_view is derived: true when an object is currently at a position
+  ;; that geometrically blocks a view corridor.
+  ;; view_clear is derived via stratified negation: true when no object
+  ;; blocks the view. Push never mentions views — it moves objects, and
+  ;; the planner re-derives visibility automatically.
+  
+  (:derived (blocks_view ?obj ?region)
+    (exists (?b)
+      (and (obj_at_boxel ?obj ?b)
+           (blocks_view_at ?obj ?b ?region))))
+  
+  (:derived (view_blocked ?region)
+    (exists (?obj)
+      (blocks_view ?obj ?region)))
+  
+  (:derived (view_clear ?region)
+    (and (Boxel ?region)
+         (is_shadow ?region)
+         (not (view_blocked ?region))))
+  
+  ;; =========================================================================
+  ;; PUSH: Move an object from one boxel to another
+  ;; =========================================================================
+  ;; A spatial capability: the robot contacts the object and pushes it.
+  ;; Effects are purely spatial — object position and robot config update.
+  ;; View state (blocks_view, view_clear) is re-derived automatically.
   (:action push
-    :parameters (?obj ?region ?q)
+    :parameters (?obj ?b_from ?b_to ?q_start ?q_end ?traj)
     :precondition (and
       (Boxel ?obj)
-      (Boxel ?region)
-      (Config ?q)
+      (Boxel ?b_from)
+      (Boxel ?b_to)
+      (Config ?q_start)
+      (Config ?q_end)
+      (Trajectory ?traj)
       (is_object ?obj)
-      (blocks_view ?obj ?region)
-      (at_config ?q)
-      (push_config ?obj ?q)
+      (obj_at_boxel ?obj ?b_from)
+      (at_config ?q_start)
+      (push_solution ?obj ?b_from ?b_to ?q_start ?q_end ?traj)
       (handempty)
     )
     :effect (and
-      (not (blocks_view ?obj ?region))
-      (view_clear ?region)
+      (obj_at_boxel ?obj ?b_to)
+      (not (obj_at_boxel ?obj ?b_from))
+      (at_config ?q_end)
+      (not (at_config ?q_start))
     )
   )
   

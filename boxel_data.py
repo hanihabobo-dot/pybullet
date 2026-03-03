@@ -263,10 +263,12 @@ class BoxelRegistry:
         """
         Generate PDDL facts using predicates from domain_pddlstream.pddl.
 
-        Produces static scene structure facts only (type predicates and
-        relationships). Dynamic state (blocks_view, view_clear,
-        obj_at_boxel_KIF, at_config, etc.) depends on execution context
-        and is managed by PDDLStreamPlanner.create_problem().
+        Produces static scene structure facts only (type predicates,
+        object positions, and geometric visibility relationships).
+        Dynamic state (obj_at_boxel_KIF, at_config, etc.) depends on
+        execution context and is managed by PDDLStreamPlanner.create_problem().
+        Visibility predicates (blocks_view, view_clear) are derived
+        automatically from object positions in the PDDL domain.
 
         Returns:
             List of PDDL fact strings matching domain_pddlstream.pddl.
@@ -284,8 +286,9 @@ class BoxelRegistry:
                 facts.append(f"(is_free_space {boxel.id})")
 
             if boxel.boxel_type == BoxelType.OBJECT:
+                facts.append(f"(obj_at_boxel {boxel.id} {boxel.id})")
                 for shadow_id in boxel.shadow_boxel_ids:
-                    facts.append(f"(blocks_view {boxel.id} {shadow_id})")
+                    facts.append(f"(blocks_view_at {boxel.id} {boxel.id} {shadow_id})")
 
         return facts
     
@@ -293,9 +296,10 @@ class BoxelRegistry:
         """Save PDDL facts to a file.
 
         Output uses predicates from domain_pddlstream.pddl.  Only static
-        scene structure is included; dynamic state (blocks_view,
-        view_clear, obj_at_boxel_KIF, at_config, etc.) is added at
-        planning time by PDDLStreamPlanner.create_problem().
+        scene structure is included; dynamic state (obj_at_boxel_KIF,
+        at_config, etc.) is added at planning time by
+        PDDLStreamPlanner.create_problem(). Visibility predicates
+        (blocks_view, view_clear) are derived in the PDDL domain.
         """
         facts = self.generate_pddl_facts()
         with open(filepath, 'w') as f:

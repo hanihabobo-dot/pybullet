@@ -1,12 +1,23 @@
 (define (stream boxel-streams)
   
-  ;; Sample a robot configuration for pushing an occluder aside
-  ;; Certifies config_for_boxel so the move action knows the destination
+  ;; Compute a push plan: where to push the object and how to get there.
+  ;; Input: the object and its current location.
+  ;; Output: destination boxel, robot start/end configs, push trajectory.
+  ;; Domain uses is_object (static) for both inputs so PDDLStream can bind
+  ;; them. The push action precondition (obj_at_boxel ?obj ?b_from) enforces
+  ;; that the object is actually at b_from.
+  ;; Certifies config_for_boxel so the move action can reach the start config.
   (:stream sample-push-config
-    :inputs (?occ)
-    :domain (is_object ?occ)
-    :outputs (?q)
-    :certified (and (Config ?q) (push_config ?occ ?q) (config_for_boxel ?q ?occ))
+    :inputs (?obj ?b_from)
+    :domain (and (is_object ?obj) (is_object ?b_from))
+    :outputs (?b_to ?q_start ?q_end ?traj)
+    :certified (and
+      (Boxel ?b_to)
+      (Config ?q_start)
+      (Config ?q_end)
+      (Trajectory ?traj)
+      (push_solution ?obj ?b_from ?b_to ?q_start ?q_end ?traj)
+      (config_for_boxel ?q_start ?b_from))
   )
   
   ;; Sample grasp poses for an object  

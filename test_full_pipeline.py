@@ -257,9 +257,12 @@ def main(gui=True):
             
             if action_name == 'push':
                 occluder_id = params[0]
-                region_id = params[1]
-                config_name = params[2]
-                print(f"    Pushing {occluder_id} (clearing view to {region_id})...")
+                b_from = params[1]
+                b_to = params[2]
+                q_start = params[3]
+                q_end = params[4]
+                traj = params[5]
+                print(f"    Pushing {occluder_id} from {b_from} to {b_to}...")
                 
                 # Actually move the occluder in PyBullet
                 if occluder_id in boxel_to_pybullet:
