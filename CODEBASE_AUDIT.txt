@@ -195,7 +195,7 @@ Fix:   DECISION: do (b) — we have a fixed camera. Remove the
        domain. The plan should not pretend to move for sensing.
 
 ================================================================================
-41. NO VERIFICATION THAT PUSH CLEARED LINE OF SIGHT
+41. NO VERIFICATION THAT PUSH CLEARED LINE OF SIGHT  [DONE]
 ================================================================================
 Where: test_full_pipeline.py lines 259-288
 What:  After pushing an occluder (teleportation + 30 physics steps), the
@@ -205,9 +205,18 @@ What:  After pushing an occluder (teleportation + 30 physics steps), the
        partially, the subsequent sense_shadow will fail to detect the
        target even if it IS there.
 
-Fix:   After push + physics settling, cast a quick verification ray from
-       the camera through the shadow volume center. If the occluder
-       still blocks, either push again or log a warning and replan.
+Fixed: Added verify_push_cleared_view() which casts a 5x5 grid of rays
+       from the camera through the shadow AABB at mid-height, checking
+       specifically whether the pushed occluder still intercepts them.
+       Called after push + physics settling for every shadow linked to
+       the pushed occluder. If any shadow is still blocked:
+       (1) A warning is printed with the blocked ray fraction.
+       (2) The occluder is NOT marked as moved in the belief state.
+       (3) Execution breaks out of the action loop to trigger a replan.
+       Since the occluder remains "blocking" in the belief state, the
+       replanner will include another push attempt — starting from the
+       occluder's updated (post-push) position, which may succeed with
+       a different displacement.
 
 ================================================================================
 44. SHADOWS NOT RECOMPUTED AFTER PUSH — STALE REGISTRY
@@ -252,7 +261,7 @@ The IMPLEMENTATION shortcuts every geometric step:
   - Streams produce labels instead of geometry (#4 — done, #20 to wire)
   - Execution uses type-dependent offsets; pick/push ignore plan (#6, #7)
   - Sensing uses fixed camera regardless of robot config (#36)
-  - Pushing is teleportation; no post-push verification (#41)
+  - Pushing is teleportation; post-push verification added (#41 — done)
   - Visibility check is a stub returning True (#12)
   - Heuristic IK produces meaningless configs (#26 — done, now flagged+warned)
   - Shadow/registry not recomputed after push (#44)
@@ -265,5 +274,5 @@ Priority order for remaining fixes:
   2. Wire BoxelStreams into the planner — THE critical fix (#20, #12)
   3. Fix execution to use plan parameters (#6, #7)
   4. Fix sensing: remove move-to-sense since we use fixed camera (#36)
-  5. Fix push edge cases: post-push verification (#41), stale registry (#44)
+  5. Fix push edge cases: post-push verification (#41 — done), stale registry (#44)
   6. Improve heuristic IK fallback (#26 — done)

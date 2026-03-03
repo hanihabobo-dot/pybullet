@@ -18,6 +18,9 @@ Run from WSL:
 
 Or with no GUI (for testing):
     python3 test_full_pipeline.py --no-gui
+
+PDDLStream path is resolved automatically via config.py
+(PROJECT_ROOT/../pddlstream_lib). No manual PYTHONPATH export needed.
 """
 
 import sys
@@ -287,14 +290,34 @@ def main(gui=True):
                         if obj_name in env.objects:
                             binfo['position'] = np.array(env.objects[obj_name].position)
                     
-                    belief.mark_occluder_moved(occluder_id)
-                    
                     push_dir_xy = push_disp[:2] / (np.linalg.norm(push_disp[:2]) + 1e-8)
                     print(f"    -> Pushed {occ_info['name']} "
                           f"dir=[{push_dir_xy[0]:.2f},{push_dir_xy[1]:.2f}] "
                           f"dist={np.linalg.norm(push_disp[:2]):.3f}m "
                           f"from [{occ_pos[0]:.2f},{occ_pos[1]:.2f}] "
                           f"to [{new_pos[0]:.2f},{new_pos[1]:.2f}]")
+                    
+                    occluder_boxel = registry.get_boxel(occluder_id)
+                    push_cleared = True
+                    if occluder_boxel:
+                        for sid in occluder_boxel.shadow_boxel_ids:
+                            shadow_b = registry.get_boxel(sid)
+                            if shadow_b is None:
+                                continue
+                            is_clear, blocked_frac = verify_push_cleared_view(
+                                env.camera_position, shadow_b, occ_pybullet_id
+                            )
+                            if not is_clear:
+                                print(f"    WARNING: Push insufficient — "
+                                      f"{blocked_frac:.0%} of rays to shadow "
+                                      f"{sid} still blocked by "
+                                      f"{occ_info['name']}. Replanning...")
+                                push_cleared = False
+                    
+                    if not push_cleared:
+                        break
+                    
+                    belief.mark_occluder_moved(occluder_id)
                 else:
                     occ_boxel = registry.get_boxel(occluder_id)
                     occ_name = occ_boxel.object_name if occ_boxel else None
@@ -438,6 +461,47 @@ def sense_shadow_raycasting(camera_pos, shadow_boxel, target_pybullet_id):
             return True
 
     return False
+
+
+def verify_push_cleared_view(camera_pos, shadow_boxel, occluder_pybullet_id):
+    """
+    Verify that pushing an occluder cleared the camera's line of sight
+    to its former shadow region.
+
+    Casts a 5x5 grid of rays from the camera through the shadow AABB at
+    mid-height. If any ray still hits the pushed occluder, the push was
+    insufficient and downstream sensing will likely fail.
+
+    Args:
+        camera_pos: Fixed camera position [x, y, z]
+        shadow_boxel: BoxelData for the shadow region to check
+        occluder_pybullet_id: PyBullet body ID of the pushed occluder
+
+    Returns:
+        Tuple of (is_clear, blocked_fraction):
+          is_clear: True if no rays hit the occluder
+          blocked_fraction: fraction of rays still blocked by the occluder
+    """
+    ray_origin = np.array(camera_pos)
+    min_c = shadow_boxel.min_corner
+    max_c = shadow_boxel.max_corner
+    z_mid = (min_c[2] + max_c[2]) / 2.0
+
+    n = 5
+    ray_froms = []
+    ray_tos = []
+    for xi in np.linspace(min_c[0], max_c[0], n):
+        for yi in np.linspace(min_c[1], max_c[1], n):
+            ray_froms.append(ray_origin.tolist())
+            ray_tos.append([float(xi), float(yi), float(z_mid)])
+
+    results = p.rayTestBatch(ray_froms, ray_tos)
+    blocked = sum(1 for hit_id, _, _, _, _ in results
+                  if hit_id == occluder_pybullet_id)
+    total = len(results)
+    blocked_fraction = blocked / total if total > 0 else 0.0
+
+    return blocked == 0, blocked_fraction
 
 
 def execute_pick(robot_id, env, target_name, target_pos, gui):
