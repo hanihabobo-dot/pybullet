@@ -9,6 +9,9 @@ Usage (from WSL):
     source wsl_env/bin/activate
     export PYTHONPATH=/mnt/c/Users/HaniAlassiriAlhabbou/git/pddlstream_lib
     python3 pddlstream_planner.py
+
+PDDLStream path is resolved automatically via config.py
+(PROJECT_ROOT/../pddlstream_lib). No manual PYTHONPATH export needed.
 """
 
 import sys

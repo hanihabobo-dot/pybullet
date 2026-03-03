@@ -207,6 +207,7 @@ def main(gui=True):
     # returns None) that consume a plan count without progress.
     max_replans = 2 * len(shadows) + 1
     grasp_constraint_id = None
+    exit_reason = None
     
     while not belief.is_target_found() and plan_count < max_replans:
         plan_count += 1
@@ -217,6 +218,7 @@ def main(gui=True):
         print(f"Unknown shadows remaining: {len(unknown_shadows)}")
         
         if not unknown_shadows:
+            exit_reason = "all_searched"
             print("ERROR: Searched all shadows but target not found!")
             break
         
@@ -231,6 +233,7 @@ def main(gui=True):
         )
         
         if plan is None:
+            exit_reason = "planner_failed"
             print("ERROR: No plan found!")
             break
         
@@ -358,11 +361,16 @@ def main(gui=True):
         print(f"  Shadows searched: {len(shadows) - len(belief.get_unknown_shadows())}")
     else:
         remaining = belief.get_unknown_shadows()
-        if remaining:
+        if exit_reason is None:
+            exit_reason = "replan_limit"
+        if exit_reason == "all_searched":
+            print(f"FAILED: All {len(shadows)} shadows searched — target not found")
+        elif exit_reason == "planner_failed":
+            print(f"FAILED: Planner returned no plan "
+                  f"({len(remaining)} unsearched shadows remaining)")
+        else:
             print(f"FAILED: Replan limit reached ({max_replans}) with "
                   f"{len(remaining)} unsearched shadows remaining")
-        else:
-            print(f"FAILED: All {len(shadows)} shadows searched — target not found")
         print(f"  Plans executed: {plan_count}")
     print("=" * 60)
     
