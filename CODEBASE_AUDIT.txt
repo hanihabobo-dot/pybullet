@@ -351,6 +351,33 @@ Fix:   Use PDDLStream's fluent stream support. Declare obj_at_boxel as
        state — no hack, no over-instantiation.
 
 ================================================================================
+48. MOVED OCCLUDERS VANISH FROM PLANNER STATE
+================================================================================
+Where: test_full_pipeline.py (BeliefState), pddlstream_planner.py (_build_init)
+What:  BeliefState.mark_occluder_moved() only records WHICH occluder was
+       moved (adds ID to a set), not WHERE it was moved to. When
+       replanning, _build_init() skips (obj_at_boxel occ occ) for moved
+       occluders (line 292-293) but has no destination to add instead.
+       The occluder has no position in the planner state — it effectively
+       disappears.
+
+       Consequence: the planner cannot push a moved occluder again. This
+       is correct for the current scenario (once moved, view_clear is
+       derived as true, so no second push is needed). But it prevents
+       multi-push scenarios where an occluder must be pushed incrementally
+       or re-pushed after drifting back (see #45).
+
+       Interacts with #47: even if the destination were tracked, the
+       is_object hack in the stream domain would prevent binding ?b_from
+       to a non-object boxel like push_dest_obj_007_14.
+
+Fix:   Track push destinations in BeliefState:
+         mark_occluder_moved(occluder_id, destination_boxel_id)
+       In _build_init(), add (obj_at_boxel occ dest) for moved occluders.
+       Requires #47 to also be fixed (fluent streams) so the push stream
+       can bind ?b_from to the new location.
+
+================================================================================
 FOR LATER
 ================================================================================
 - Incremental boxel recomputation after actions (without redoing everything
