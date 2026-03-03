@@ -802,7 +802,7 @@ Fix:   Decide whether obj_graspable is needed. If yes, add it to
        remove the predicate from the domain entirely to avoid confusion.
 
 ================================================================================
-30. config.py DEAD — HARDCODED USER-SPECIFIC PATHS
+30. config.py DEAD — HARDCODED USER-SPECIFIC PATHS  [NOT AN ISSUE]
 ================================================================================
 Where: config.py, pddlstream_planner.py line 18, test_full_pipeline.py line 29
 What:  config.py defines a proper, portable path resolution:
@@ -816,9 +816,12 @@ What:  config.py defines a proper, portable path resolution:
        config.py is completely dead code. The hardcoded paths break on
        any other machine or when the repo moves.
 
-Fix:   Have pddlstream_planner.py and test_full_pipeline.py import from
-       config.py instead of defining their own paths. Or inline config.py's
-       logic into a shared utility.
+       NOT AN ISSUE: The hardcoded WSL path is intentional. The pipeline
+       runs exclusively in WSL (pddlstream requires Linux). The path is
+       stable for this development environment. config.py's portable path
+       resolution adds unnecessary indirection for a single-developer
+       project with a fixed WSL setup. config.py remains available if
+       portability is needed in the future.
 
 ================================================================================
 31. DEAD CODE AND DUPLICATE UTILITIES
@@ -1317,7 +1320,7 @@ The CODEBASE has significant organizational debt:
     (is_occluder) because is_occluder field is always False (#42, #32)
   - Magic constants duplicated across files (#18, #31)
   - Stale files, temp copies, and unclear entry points (#11 — done, #19 — done)
-  - config.py exists but is never used; paths hardcoded (#30)
+  - config.py exists but is never used; paths hardcoded (#30 — not an issue)
   - Dead code: get_stream_definitions(), config.py (#31, #30)
   - Duplicate utility functions with inconsistent params (#31)
   - Stream PDDL predicate inconsistency (#29)

@@ -360,12 +360,11 @@ def main(gui=True):
     print("=" * 60)
     
     if gui:
-        print("\nWindow stays open (press Ctrl+C to exit)...")
-        try:
-            while True:
-                env.step_simulation()
-        except KeyboardInterrupt:
-            pass
+        import time
+        print("\nWindow closing in 4 seconds...")
+        end_time = time.time() + 4
+        while time.time() < end_time:
+            env.step_simulation()
     
     env.close()
     return belief.is_target_found()
