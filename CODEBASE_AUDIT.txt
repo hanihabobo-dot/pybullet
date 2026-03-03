@@ -762,9 +762,9 @@ Fix:   If used for testing, explicitly mark configs as "heuristic"
        IK. Never use heuristic IK when robot_id should be available.
 
 ================================================================================
-27. max_replans — MAGIC HEURISTIC, NO GUARANTEE
+27. max_replans — MAGIC HEURISTIC, NO GUARANTEE  [DONE]
 ================================================================================
-Where: test_full_pipeline.py line 201
+Where: test_full_pipeline.py line 205
 What:  max_replans = len(shadows) + 1. This is a heuristic: if we've
        searched every shadow, we need at most len(shadows) sense actions
        + 1 extra for the final pick. But the actual plan length depends on
@@ -775,6 +775,18 @@ Fix:   Document the heuristic. Consider increasing to 2*len(shadows) + 1
        or making it configurable. Add a clear failure message when
        max_replans is exhausted (currently says "Searched all shadows
        but target not found!" which is wrong if max_replans ran out early).
+
+Fixed: (1) Increased max_replans from len(shadows) + 1 to
+       2 * len(shadows) + 1. The base case is one plan per shadow
+       (push + sense → not found → replan) plus one for the final pick.
+       Doubling tolerates failed plans (planner returns None) that
+       consume a plan count without making progress.
+       (2) Added a comment documenting the formula and its assumptions.
+       (3) Fixed the failure reporting: the results section now
+       distinguishes between "replan limit reached with N unsearched
+       shadows remaining" (safety limit hit) and "all shadows searched —
+       target not found" (genuine failure). Previously both cases
+       printed the same generic "FAILED: Target not found" message.
 
 ================================================================================
 28. TARGETS GENERATE SHADOWS — is_occluder NEVER CHECKED  [AUDIT CORRECTION]
@@ -921,7 +933,7 @@ What:  The domain is tailored to the hidden-object scenario rather than
        Note: is_occluder was renamed to is_object in #42 (done). The
        remaining scenario-specific predicates are:
        occluder_blocking, occluder_aside, casts_shadow.
-       These encode the hidden-object solution structure.
+       These encode the hidden-object solution structure and should also be removed
        The domain is essentially hardcoded — it cannot be reused for:
          - Rearrangement (move object from boxel A to boxel B, no occlusion)
          - General search (sense any region, not just shadow regions)
@@ -1405,6 +1417,7 @@ Priority order for fixing:
      orientation reset (#43), stale registry (#44)
   8. Fix pick robustness: open_gripper (#37 — done), constraint cleanup (#38 — done)
   9. Consolidate shared constants and utilities (#18, #30, #31)
- 10. Clean up minor issues: unused imports (#46 — done), keyboard interrupt (#45 — done)
+ 10. Clean up minor issues: unused imports (#46 — done), keyboard interrupt (#45 — done),
+     max_replans heuristic (#27 — done)
  11. Implement physics-based pushing (#3)
  12. Add collision-free motion planning (#5)

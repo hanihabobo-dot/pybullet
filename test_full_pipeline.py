@@ -202,7 +202,10 @@ def main(gui=True):
     boxel_centers = {b.id: b.center for b in registry.boxels.values()}
     
     plan_count = 0
-    max_replans = len(shadows) + 1  # Safety limit
+    # Worst case: one plan per shadow (push + sense, not found → replan) +
+    # one for the final pick. Doubled to tolerate failed plans (planner
+    # returns None) that consume a plan count without progress.
+    max_replans = 2 * len(shadows) + 1
     grasp_constraint_id = None
     
     while not belief.is_target_found() and plan_count < max_replans:
@@ -354,7 +357,13 @@ def main(gui=True):
         print(f"  Plans executed: {plan_count}")
         print(f"  Shadows searched: {len(shadows) - len(belief.get_unknown_shadows())}")
     else:
-        print("FAILED: Target not found")
+        remaining = belief.get_unknown_shadows()
+        if remaining:
+            print(f"FAILED: Replan limit reached ({max_replans}) with "
+                  f"{len(remaining)} unsearched shadows remaining")
+        else:
+            print(f"FAILED: All {len(shadows)} shadows searched — target not found")
+        print(f"  Plans executed: {plan_count}")
     print("=" * 60)
     
     if gui:
