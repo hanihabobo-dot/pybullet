@@ -306,3 +306,25 @@ Fixed: Replaced with timed exit (4-second countdown). No interrupt handling need
 Where: test_full_pipeline.py
 
 Fixed: Removed unused BoxelStreams import.
+
+================================================================================
+31. DEAD CODE AND DUPLICATE UTILITIES  [DONE]
+================================================================================
+Where: Multiple files
+
+Fixed: Created robot_utils.py as the single source of truth for all Panda
+       constants (ARM_JOINT_INDICES, END_EFFECTOR_LINK, FINGER_JOINTS,
+       JOINT_LIMITS_LOW/HIGH, JOINT_RANGES, REST_POSES) using the precise
+       datasheet values from streams.py. Moved compute_ik, move_robot_smooth,
+       move_robot_to_pos, open_gripper, close_gripper into robot_utils.py.
+       Updated streams.py and test_full_pipeline.py to import from
+       robot_utils — removed all duplicate definitions. The rounded
+       joint-limit values in test_full_pipeline.py (-2.9 vs -2.8973, etc.)
+       are now replaced by the precise Panda spec values everywhere.
+
+       Note: compute_ik and move_robot_to_pos are interim — they exist
+       because execution currently recomputes IK from hardcoded offsets
+       instead of using plan parameters (#6). Once #20 wires BoxelStreams
+       into the planner and #6 makes execution use plan configs, these
+       two functions become unnecessary. The permanent utilities are
+       move_robot_smooth (motor interpolation), open_gripper, close_gripper.

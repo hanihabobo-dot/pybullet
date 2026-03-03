@@ -104,7 +104,7 @@ Fix:   If used for testing, explicitly mark configs as "heuristic"
        IK. Never use heuristic IK when robot_id should be available.
 
 ================================================================================
-31. DEAD CODE AND DUPLICATE UTILITIES
+31. DEAD CODE AND DUPLICATE UTILITIES  [DONE]
 ================================================================================
 Where: Multiple files
 What:  Several functions and constants are dead code or copy-pasted across
@@ -124,10 +124,22 @@ What:  Several functions and constants are dead code or copy-pasted across
            defined in test_full_pipeline.py, partially duplicated
            in streams.py with different iteration counts
 
-Fix:   - Define robot constants ONCE in a shared module and import
-         everywhere.
-       - Factor move_robot_smooth, close_gripper, compute_ik into a
-         shared robot_utils.py.
+Fixed: Created robot_utils.py as the single source of truth for all Panda
+       constants (ARM_JOINT_INDICES, END_EFFECTOR_LINK, FINGER_JOINTS,
+       JOINT_LIMITS_LOW/HIGH, JOINT_RANGES, REST_POSES) using the precise
+       datasheet values from streams.py. Moved compute_ik, move_robot_smooth,
+       move_robot_to_pos, open_gripper, close_gripper into robot_utils.py.
+       Updated streams.py and test_full_pipeline.py to import from
+       robot_utils — removed all duplicate definitions. The rounded
+       joint-limit values in test_full_pipeline.py (-2.9 vs -2.8973, etc.)
+       are now replaced by the precise Panda spec values everywhere.
+
+       Note: compute_ik and move_robot_to_pos are interim — they exist
+       because execution currently recomputes IK from hardcoded offsets
+       instead of using plan parameters (#6). Once #20 wires BoxelStreams
+       into the planner and #6 makes execution use plan configs, these
+       two functions become unnecessary. The permanent utilities are
+       move_robot_smooth (motor interpolation), open_gripper, close_gripper.
 
 ================================================================================
 32. PDDL DOMAIN MODELS SOLUTION, NOT ROBOT CAPABILITIES [SUPERVISOR CRITIQUE]
@@ -239,8 +251,8 @@ The IMPLEMENTATION shortcuts every geometric step:
   - Heuristic IK produces meaningless configs (#26)
   - Shadow/registry not recomputed after push (#44)
 
-The CODEBASE has remaining organizational debt:
-  - Duplicate robot constants and utility functions (#31)
+The CODEBASE organizational debt is largely resolved:
+  - Duplicate robot constants and utility functions (#31 — done)
 
 Priority order for remaining fixes:
   1. Refactor PDDL domain to model capabilities, not solution (#32)
@@ -248,5 +260,4 @@ Priority order for remaining fixes:
   3. Fix execution to use plan parameters (#6, #7)
   4. Fix sensing: remove move-to-sense since we use fixed camera (#36)
   5. Fix push edge cases: post-push verification (#41), stale registry (#44)
-  6. Consolidate shared constants and utilities (#31)
-  7. Improve heuristic IK fallback (#26)
+  6. Improve heuristic IK fallback (#26)

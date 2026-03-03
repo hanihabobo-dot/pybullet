@@ -18,6 +18,8 @@ from typing import List, Tuple, Optional, Generator, Iterator
 from dataclasses import dataclass
 
 from boxel_data import BoxelRegistry, BoxelData, BoxelType
+from robot_utils import (ARM_JOINT_INDICES, END_EFFECTOR_LINK, FINGER_JOINTS,
+                         JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH, REST_POSES)
 
 
 @dataclass
@@ -56,11 +58,6 @@ class BoxelStreams:
     PDDLStream calls them lazily during planning.
     """
     
-    # Franka Panda constants
-    ARM_JOINT_INDICES = [0, 1, 2, 3, 4, 5, 6]  # 7 DOF arm
-    END_EFFECTOR_LINK = 11  # panda_grasptarget
-    FINGER_JOINTS = [9, 10]  # panda_finger_joint1, panda_finger_joint2
-    
     def __init__(self, registry: BoxelRegistry, robot_id: int = None,
                  physics_client: int = None):
         """
@@ -75,18 +72,9 @@ class BoxelStreams:
         self.robot_id = robot_id
         self.physics_client = physics_client if physics_client is not None else 0
         
-        # Franka Panda joint limits (radians)
-        self.joint_limits_low = np.array([-2.8973, -1.7628, -2.8973, -3.0718, 
-                                          -2.8973, -0.0175, -2.8973])
-        self.joint_limits_high = np.array([2.8973, 1.7628, 2.8973, -0.0698,
-                                           2.8973, 3.7525, 2.8973])
-        
-        # Rest pose for null-space IK (helps get consistent solutions)
-        self.rest_poses = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]
-        
         # Home configuration
         self.home_config = RobotConfig(
-            joint_positions=np.array(self.rest_poses),
+            joint_positions=np.array(REST_POSES),
             name="q_home"
         )
         
@@ -234,7 +222,7 @@ class BoxelStreams:
             # Simple IK call - more robust than null-space version
             joint_positions = p.calculateInverseKinematics(
                 bodyUniqueId=self.robot_id,
-                endEffectorLinkIndex=self.END_EFFECTOR_LINK,
+                endEffectorLinkIndex=END_EFFECTOR_LINK,
                 targetPosition=ee_pos.tolist(),
                 targetOrientation=ee_orn.tolist(),
                 maxNumIterations=self.ik_max_iterations,
@@ -249,12 +237,12 @@ class BoxelStreams:
             arm_joints = np.array(joint_positions[:7])
             
             # Validate joint limits (with small tolerance)
-            if np.any(arm_joints < self.joint_limits_low - 0.1) or \
-               np.any(arm_joints > self.joint_limits_high + 0.1):
+            if np.any(arm_joints < JOINT_LIMITS_LOW - 0.1) or \
+               np.any(arm_joints > JOINT_LIMITS_HIGH + 0.1):
                 return None
             
             # Clamp to limits
-            arm_joints = np.clip(arm_joints, self.joint_limits_low, self.joint_limits_high)
+            arm_joints = np.clip(arm_joints, JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH)
             
             # Verify solution by checking forward kinematics error
             # (skip for now to avoid state changes)
@@ -280,7 +268,7 @@ class BoxelStreams:
         new_joints = self.home_config.joint_positions + joint_offsets * 0.3
         
         # Clamp to limits
-        new_joints = np.clip(new_joints, self.joint_limits_low, self.joint_limits_high)
+        new_joints = np.clip(new_joints, JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH)
         
         return RobotConfig(joint_positions=new_joints)
     

@@ -38,6 +38,8 @@ from boxel_env import BoxelTestEnv
 from boxel_data import BoxelRegistry, BoxelType, create_boxel_registry_from_boxels
 from cell_merger import merge_free_space_cells
 from pddlstream_planner import PDDLStreamPlanner
+from robot_utils import (END_EFFECTOR_LINK, compute_ik, move_robot_to_pos,
+                         move_robot_smooth, open_gripper, close_gripper)
 
 
 class BeliefState:
@@ -391,72 +393,6 @@ def main(gui=True):
     
     env.close()
     return belief.is_target_found()
-
-
-# Robot IK parameters
-REST_POSE = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]
-JOINT_LIMITS_LOW = [-2.9, -1.8, -2.9, -3.1, -2.9, -0.02, -2.9]
-JOINT_LIMITS_HIGH = [2.9, 1.8, 2.9, -0.07, 2.9, 3.8, 2.9]
-JOINT_RANGES = [5.8, 3.6, 5.8, 3.0, 5.8, 3.8, 5.8]
-END_EFFECTOR_LINK = 11
-
-
-def compute_ik(robot_id, target_pos, target_orn=None):
-    """Compute IK solution for target position."""
-    if target_orn is None:
-        target_orn = p.getQuaternionFromEuler([0, np.pi, 0])  # Gripper pointing down
-    
-    joints = p.calculateInverseKinematics(
-        robot_id, END_EFFECTOR_LINK, target_pos.tolist(), target_orn,
-        lowerLimits=JOINT_LIMITS_LOW,
-        upperLimits=JOINT_LIMITS_HIGH,
-        jointRanges=JOINT_RANGES,
-        restPoses=REST_POSE
-    )[:7]
-    return joints
-
-
-def move_robot_to_pos(robot_id, target_pos, gui=True):
-    """Move robot end-effector to target position."""
-    joints = compute_ik(robot_id, target_pos)
-    move_robot_smooth(robot_id, joints, gui)
-
-
-def move_robot_smooth(robot_id, target_joints, gui=True, steps=60):
-    """Smoothly move robot to target joint configuration."""
-    import time
-    current = [p.getJointState(robot_id, i)[0] for i in range(7)]
-    for t in range(steps):
-        alpha = (t + 1) / steps
-        interp = [(1-alpha)*c + alpha*tgt for c, tgt in zip(current, target_joints)]
-        for i in range(7):
-            p.setJointMotorControl2(robot_id, i, p.POSITION_CONTROL,
-                                    targetPosition=interp[i], force=240)
-        p.stepSimulation()
-        if gui:
-            time.sleep(1/120)  # Real-time visualization (120 Hz)
-
-
-def open_gripper(robot_id, gui=True):
-    """Open gripper (Franka Panda fingers: 0.04 = open, 0.01 = closed)."""
-    import time
-    for _ in range(30):
-        p.setJointMotorControl2(robot_id, 9, p.POSITION_CONTROL, targetPosition=0.04, force=50)
-        p.setJointMotorControl2(robot_id, 10, p.POSITION_CONTROL, targetPosition=0.04, force=50)
-        p.stepSimulation()
-        if gui:
-            time.sleep(1/120)
-
-
-def close_gripper(robot_id, gui=True):
-    """Close gripper."""
-    import time
-    for _ in range(30):
-        p.setJointMotorControl2(robot_id, 9, p.POSITION_CONTROL, targetPosition=0.01, force=50)
-        p.setJointMotorControl2(robot_id, 10, p.POSITION_CONTROL, targetPosition=0.01, force=50)
-        p.stepSimulation()
-        if gui:
-            time.sleep(1/120)
 
 
 def sense_shadow_raycasting(camera_pos, shadow_boxel, target_pybullet_id):
