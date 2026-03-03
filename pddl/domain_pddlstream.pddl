@@ -43,7 +43,6 @@
     (obj_pose_known ?o)
     
     ;; --- Stream certified facts ---
-    (sensing_config ?b ?q)        ; Config ?q can sense boxel ?b
     (push_config ?obj ?q)         ; Config ?q can push object ?obj
     (valid_grasp ?o ?g)           ; Grasp ?g valid for object ?o
     (motion ?q1 ?q2 ?t)           ; Trajectory ?t from ?q1 to ?q2
@@ -79,16 +78,14 @@
   ;; SENSE: Observe a region to check for an object
   ;; =========================================================================
   ;; Requires clear line of sight to the region.
+  ;; Uses the fixed scene camera — no robot positioning needed.
   ;; OPTIMISTIC: Assumes object will be found (replanning handles failures)
   (:action sense
-    :parameters (?o ?region ?q)
+    :parameters (?o ?region)
     :precondition (and
       (Obj ?o)
       (Boxel ?region)
-      (Config ?q)
       (view_clear ?region)
-      (at_config ?q)
-      (sensing_config ?region ?q)
       (not (obj_at_boxel_KIF ?o ?region))  ; Only sense if unknown
     )
     :effect (and

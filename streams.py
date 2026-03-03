@@ -3,13 +3,16 @@ PDDLStream Streams for Semantic Boxel TAMP.
 
 This module implements the geometric reasoning streams that generate and test
 continuous parameters for the symbolic planner. Streams interface with PyBullet
-for inverse kinematics, motion planning, and visibility checking.
+for inverse kinematics and motion planning.
+
+Sensing uses the fixed scene camera (not the robot's end-effector), so there
+is no sensing_config stream. See issue #36 in CODEBASE_AUDIT.txt.
 
 Streams:
-    - sample_sensing_config: Generate robot configs to observe a boxel
+    - sample_push_config: Generate robot configs to push an occluder
     - sample_grasp: Generate grasp poses for an object
     - plan_motion: Plan collision-free trajectory between configs
-    - test_visibility: Check if boxel is observable from config
+    - compute_kin_solution: Compute IK for pick/place
 """
 
 import logging
@@ -139,52 +142,6 @@ class BoxelStreams:
                 self._config_counter += 1
                 config.name = f"q_push_{occluder_id}_{self._config_counter}"
                 yield (config,)
-    
-    # =========================================================================
-    # STREAM: Sample Sensing Configuration
-    # =========================================================================
-    def sample_sensing_config(self, boxel_id: str) -> Iterator[Tuple[RobotConfig]]:
-        """
-        Generate robot configurations that can observe a given boxel.
-        
-        PDDLStream declaration:
-            (:stream sample-sensing-config
-              :inputs (?b - boxel)
-              :domain (is_shadow ?b)
-              :outputs (?q - config)
-              :certified (sensing_config ?b ?q))
-        
-        Args:
-            boxel_id: ID of the boxel to observe
-            
-        Yields:
-            Tuples of (config,) that can observe the boxel
-        """
-        boxel = self.registry.get_boxel(boxel_id)
-        if boxel is None:
-            return
-        
-        # Generate viewpoints around the boxel
-        boxel_center = boxel.center
-        
-        # Sample viewing angles
-        for angle in np.linspace(0, 2*np.pi, 8, endpoint=False):
-            for height_offset in [0.0, 0.15, 0.3]:
-                # Compute camera position for this view
-                distance = 0.4  # Distance from boxel center
-                view_pos = boxel_center + np.array([
-                    distance * np.cos(angle),
-                    distance * np.sin(angle),
-                    height_offset + 0.2
-                ])
-                
-                # Compute IK for this end-effector position looking at boxel
-                config = self._compute_sensing_ik(view_pos, boxel_center)
-                
-                if config is not None:
-                    self._config_counter += 1
-                    config.name = f"q_sense_{boxel_id}_{self._config_counter}"
-                    yield (config,)
     
     def _compute_sensing_ik(self, ee_pos: np.ndarray, 
                             look_at: np.ndarray) -> Optional[RobotConfig]:
@@ -472,20 +429,3 @@ class BoxelStreams:
             config.name = f"q_pick_{obj_id}_{self._config_counter}"
             yield (config,)
     
-    # =========================================================================
-    # TEST: Check Visibility
-    # =========================================================================
-    def test_visibility(self, boxel_id: str, config: RobotConfig) -> bool:
-        """
-        Test if boxel is visible from configuration (for stream certification).
-        
-        Args:
-            boxel_id: Boxel to check
-            config: Robot configuration
-            
-        Returns:
-            True if boxel is observable from config
-        """
-        # TODO: Implement actual visibility check with ray casting
-        # For now, always return True for mock testing
-        return True

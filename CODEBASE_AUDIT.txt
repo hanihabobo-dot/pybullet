@@ -51,19 +51,18 @@ Fix:   Use the grasp pose and kin_solution from the plan to position the
        simulation but should be noted as a simplification.
 
 ================================================================================
-12. VISIBILITY CHECK — ALWAYS RETURNS TRUE (STUB)
+12. VISIBILITY CHECK — ALWAYS RETURNS TRUE (STUB)  [RESOLVED — no longer applicable]
 ================================================================================
-Where: streams.py lines 475-488
-What:  test_visibility() always returns True regardless of inputs.
-       Comment says "TODO: Implement actual visibility check with ray casting".
-       This is the stream-level visibility test that would let the planner
-       reject sensing configs that can't actually see the target boxel.
+Where: streams.py (formerly lines 475-488)
+What:  test_visibility() always returned True regardless of inputs.
+       This was the stream-level visibility test for sensing configs.
 
-Fix:   Implement ray-cast visibility check using PyBullet. Given a robot
-       config, compute the end-effector (or camera) position and cast rays
-       toward the boxel. Return True only if rays reach the boxel without
-       being blocked. Currently irrelevant because streams aren't used by
-       the planner (issue #4), but will matter once real streams are wired in.
+Resolved: test_visibility() and the sensing_config stream were removed
+       as part of #36. Sensing uses the fixed scene camera, not a
+       robot-positioned viewpoint, so there is no robot config whose
+       visibility needs testing. View clearance is tracked by the
+       view_clear predicate in the PDDL domain and will be verified
+       by sense execution once #32 is properly fixed.
 
 ================================================================================
 20. BoxelStreams CLASS IS NEVER USED BY THE PLANNER
@@ -148,55 +147,94 @@ Fixed: Created robot_utils.py as the single source of truth for all Panda
        move_robot_smooth (motor interpolation), open_gripper, close_gripper.
 
 ================================================================================
-32. PDDL DOMAIN MODELS SOLUTION, NOT ROBOT CAPABILITIES  [DONE]
+32. PDDL DOMAIN MODELS SOLUTION, NOT ROBOT CAPABILITIES  [REOPENED]
 ================================================================================
-Where: pddl/domain_pddlstream.pddl
-What:  The domain was tailored to the hidden-object scenario rather than
-       expressing the robot's fundamental capabilities. Actions and predicates
-       were solution-specific, not reusable (push_aside, sense_shadow,
-       occluder_blocking, occluder_aside, casts_shadow).
+Where: pddl/domain_pddlstream.pddl, test_full_pipeline.py, stream.pddl
 
-       push_aside:
-         - Requires (is_object ?occ), (occluder_blocking ?occ), (occluder_aside ?occ)
-         - Only works for "occluders" — cannot push arbitrary objects
-         - The action name and preconditions encode the scenario
+Previously done (cosmetic):
+       Renamed push_aside → push, sense_shadow → sense. Replaced
+       scenario-specific predicates (occluder_blocking, occluder_aside,
+       casts_shadow) with spatial predicates (blocks_view, view_clear).
+       These were naming improvements, not structural fixes.
 
-       sense_shadow:
-         - Requires (is_shadow ?shd), (casts_shadow ?occ ?shd), (occluder_aside ?occ)
-         - Only senses boxels that are "shadows" cast by occluders
-         - Cannot sense generic "unknown region"
+What's STILL wrong:
 
-Fix:   Refactor the domain to model CAPABILITIES, not the solution:
-       - Replace push_aside with generic push(?o ?b_from ?b_to ?q)
-       - Replace sense_shadow with generic sense(?b ?q)
-       - Keep pick/place as generic (they already are)
-       - Model "occluder blocks shadow" as problem-level predicates
-Fixed: Refactored domain to model CAPABILITIES, not the solution.
-       Actions now express physical consequences, not scenario logic:
-       (1) push_aside(?occ ?q) → push(?obj ?region ?q). Push an object to
-           clear the camera's line of sight to a specific region. Effect
-           directly modifies the spatial relationship: removes
-           (blocks_view ?obj ?region), adds (view_clear ?region). No
-           solution-specific "pushed" flag — the domain models what
-           PHYSICALLY CHANGED, not what action was taken.
-       (2) sense_shadow(?o ?shd ?occ ?q) → sense(?o ?region ?q). Generic
-           sensing of any region with a clear line of sight. No blocker
-           parameter needed — sense just requires (view_clear ?region).
-       (3) Predicates: casts_shadow → blocks_view (dynamic, removed by
-           push). occluder_blocking/occluder_aside → eliminated entirely.
-           Added view_clear (set by push; also set in init for regions
-           whose blockers were already moved at replan time).
-       (4) pick, place, move unchanged (already generic).
-       (5) Updated pddlstream_planner.py _build_init(): emits blocks_view
-           for active blockers, view_clear for already-cleared regions.
-       (6) Updated test_full_pipeline.py execution dispatch for new action
-           signatures (push has 3 params, sense has 3 params).
-       (7) Updated boxel_data.py generate_pddl_facts() to emit blocks_view.
-       stream.pddl unchanged — stream names and certified facts were
-       already generic (push_config, sensing_config, etc.).
+  (A) push(?obj ?region ?q) is "push to clear a view", not a capability.
+       The action does NOT track where the object moves. It has no
+       ?b_from or ?b_to. Its effects only flip view predicates:
+         (not (blocks_view ?obj ?region))
+         (view_clear ?region)
+       The object's position is never updated — no (obj_at_boxel ?obj ...)
+       change. Push is "clear the camera's line of sight," not "move an
+       object from here to there." That is the scenario encoded as an action.
+
+  (B) Execution embeds sensing inside push. verify_push_cleared_view()
+       casts rays from the camera after every push to check if the view
+       was cleared — this is a sensing action that the planner never
+       planned. It hardcodes that every push must be followed by a
+       view check. The planner should decide what to verify and when.
+
+  (C) Occluder positions are not tracked. The init state has no
+       (obj_at_boxel ?occ ?b) for occluders, so the planner cannot
+       reason about where occluders are or where they will end up.
+
+Fix:   Make push a SPATIAL CAPABILITY — "move object from A to B."
+
+       No other open issues need to be solved first. #20 (wiring
+       BoxelStreams) is independent — the domain structure can change
+       while generators still produce string placeholders. #5, #6,
+       #7, #44 are all independent.
+
+       Break into three phases to avoid regressions:
+
+  PHASE 1 — Track occluder positions (additive, nothing breaks):
+       Add (obj_at_boxel ?occ ?b) for every occluder in the init
+       state. Currently only the target's position is tracked. No
+       action uses this yet, so nothing changes in behavior.
+
+  PHASE 2 — Rewrite push as spatial + derived predicates:
+
+       Push action requirements:
+         - Parameters: the object, where it is now, where it should
+           go, the robot start config, end config, and the push
+           trajectory. Pushing is a MOTION — the robot moves while
+           contacting the object.
+         - Preconditions: object must be at source, robot at start
+           config, valid push trajectory exists, hand empty.
+         - Effects: PURELY SPATIAL. Object moves from source to
+           destination. Robot config updates from start to end.
+           No view predicates.
+
+       Derived predicates (PDDLStream/Fast Downward support these):
+         - blocks_view(?obj, ?region): derived from object positions.
+           True when ?obj is at a location that geometrically blocks
+           the camera's view to ?region.
+         - view_clear(?region): derived as the negation — true when
+           no object blocks the view to ?region.
+         Push does NOT mention views at all. The planner automatically
+         computes view state from spatial positions.
+
+       Push stream requirements:
+         - Input: the object and its current location.
+         - Output: destination, robot start config, end config,
+           and push trajectory.
+         - The stream computes WHERE and HOW to push based on
+           geometry. Destination is an output, not hardcoded.
+
+       Execution:
+         - Push moves the object from source to destination.
+         - Keep verify_push_cleared_view() as a safety net for now.
+
+  PHASE 3 — Move verification from push to sense:
+       Remove verify_push_cleared_view() from push execution. Sense
+       needs a third outcome: "view still blocked" (rays hit the
+       occluder, not the target and not empty space). If blocked,
+       belief state must NOT mark the shadow as "not_here" — it
+       hasn't been observed yet. This prevents a failed push from
+       corrupting the belief state.
 
 ================================================================================
-36. sense_shadow IGNORES ROBOT POSITION — USES FIXED CAMERA
+36. sense_shadow IGNORES ROBOT POSITION — USES FIXED CAMERA  [DONE]
 ================================================================================
 Where: test_full_pipeline.py lines 324-338
 What:  The PDDL plan moves the robot to a sensing config before sensing:
@@ -208,18 +246,27 @@ What:  The PDDL plan moves the robot to a sensing config before sensing:
        or any config-dependent viewpoint. The robot's actual position has
        zero effect on sensing.
 
-       Consequences:
-       (a) The move-to-sensing-config step is wasted motion.
-       (b) The architecture pretends the robot needs to be positioned for
-           sensing, but execution completely ignores it.
-       (c) The robot's arm could block camera rays after moving.
-
-Fix:   DECISION: do (b) — we have a fixed camera. Remove the
-       sensing_config stream and the move-to-sense step from the PDDL
-       domain. The plan should not pretend to move for sensing.
+Fixed: Removed the sensing_config stream and robot-config dependency from
+       the sense action entirely. We use a fixed scene camera, so the plan
+       should not pretend the robot needs to be positioned for sensing.
+       (1) domain_pddlstream.pddl: sense action now takes (?o ?region)
+           instead of (?o ?region ?q). Removed (at_config ?q),
+           (sensing_config ?region ?q) preconditions. Removed
+           sensing_config predicate.
+       (2) stream.pddl: removed sample-sensing-config stream.
+       (3) pddlstream_planner.py: removed _gen_sensing_config generator
+           and its stream-map entry.
+       (4) test_full_pipeline.py: sense dispatch unpacks 2 params
+           instead of 3.
+       (5) streams.py: removed sample_sensing_config() and
+           test_visibility() (both were dead code for the fixed-camera
+           architecture). Updated module docstring.
+       The planner will no longer generate move-to-sense steps. Plans
+       become: push → sense → move-to-pick → pick (was: push →
+       move-to-sense → sense → move-to-pick → pick).
 
 ================================================================================
-41. NO VERIFICATION THAT PUSH CLEARED LINE OF SIGHT  [DONE]
+41. NO VERIFICATION THAT PUSH CLEARED LINE OF SIGHT  [REOPENED — see #32]
 ================================================================================
 Where: test_full_pipeline.py lines 259-288
 What:  After pushing an occluder (teleportation + 30 physics steps), the
@@ -229,18 +276,22 @@ What:  After pushing an occluder (teleportation + 30 physics steps), the
        partially, the subsequent sense_shadow will fail to detect the
        target even if it IS there.
 
-Fixed: Added verify_push_cleared_view() which casts a 5x5 grid of rays
-       from the camera through the shadow AABB at mid-height, checking
-       specifically whether the pushed occluder still intercepts them.
-       Called after push + physics settling for every shadow linked to
-       the pushed occluder. If any shadow is still blocked:
-       (1) A warning is printed with the blocked ray fraction.
-       (2) The occluder is NOT marked as moved in the belief state.
-       (3) Execution breaks out of the action loop to trigger a replan.
-       Since the occluder remains "blocking" in the belief state, the
-       replanner will include another push attempt — starting from the
-       occluder's updated (post-push) position, which may succeed with
-       a different displacement.
+Previously done: Added verify_push_cleared_view() which casts rays from
+       the camera after push + physics settling. If shadow is still
+       blocked, the occluder is not marked as moved and replanning is
+       triggered.
+
+Still wrong: verify_push_cleared_view() is sensing logic embedded in
+       push execution. The planner never planned a view-check — the
+       push executor hardcodes "after every push, do sensing." This
+       bypasses the planner and models the solution in execution.
+
+       The correct architecture is described in #32's fix: push
+       execution just moves the object. Sense execution detects
+       whether the view is blocked and reports the appropriate
+       outcome. verify_push_cleared_view() should be removed from
+       push and its logic absorbed into sense (which already casts
+       rays from the fixed camera).
 
 ================================================================================
 44. SHADOWS NOT RECOMPUTED AFTER PUSH — STALE REGISTRY
@@ -274,18 +325,18 @@ FOR LATER
 ================================================================================
 SUMMARY
 ================================================================================
-The PLANNING ARCHITECTURE:
-  - PDDL domain now models capabilities, not the scenario (#32 — done)
-  - PDDLStream correctly uses streams for geometric reasoning
-  - Replanning loop correctly updates belief state
+The PLANNING ARCHITECTURE still models the solution, not capabilities:
+  - Push action is "clear a view", not "move an object" (#32 — reopened)
+  - Push execution embeds sensing (verify_push_cleared_view) (#32, #41)
+  - Occluder positions not tracked in planner state (#32)
+  - Sensing uses fixed camera correctly (#36 — done)
   - KIF fluents for partial observability are sound
 
 The IMPLEMENTATION shortcuts every geometric step:
   - Streams produce labels instead of geometry (#4 — done, #20 to wire)
   - Execution uses type-dependent offsets; pick/push ignore plan (#6, #7)
-  - Sensing uses fixed camera regardless of robot config (#36)
-  - Pushing is teleportation; post-push verification added (#41 — done)
-  - Visibility check is a stub returning True (#12)
+  - Pushing is teleportation (#32 execution, FOR LATER)
+  - Visibility check removed (was stub; no longer needed) (#12 — resolved)
   - Heuristic IK produces meaningless configs (#26 — done, now flagged+warned)
   - Shadow/registry not recomputed after push (#44)
 
@@ -293,8 +344,8 @@ The CODEBASE organizational debt is largely resolved:
   - Duplicate robot constants and utility functions (#31 — done)
 
 Priority order for remaining fixes:
-  1. Wire BoxelStreams into the planner — THE critical fix (#20, #12)
-  2. Fix execution to use plan parameters (#6, #7)
-  3. Fix sensing: remove move-to-sense since we use fixed camera (#36)
-  4. Fix push edge cases: post-push verification (#41 — done), stale registry (#44)
-  5. Improve heuristic IK fallback (#26 — done)
+  1. Fix push to model spatial movement, not view-clearing (#32)
+  2. Wire BoxelStreams into the planner (#20)
+  3. Fix execution to use plan parameters (#6, #7)
+  4. Fix stale registry after push (#44)
+  5. Add collision-free motion planning (#5)

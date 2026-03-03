@@ -356,8 +356,8 @@ def main(gui=True):
                 print(f"    -> Moved to {dest_boxel_id} (offset {offset.tolist()})")
                     
             elif action_name == 'sense':
-                obj, shadow_id, config = params
-                print(f"    Sensing {shadow_id}...")
+                obj, shadow_id = params
+                print(f"    Sensing {shadow_id} (fixed camera)...")
                 
                 shadow_boxel = registry.get_boxel(str(shadow_id))
                 target_pybullet_id = env.objects[target_name].object_id

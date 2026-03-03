@@ -81,7 +81,6 @@ class PDDLStreamPlanner:
         """
         return {
             'sample-push-config': from_gen_fn(self._gen_push_config),
-            'sample-sensing-config': from_gen_fn(self._gen_sensing_config),
             'sample-grasp': from_gen_fn(self._gen_grasp),
             'plan-motion': from_gen_fn(self._gen_motion),
             'compute-kin': from_gen_fn(self._gen_kin_solution),
@@ -96,18 +95,6 @@ class PDDLStreamPlanner:
         for i in range(2):
             self._config_count += 1
             config_name = f"q_push_{occluder_id}_{self._config_count}"
-            yield (config_name,)
-    
-    def _gen_sensing_config(self, boxel_id: str):
-        """Generator for sensing configurations."""
-        boxel = self.registry.get_boxel(boxel_id)
-        if boxel is None:
-            return
-        
-        # Generate a few viewing configurations
-        for i in range(3):
-            self._config_count += 1
-            config_name = f"q_sense_{boxel_id}_{self._config_count}"
             yield (config_name,)
     
     def _gen_grasp(self, obj_id: str):
@@ -178,7 +165,7 @@ class PDDLStreamPlanner:
         planner receives, without running PDDLStream. The output file matches
         domain_pddlstream.pddl's untyped format.
 
-        Note: stream-certified predicates (sensing_config, push_config, etc.)
+        Note: stream-certified predicates (push_config, kin_solution, etc.)
         are populated at runtime by PDDLStream streams and will NOT appear in
         this file. The problem is therefore not solvable by a plain PDDL
         planner — it's a snapshot of the static init state for inspection.

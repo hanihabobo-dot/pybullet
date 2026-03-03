@@ -9,15 +9,6 @@
     :certified (and (Config ?q) (push_config ?occ ?q) (config_for_boxel ?q ?occ))
   )
   
-  ;; Sample a robot configuration for sensing a shadow boxel
-  ;; (Sensing requires view_clear - checked at action level)
-  (:stream sample-sensing-config
-    :inputs (?b)
-    :domain (is_shadow ?b)
-    :outputs (?q)
-    :certified (and (Config ?q) (sensing_config ?b ?q) (config_for_boxel ?q ?b))
-  )
-  
   ;; Sample grasp poses for an object  
   (:stream sample-grasp
     :inputs (?o)
