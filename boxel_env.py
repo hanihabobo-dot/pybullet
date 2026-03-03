@@ -101,8 +101,14 @@ class BoxelTestEnv:
         self._setup_scene()
         
         # Initialize helper components
-        self.shadow_calculator = ShadowCalculator(self.camera_position, self.table_surface_height)
-        self.free_space_generator = FreeSpaceGenerator(self.table_surface_height)
+        self.shadow_calculator = ShadowCalculator(
+            self.camera_position, self.table_surface_height,
+            table_x_range=self.table_x_range, table_y_range=self.table_y_range
+        )
+        self.free_space_generator = FreeSpaceGenerator(
+            self.table_surface_height,
+            table_x_range=self.table_x_range, table_y_range=self.table_y_range
+        )
         self.cell_merger = CellMerger()
         self.visualizer = BoxelVisualizer()
         
@@ -132,6 +138,12 @@ class BoxelTestEnv:
         table_position = [0.5, 0.0, table_z_offset]
         table_id = p.loadURDF("table/table.urdf", table_position, [0, 0, 0, 1], useFixedBase=True)
         self.table_surface_height = 0.625 + table_z_offset
+
+        # Table XY bounds — derived from table position [0.5, 0] and size [1.0, 1.0].
+        # Defined once here; passed to ShadowCalculator, FreeSpaceGenerator, and
+        # any external code that needs to check table boundaries.
+        self.table_x_range = (0.0, 1.0)
+        self.table_y_range = (-0.5, 0.5)
         
         self.objects["table"] = ObjectInfo(
             object_id=table_id, name="table",

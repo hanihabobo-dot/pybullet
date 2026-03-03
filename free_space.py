@@ -21,20 +21,24 @@ class FreeSpaceGenerator:
     until reaching a minimum resolution.
     """
     
-    def __init__(self, table_surface_height: float, min_resolution: float = 0.035):
+    def __init__(self, table_surface_height: float, min_resolution: float = 0.035,
+                 table_x_range: tuple = (0.0, 1.0),
+                 table_y_range: tuple = (-0.5, 0.5)):
         """
         Initialize the free space generator.
         
         Args:
             table_surface_height: Z height of the table surface
             min_resolution: Minimum boxel size in meters (default 3cm)
+            table_x_range: (min, max) X bounds of the table surface
+            table_y_range: (min, max) Y bounds of the table surface
         """
         self.table_surface_height = table_surface_height
         self.min_resolution = min_resolution
         
         # Workspace bounds (volume above table)
-        self.ws_min = np.array([0.0, -0.5, table_surface_height])
-        self.ws_max = np.array([1.0, 0.5, table_surface_height + 0.5])
+        self.ws_min = np.array([table_x_range[0], table_y_range[0], table_surface_height])
+        self.ws_max = np.array([table_x_range[1], table_y_range[1], table_surface_height + 0.5])
         
         # Debug drawing state
         self.debug_items = []

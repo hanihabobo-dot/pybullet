@@ -20,22 +20,23 @@ class ShadowCalculator:
     the camera's perspective.
     """
     
-    def __init__(self, camera_position: np.ndarray, table_surface_height: float):
+    def __init__(self, camera_position: np.ndarray, table_surface_height: float,
+                 table_x_range: tuple = (0.0, 1.0),
+                 table_y_range: tuple = (-0.5, 0.5)):
         """
         Initialize the shadow calculator.
         
         Args:
             camera_position: [x, y, z] position of the camera
             table_surface_height: Z height of the table surface
+            table_x_range: (min, max) X bounds of the table surface
+            table_y_range: (min, max) Y bounds of the table surface
         """
         self.camera_position = camera_position
         self.table_surface_height = table_surface_height
         
-        # Table bounds (hardcoded for now, could be parameterized)
-        self.table_x_min = 0.0
-        self.table_x_max = 1.0
-        self.table_y_min = -0.5
-        self.table_y_max = 0.5
+        self.table_x_min, self.table_x_max = table_x_range
+        self.table_y_min, self.table_y_max = table_y_range
     
     def calculate_shadow_boxel(self, obj_boxel: Boxel, obstacles: List[Boxel]) -> List[Boxel]:
         """

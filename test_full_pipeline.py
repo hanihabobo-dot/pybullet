@@ -260,7 +260,8 @@ def main(gui=True):
                     occ_pos = occ_info['position']
                     
                     push_disp = compute_push_displacement(
-                        env.camera_position, occluder_id, registry, boxel_to_pybullet
+                        env.camera_position, occluder_id, registry, boxel_to_pybullet,
+                        table_x_range=env.table_x_range, table_y_range=env.table_y_range
                     )
                     if push_disp is None:
                         print(f"    WARNING: No valid push direction for {occ_info['name']} "
@@ -535,7 +536,8 @@ def execute_pick(robot_id, env, target_name, target_pos, gui):
     return grasp_constraint_id
 
 
-def compute_push_displacement(camera_pos, occluder_id, registry, boxel_to_pybullet):
+def compute_push_displacement(camera_pos, occluder_id, registry, boxel_to_pybullet,
+                              table_x_range=(0.0, 1.0), table_y_range=(-0.5, 0.5)):
     """
     Compute the displacement vector to push an occluder out of the camera's
     line of sight to its shadow region(s).
@@ -550,6 +552,8 @@ def compute_push_displacement(camera_pos, occluder_id, registry, boxel_to_pybull
         occluder_id: Boxel ID of the occluder to push
         registry: BoxelRegistry with scene geometry
         boxel_to_pybullet: Dict mapping boxel IDs to PyBullet info
+        table_x_range: (min, max) X bounds of the table surface
+        table_y_range: (min, max) Y bounds of the table surface
 
     Returns:
         np.ndarray or None: Push displacement vector [dx, dy, 0], or None if
@@ -587,8 +591,8 @@ def compute_push_displacement(camera_pos, occluder_id, registry, boxel_to_pybull
     half_width = abs(occ_extent[0] * perp[0]) + abs(occ_extent[1] * perp[1])
     push_dist = half_width + 0.10
 
-    TABLE_X_MIN, TABLE_X_MAX = 0.0, 1.0
-    TABLE_Y_MIN, TABLE_Y_MAX = -0.5, 0.5
+    TABLE_X_MIN, TABLE_X_MAX = table_x_range
+    TABLE_Y_MIN, TABLE_Y_MAX = table_y_range
 
     occ_pos_xy = occluder_boxel.center[:2]
     if occluder_id in boxel_to_pybullet:

@@ -489,7 +489,7 @@ Fix:   Move scene parameters (positions, sizes, masses) to a YAML/JSON
        No randomization — just separation of data from code.
 
 ================================================================================
-18. TABLE BOUNDS DUPLICATED ACROSS FILES
+18. TABLE BOUNDS DUPLICATED ACROSS FILES  [DONE]
 ================================================================================
 Where: test_full_pipeline.py lines 527-528, boxel_test_env.py lines 502-508
 What:  Table bounds (x: 0.0-1.0, y: -0.5-0.5) and table_surface_height
@@ -504,6 +504,23 @@ What:  Table bounds (x: 0.0-1.0, y: -0.5-0.5) and table_surface_height
 Fix:   Define table bounds once in BoxelTestEnv (or config.py) and pass
        them to all consumers. compute_push_displacement() should receive
        bounds from the environment, not define its own.
+
+Fixed: Table bounds are now defined once in BoxelTestEnv._setup_scene()
+       as table_x_range=(0.0, 1.0) and table_y_range=(-0.5, 0.5), right
+       after computing table_surface_height. Changes:
+       (1) ShadowCalculator.__init__() accepts table_x_range and
+           table_y_range parameters instead of hardcoding them. BoxelTestEnv
+           passes its bounds at construction time.
+       (2) FreeSpaceGenerator.__init__() accepts table_x_range and
+           table_y_range parameters. Its ws_min/ws_max workspace bounds
+           are now derived from the passed parameters instead of hardcoded.
+       (3) compute_push_displacement() in test_full_pipeline.py accepts
+           table_x_range and table_y_range parameters. main() passes
+           env.table_x_range and env.table_y_range from the environment.
+       All three consumers use backward-compatible default values matching
+       the current scene, so existing callers that don't pass bounds
+       continue to work. Changing the table geometry now requires updating
+       only BoxelTestEnv._setup_scene().
 
 ================================================================================
 19. STALE FILES AND SCRATCH SCRIPTS  [DONE]
@@ -1394,7 +1411,7 @@ The CODEBASE has significant organizational debt:
     but never managed (#33 — done) — same anti-pattern as removed #16 fields
   - PDDL predicate is_occluder renamed to is_object (#42 — done);
     broader occluder-specific predicate cleanup remains in #32
-  - Magic constants duplicated across files (#18, #31)
+  - Magic constants duplicated across files (#18 — done, #31)
   - Stale files, temp copies, and unclear entry points (#11 — done, #19 — done)
   - config.py exists but is never used; paths hardcoded (#30 — not an issue)
   - Dead code: config.py (#30); get_stream_definitions() removed (#29 fix)
@@ -1416,7 +1433,7 @@ Priority order for fixing:
   7. Fix push edge cases: collision (#23), post-push verification (#41),
      orientation reset (#43), stale registry (#44)
   8. Fix pick robustness: open_gripper (#37 — done), constraint cleanup (#38 — done)
-  9. Consolidate shared constants and utilities (#18, #30, #31)
+  9. Consolidate shared constants and utilities (#18 — done, #30, #31)
  10. Clean up minor issues: unused imports (#46 — done), keyboard interrupt (#45 — done),
      max_replans heuristic (#27 — done)
  11. Implement physics-based pushing (#3)
