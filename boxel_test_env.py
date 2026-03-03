@@ -1328,14 +1328,6 @@ class BoxelTestEnv:
                     # If something else is hit first, object is occluded
                     if hit_object_id != obj_info.object_id and hit_fraction < 0.95:
                         is_visible = False
-                        # Check if the occluder is actually blocking (not just a near miss)
-                        occluder_pos, _ = p.getBasePositionAndOrientation(hit_object_id)
-                        occluder_dist = np.linalg.norm(np.array(occluder_pos) - ray_from)
-                        obj_dist = np.linalg.norm(position - ray_from)
-                        if occluder_dist < obj_dist:
-                            is_visible = False
-                        else:
-                            is_visible = True
                     else:
                         is_visible = True
                 else:

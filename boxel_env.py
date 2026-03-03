@@ -381,9 +381,7 @@ class BoxelTestEnv:
                 if len(ray_result) > 0:
                     hit_id, _, hit_fraction = ray_result[0][0], ray_result[0][1], ray_result[0][2]
                     if hit_id != obj_info.object_id and hit_fraction < 0.95:
-                        occluder_pos, _ = p.getBasePositionAndOrientation(hit_id)
-                        if np.linalg.norm(np.array(occluder_pos) - self.camera_position) < np.linalg.norm(position - self.camera_position):
-                            is_visible = False
+                        is_visible = False
             
             obj_info.is_visible = is_visible
             if is_visible:

@@ -1033,7 +1033,7 @@ Fix:   Store the constraint ID returned by p.createConstraint(). Remove
        it when placing the object or resetting the environment.
 
 ================================================================================
-39. oracle_detect_objects HAS REDUNDANT DISTANCE CHECK
+39. oracle_detect_objects HAS REDUNDANT DISTANCE CHECK  [DONE]
 ================================================================================
 Where: boxel_test_env.py lines 1329-1338
 What:  When a ray from camera to object hits something with
@@ -1051,6 +1051,19 @@ What:  When a ray from camera to object hits something with
 Fix:   Remove the secondary distance check. The hit_fraction < 0.95 test
        is sufficient. Or if the check is meant to handle edge cases
        (e.g., objects overlapping in projection), document the intent.
+
+Fixed: Removed the secondary center-to-center distance check from both
+       boxel_test_env.py and boxel_env.py. The hit_fraction < 0.95
+       condition is sufficient and correct: it tests where the ray
+       actually hit the blocker's surface. The secondary check compared
+       body center distances instead, which is not just redundant but
+       actively wrong in edge cases — a large occluder whose center is
+       behind the target but whose surface extends forward would pass
+       hit_fraction < 0.95 (correctly occluded) but fail the center
+       distance check, causing is_visible to flip back to True
+       (incorrectly visible). Now the logic is: if the ray hits a
+       different body before reaching the target (hit_fraction < 0.95),
+       the object is occluded. No secondary check.
 
 ================================================================================
 40. boxel_env.py MISSING update_object_positions()
@@ -1271,7 +1284,7 @@ The CODEBASE has significant organizational debt:
   - Dead code: get_stream_definitions(), config.py (#31, #30)
   - Duplicate utility functions with inconsistent params (#31)
   - Stream PDDL predicate inconsistency (#29)
-  - oracle_detect_objects has dead logic in distance check (#39)
+  - oracle_detect_objects had dead/buggy distance check (#39 — done)
   - Targets DO generate shadow boxels — #28 factual correction
   - Unused imports in active files (#46 — done)
   - KeyboardInterrupt silently swallowed (#45)
