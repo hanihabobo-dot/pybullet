@@ -1,0 +1,308 @@
+================================================================================
+CODEBASE AUDIT — RESOLVED ISSUES
+================================================================================
+Date: 2026-02-25 (original audit, merged from 3 audit passes)
+Archived: 2026-03-03
+
+These issues have been fixed, reclassified as not-an-issue, or corrected.
+The active audit with remaining open issues is in CODEBASE_AUDIT.txt.
+
+================================================================================
+1. OBJECT HIDING — FAKE ORACLE  [DONE]
+================================================================================
+Where: test_full_pipeline.py lines 141-144
+What:  The target is randomly assigned to a shadow via random.randint().
+       It has no relation to where the object actually is in the PyBullet scene.
+       Sensing (line 285) is a string comparison, not actual perception.
+
+Fix:   Determine which shadow a target is actually inside by checking if the
+       target's position falls within a shadow boxel's AABB. Replace the oracle
+       with ground-truth geometry from the scene.
+
+Fixed: Random oracle replaced with AABB containment check. Each target's
+       position is tested against every shadow boxel's min_corner/max_corner.
+       Only targets that are geometrically inside a shadow are eligible.
+       If no target is inside any shadow, the scenario exits gracefully.
+
+================================================================================
+2. SENSING — STRING COMPARISON, NO PERCEPTION  [DONE]
+================================================================================
+Where: test_full_pipeline.py line 285
+What:  found = (str(shadow_id) == oracle_hidden_shadow)
+       No ray-casting, no camera rendering, no visibility check.
+
+Fixed: String comparison replaced with PyBullet ray-casting via
+       sense_shadow_raycasting(). Rays originate from the fixed scene camera
+       (the actual perception sensor) and target a 7x7 XY grid at 3 Z levels
+       within the shadow volume. If any ray hits the target's PyBullet body,
+       sensing reports found=True.
+
+================================================================================
+3. PUSH — TELEPORTATION WITH HARDCODED DIRECTION  [DONE]
+================================================================================
+Where: test_full_pipeline.py lines 237-239
+What:  The occluder is teleported +0.3 in X using p.resetBasePositionAndOrientation().
+       Direction is always +X regardless of camera/shadow geometry.
+
+Fixed: Hardcoded +0.3 X replaced with compute_push_displacement(). The push
+       direction is now computed perpendicular to the camera->shadow viewing
+       line (in the XY plane). The push distance is the occluder's projected
+       half-width along the perpendicular + 10cm clearance margin. Teleportation
+       is retained as the motion mechanism.
+
+================================================================================
+4. STREAMS — RETURN STRING NAMES, NO GEOMETRY  [DONE]
+================================================================================
+Where: pddlstream_planner.py lines 87-127
+What:  All stream generators yield only string names like "q_push_obj_002_5".
+       No actual IK computation, no joint angles, no end-effector poses.
+       The streams in streams.py already have partial implementations with real
+       IK, but pddlstream_planner.py does NOT use them. See #20 for wiring.
+
+================================================================================
+8. MOVE ACTION — NO BOXEL REFERENCE  [DONE]
+================================================================================
+Where: pddl/domain_pddlstream.pddl lines 102-115
+
+Fixed: Added (config_for_boxel ?q ?b) predicate. Move action is now
+       move(?q1, ?q2, ?b, ?t) with precondition (config_for_boxel ?q2 ?b).
+       Execution uses the ?b parameter directly.
+
+================================================================================
+9. PLACE ACTION — NO DESTINATION CONSTRAINT  [DONE]
+================================================================================
+Where: pddl/domain_pddlstream.pddl lines 144-161
+
+Fixed: Added (is_free_space ?b) as a precondition to the place action.
+
+================================================================================
+10. SHADOW-OCCLUDER MAPPING — ROUND-ROBIN ASSIGNMENT  [DONE]
+================================================================================
+Where: test_full_pipeline.py lines 152-154
+
+Fixed: Round-robin replaced with registry lookup using created_by_boxel_id.
+       Each shadow now maps to the occluder that actually casts it.
+
+================================================================================
+BUG FIX: REPLANNING INIT STATE  [DONE]
+================================================================================
+Where: pddlstream_planner.py create_problem(), line 175
+
+Fixed: Added (occluder_aside occ_id) to init for already-moved occluders.
+
+================================================================================
+BUG FIX: EXECUTION — BELIEF, OFFSETS, FAILED PUSH  [DONE]
+================================================================================
+Where: test_full_pipeline.py
+
+Fixed: (1) belief.mark_occluder_moved() only after successful push.
+       (2) Move uses boxel-type-dependent offsets.
+       (3) On push failure, break to replan instead of continue.
+
+================================================================================
+11. NO PROBLEM FILE — BUILT IN PYTHON, LEGACY ARTIFACTS LINGER  [DONE]
+================================================================================
+Where: pddlstream_planner.py create_problem(), pddl/ directory
+
+Fixed: Moved unused PDDL files to archive/pddl/. Added export_problem_pddl()
+       for debugging. pddl/ now contains only runtime files.
+
+================================================================================
+13. TWO DIVERGED VERSIONS OF BoxelTestEnv  [DONE]
+================================================================================
+Where: boxel_test_env.py and boxel_env.py
+
+Fixed: Kept boxel_env.py (modular version) as sole BoxelTestEnv. Archived
+       boxel_test_env.py. Unified Boxel class in boxel_types.py. Also fixes #40.
+
+================================================================================
+14. OBSOLETE EXECUTOR / PROBLEM GENERATOR / HIDDEN OBJECT SCENARIO  [DONE]
+================================================================================
+Where: executor.py, problem_generator.py, hidden_object_scenario.py
+
+Fixed: Moved all three files to archive/.
+
+================================================================================
+15. PDDL FACT GENERATOR USES WRONG PREDICATES  [DONE]
+================================================================================
+Where: boxel_data.py lines 283-337
+
+Fixed: Rewrote generate_pddl_facts() to use exact predicates from
+       domain_pddlstream.pddl. Removed all 9 wrong predicates.
+
+================================================================================
+16. REACHABILITY / OBSERVABILITY — NEVER COMPUTED, ALWAYS TRUE  [DONE]
+================================================================================
+Where: boxel_data.py lines 69-71
+
+Fixed: Removed both fields entirely from BoxelData.
+
+================================================================================
+17. SCENE IS FULLY HARDCODED  [NOT AN ISSUE — BY DESIGN]
+================================================================================
+The fixed scene composition is intentional. No randomization wanted.
+
+================================================================================
+18. TABLE BOUNDS DUPLICATED ACROSS FILES  [DONE]
+================================================================================
+Where: test_full_pipeline.py, boxel_test_env.py
+
+Fixed: Table bounds now defined once in BoxelTestEnv._setup_scene() and
+       passed to all consumers.
+
+================================================================================
+19. STALE FILES AND SCRATCH SCRIPTS  [DONE]
+================================================================================
+Where: Multiple files in project root and temp/
+
+Fixed: Deleted temp/. Moved 7 stale files to archive/.
+
+================================================================================
+21. compute_push_displacement — DUMMY FALLBACK RETURNS [0.3, 0, 0]  [DONE]
+================================================================================
+Where: test_full_pipeline.py
+
+Fixed: All three dummy returns replaced with return None. Caller's
+       existing None check triggers replan correctly.
+
+================================================================================
+22. push_aside — SILENT SKIP WHEN OCCLUDER NOT IN MAPPING  [DONE]
+================================================================================
+Where: test_full_pipeline.py lines 245-279
+
+Fixed: Added else branch that prints ERROR and breaks to replan.
+
+================================================================================
+23. push_aside COLLISION CHECK INCOMPLETE  [NOT AN ISSUE]
+================================================================================
+Where: test_full_pipeline.py compute_push_displacement()
+What:  Hidden targets missing from collision check because generate_boxels()
+       only processes visible objects.
+
+NOT AN ISSUE: The robot operates under partial observability. Hidden targets
+are unknown to the robot. Including them in collision checks would give the
+robot oracle knowledge it shouldn't have. If a push displaces a hidden target,
+that's a consequence of partial observability + teleportation, not a bug.
+
+================================================================================
+24. GOAL PARSING IS STRING-BASED AND BRITTLE  [DONE]
+================================================================================
+Where: pddlstream_planner.py create_problem()
+
+Fixed: plan() and create_problem() now accept goal as a tuple directly.
+       String parsing removed entirely.
+
+================================================================================
+25. OBJECT POSITIONS NEVER UPDATED AFTER PHYSICS SETTLING  [DONE]
+================================================================================
+Where: boxel_test_env.py, test_full_pipeline.py
+
+Fixed: Added update_object_positions() to BoxelTestEnv. Called after settling,
+       after push physics, and before pick.
+
+================================================================================
+27. max_replans — MAGIC HEURISTIC, NO GUARANTEE  [DONE]
+================================================================================
+Where: test_full_pipeline.py line 205
+
+Fixed: Increased to 2 * len(shadows) + 1. Added comment documenting formula.
+       Fixed failure reporting to distinguish limit vs exhaustion.
+
+================================================================================
+28. TARGETS GENERATE SHADOWS — is_occluder NEVER CHECKED  [AUDIT CORRECTION]
+================================================================================
+CORRECTION: Targets DO cast shadow boxels. The is_occluder field is never
+checked during shadow calculation. Acceptable as modeling simplification.
+
+================================================================================
+29. STREAM PDDL MISMATCH — obj_graspable PREDICATE  [DONE]
+================================================================================
+Where: pddl/stream.pddl, streams.py
+
+Fixed: obj_graspable is NOT needed. Removed get_stream_definitions() dead code
+       from streams.py. Fixed sample_grasp() docstring.
+
+================================================================================
+30. config.py DEAD — HARDCODED USER-SPECIFIC PATHS  [NOT AN ISSUE]
+================================================================================
+The hardcoded WSL path is intentional for single-developer project.
+
+================================================================================
+33. BoxelData HAS 5 UNUSED BELIEF-STATE FIELDS  [DONE]
+================================================================================
+Where: boxel_data.py lines 62-66
+
+Fixed: Removed all five fields from BoxelData. Belief tracking remains
+       in BeliefState class.
+
+================================================================================
+34. REPLANNING ALWAYS ASSUMES ROBOT IS AT q_home  [DONE]
+================================================================================
+Where: test_full_pipeline.py, pddlstream_planner.py
+
+Fixed: Added current_config tracking. Updated after each move action.
+       Passed to planner.plan() on every call.
+
+================================================================================
+35. push_aside REDUNDANTLY MOVES THE ROBOT  [DONE]
+================================================================================
+Where: test_full_pipeline.py line 257
+
+Fixed: Removed move_robot_to_pos call from push_aside execution.
+       Move action handles all positioning.
+
+================================================================================
+37. NO open_gripper BEFORE PICK  [DONE]
+================================================================================
+Where: test_full_pipeline.py execute_pick()
+
+Fixed: Added open_gripper() call before lowering to grasp.
+
+================================================================================
+38. p.createConstraint IN PICK IS NEVER CLEANED UP  [DONE]
+================================================================================
+Where: test_full_pipeline.py line 487
+
+Fixed: execute_pick() returns constraint ID. Caller stores it and calls
+       p.removeConstraint() after the run completes.
+
+================================================================================
+39. oracle_detect_objects HAS REDUNDANT DISTANCE CHECK  [DONE]
+================================================================================
+Where: boxel_test_env.py, boxel_env.py
+
+Fixed: Removed secondary center-to-center distance check. hit_fraction < 0.95
+       is sufficient and correct.
+
+================================================================================
+40. boxel_env.py MISSING update_object_positions()  [DONE]
+================================================================================
+Resolved as part of #13 unification.
+
+================================================================================
+42. PDDL PREDICATE is_occluder MISNAMES WHAT IT MEANS  [DONE]
+================================================================================
+Where: domain_pddlstream.pddl, stream.pddl, pddlstream_planner.py, boxel_data.py
+
+Fixed: Renamed (is_occluder ?b) to (is_object ?b) in all six locations.
+
+================================================================================
+43. push_aside TELEPORTATION RESETS ORIENTATION TO IDENTITY  [DONE]
+================================================================================
+Where: test_full_pipeline.py line 268-269
+
+Fixed: Current orientation read and preserved during teleportation.
+
+================================================================================
+45. KEYBOARD INTERRUPT SILENTLY SWALLOWED  [DONE]
+================================================================================
+Where: test_full_pipeline.py
+
+Fixed: Replaced with timed exit (4-second countdown). No interrupt handling needed.
+
+================================================================================
+46. UNUSED IMPORTS  [DONE]
+================================================================================
+Where: test_full_pipeline.py
+
+Fixed: Removed unused BoxelStreams import.
