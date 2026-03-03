@@ -1086,7 +1086,7 @@ Fixed: Added open_gripper(robot_id, gui) function mirroring close_gripper
        on real robots; the constraint-based attachment masked this in sim.
 
 ================================================================================
-38. p.createConstraint IN PICK IS NEVER CLEANED UP
+38. p.createConstraint IN PICK IS NEVER CLEANED UP  [DONE]
 ================================================================================
 Where: test_full_pipeline.py line 487
 What:  p.createConstraint() creates a JOINT_FIXED constraint between the
@@ -1099,6 +1099,15 @@ What:  p.createConstraint() creates a JOINT_FIXED constraint between the
 
 Fix:   Store the constraint ID returned by p.createConstraint(). Remove
        it when placing the object or resetting the environment.
+
+Fixed: execute_pick() now returns the constraint ID from p.createConstraint().
+       The caller in main() stores it in grasp_constraint_id (initialized to
+       None before the planning loop). After the run completes (and after the
+       GUI countdown, so the user sees the robot holding the object),
+       p.removeConstraint() is called before env.close(). This ensures:
+       (a) the constraint can be cleaned up if the code evolves to loop or
+       reset, (b) a future place action can use the stored ID to release the
+       object, (c) no phantom constraints persist in the PyBullet world.
 
 ================================================================================
 39. oracle_detect_objects HAS REDUNDANT DISTANCE CHECK  [DONE]
@@ -1335,7 +1344,7 @@ The IMPLEMENTATION shortcuts every geometric step:
   - Goal parsing is brittle string manipulation (#24 — done)
   - Object positions stale after physics settling (#25 — done)
   - push_aside redundantly moves robot after preceding move (#35 — done)
-  - No open_gripper before pick (#37 — done); leaked p.createConstraint (#38)
+  - No open_gripper before pick (#37 — done); leaked p.createConstraint (#38 — done)
   - Replanning always assumes robot at q_home (#34) — symbolic/
     execution mismatch
   - Shadow/registry not recomputed after push (#44) — ray-cast
@@ -1372,7 +1381,7 @@ Priority order for fixing:
      sensing ignores robot (#36), redundant push move (#35 — done)
   7. Fix push edge cases: collision (#23), post-push verification (#41),
      orientation reset (#43), stale registry (#44)
-  8. Fix pick robustness: open_gripper (#37 — done), constraint cleanup (#38)
+  8. Fix pick robustness: open_gripper (#37 — done), constraint cleanup (#38 — done)
   9. Consolidate shared constants and utilities (#18, #30, #31)
  10. Clean up minor issues: unused imports (#46 — done), keyboard interrupt (#45 — done)
  11. Implement physics-based pushing (#3)

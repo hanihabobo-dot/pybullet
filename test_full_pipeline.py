@@ -203,6 +203,7 @@ def main(gui=True):
     
     plan_count = 0
     max_replans = len(shadows) + 1  # Safety limit
+    grasp_constraint_id = None
     
     while not belief.is_target_found() and plan_count < max_replans:
         plan_count += 1
@@ -339,7 +340,7 @@ def main(gui=True):
                 print(f"    Picking {obj}...")
                 
                 fresh_target_pos = np.array(env.objects[target_name].position)
-                execute_pick(robot_id, env, target_name, fresh_target_pos, gui)
+                grasp_constraint_id = execute_pick(robot_id, env, target_name, fresh_target_pos, gui)
                 print(f"    *** {obj} PICKED UP! ***")
     
     # =========================================================
@@ -363,6 +364,9 @@ def main(gui=True):
         while time.time() < end_time:
             env.step_simulation()
             time.sleep(1.0 / 240.0)
+    
+    if grasp_constraint_id is not None:
+        p.removeConstraint(grasp_constraint_id)
     
     env.close()
     return belief.is_target_found()
@@ -480,7 +484,14 @@ def sense_shadow_raycasting(camera_pos, shadow_boxel, target_pybullet_id):
 
 
 def execute_pick(robot_id, env, target_name, target_pos, gui):
-    """Execute pick action with robot."""
+    """
+    Execute pick action with robot.
+
+    Returns:
+        int: PyBullet constraint ID for the grasp attachment. Callers must
+        store this and call p.removeConstraint() when placing the object
+        or resetting the environment.
+    """
     # Move above target
     move_robot_to_pos(robot_id, target_pos + np.array([0, 0, 0.15]), gui)
 
@@ -496,11 +507,15 @@ def execute_pick(robot_id, env, target_name, target_pos, gui):
     
     # Attach object
     target_id = env.objects[target_name].object_id
-    p.createConstraint(robot_id, END_EFFECTOR_LINK, target_id, -1, 
-                       p.JOINT_FIXED, [0,0,0], [0,0,0.05], [0,0,0])
+    grasp_constraint_id = p.createConstraint(
+        robot_id, END_EFFECTOR_LINK, target_id, -1,
+        p.JOINT_FIXED, [0,0,0], [0,0,0.05], [0,0,0]
+    )
     
     # Lift
     move_robot_to_pos(robot_id, target_pos + np.array([0, 0, 0.3]), gui)
+    
+    return grasp_constraint_id
 
 
 def compute_push_displacement(camera_pos, occluder_id, registry, boxel_to_pybullet):
