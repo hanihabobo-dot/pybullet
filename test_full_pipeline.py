@@ -252,9 +252,6 @@ def main(gui=True):
                     occ_pybullet_id = occ_info['pybullet_id']
                     occ_pos = occ_info['position']
                     
-                    # Move robot above occluder
-                    move_robot_to_pos(robot_id, occ_pos + np.array([0, 0, 0.15]), gui)
-                    
                     push_disp = compute_push_displacement(
                         env.camera_position, occluder_id, registry, boxel_to_pybullet
                     )
@@ -309,12 +306,12 @@ def main(gui=True):
                 
                 # Approach offset depends on boxel type: shadow moves need
                 # side clearance so the arm doesn't block camera rays;
-                # occluder moves approach from the side for pushing.
+                # occluder moves position directly above for pushing.
                 dest_boxel = registry.get_boxel(dest_boxel_id)
                 if dest_boxel and dest_boxel.boxel_type == BoxelType.SHADOW:
                     offset = np.array([0, -0.3, 0.2])
                 elif dest_boxel and dest_boxel.boxel_type == BoxelType.OBJECT:
-                    offset = np.array([0, -0.2, 0.15])
+                    offset = np.array([0, 0, 0.15])
                 else:
                     offset = np.array([0, 0, 0.15])
                 

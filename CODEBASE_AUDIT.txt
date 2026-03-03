@@ -998,7 +998,7 @@ Fix:   Track the current config name (q2 from the last move) and pass it
        back to home between plans.
 
 ================================================================================
-35. push_aside REDUNDANTLY MOVES THE ROBOT
+35. push_aside REDUNDANTLY MOVES THE ROBOT  [DONE]
 ================================================================================
 Where: test_full_pipeline.py line 257
 What:  The PDDL plan contains separate move + push_aside actions:
@@ -1019,6 +1019,17 @@ What:  The PDDL plan contains separate move + push_aside actions:
 Fix:   Remove the move_robot_to_pos call from inside push_aside execution.
        Or keep it as a "fine positioning" step but make the offset
        consistent with the move action's approach offset.
+
+Fixed: Removed the move_robot_to_pos call from push_aside execution —
+       the preceding move action already positions the robot. Updated the
+       move action's OBJECT offset from [0, -0.2, 0.15] to [0, 0, 0.15]
+       (directly above), matching what push_aside was re-positioning to.
+       The old [0, -0.2, 0.15] "approach from side" offset was vestigial:
+       since the push is teleportation (not contact forces), there is no
+       physical reason to approach from the side. The robot moves once to
+       directly above the occluder, then the teleportation push executes.
+       The PDDL plan's move→push_aside flow is now clean: move handles
+       all positioning, push_aside handles only the push logic.
 
 ================================================================================
 36. sense_shadow IGNORES ROBOT POSITION — USES FIXED CAMERA
@@ -1253,7 +1264,7 @@ Fix:   After pushing, either:
        just means rays may not cover the right area.
 
 ================================================================================
-45. KEYBOARD INTERRUPT SILENTLY SWALLOWED
+45. KEYBOARD INTERRUPT SILENTLY SWALLOWED  [DONE]
 ================================================================================
 Where: test_full_pipeline.py line 368
 What:  `except KeyboardInterrupt: pass` silently catches the interrupt.
@@ -1264,6 +1275,11 @@ What:  `except KeyboardInterrupt: pass` silently catches the interrupt.
 Fix:   Add a comment explicitly stating this is for clean exit during the
        keep-alive loop. Or replace with a proper shutdown sequence that
        logs "Shutting down..." before exiting.
+
+Fixed: The try/except KeyboardInterrupt pattern was removed when the
+       "keep alive until Ctrl+C" loop was replaced with a timed exit
+       (4-second countdown with env.step_simulation). The new pattern
+       exits deterministically — no interrupt handling needed.
 
 ================================================================================
 46. UNUSED IMPORTS  [DONE]
@@ -1318,7 +1334,7 @@ The IMPLEMENTATION shortcuts every geometric step:
   - Heuristic IK produces meaningless configs (#26)
   - Goal parsing is brittle string manipulation (#24 — done)
   - Object positions stale after physics settling (#25 — done)
-  - push_aside redundantly moves robot after preceding move (#35)
+  - push_aside redundantly moves robot after preceding move (#35 — done)
   - No open_gripper before pick (#37 — done); leaked p.createConstraint (#38)
   - Replanning always assumes robot at q_home (#34) — symbolic/
     execution mismatch
@@ -1344,7 +1360,7 @@ The CODEBASE has significant organizational debt:
   - oracle_detect_objects had dead/buggy distance check (#39 — done)
   - Targets DO generate shadow boxels — #28 factual correction
   - Unused imports in active files (#46 — done)
-  - KeyboardInterrupt silently swallowed (#45)
+  - KeyboardInterrupt silently swallowed (#45 — done)
 
 Priority order for fixing:
   1. Archive stale files, unify BoxelTestEnv (#11 — done, #13, #14 — done, #19 — done, #40)
@@ -1353,11 +1369,11 @@ Priority order for fixing:
   4. Wire BoxelStreams into the planner — THE critical fix (#20, #4, #12)
   5. Fix execution to use plan parameters (#6, #7)
   6. Fix symbolic/execution mismatches: at_config tracking (#34),
-     sensing ignores robot (#36), redundant push move (#35)
+     sensing ignores robot (#36), redundant push move (#35 — done)
   7. Fix push edge cases: collision (#23), post-push verification (#41),
      orientation reset (#43), stale registry (#44)
   8. Fix pick robustness: open_gripper (#37 — done), constraint cleanup (#38)
   9. Consolidate shared constants and utilities (#18, #30, #31)
- 10. Clean up minor issues: unused imports (#46 — done), keyboard interrupt (#45)
+ 10. Clean up minor issues: unused imports (#46 — done), keyboard interrupt (#45 — done)
  11. Implement physics-based pushing (#3)
  12. Add collision-free motion planning (#5)
