@@ -485,7 +485,7 @@ Fix:   Define table bounds once in BoxelTestEnv (or config.py) and pass
        bounds from the environment, not define its own.
 
 ================================================================================
-19. STALE FILES AND SCRATCH SCRIPTS
+19. STALE FILES AND SCRATCH SCRIPTS  [DONE]
 ================================================================================
 Where: Multiple files in project root and temp/ directory
 What:  Several files are scratch work, old tests, or stale copies:
@@ -538,6 +538,26 @@ Fix:   Archive all stale/obsolete files WITHOUT fixing their bugs.
          test_wsl_pddlstream.py
        - Clarify that test_full_pipeline.py is the canonical entry point
          (document in README)
+
+Fixed: Deleted temp/ directory (contained only an exact copy of
+       domain_pddlstream.pddl — verified byte-identical before deletion).
+       Moved 7 stale files to archive/:
+       - test_pybullet.py — scratch script, random joint wiggling, not a test
+       - run_demo.py — demo importing boxel_env, calls broken save_pddl_facts
+       - run_gui_demo.py — hardcoded pick sequence with its own scene, no
+         real sensing, provides no value over test_full_pipeline.py
+       - run_tamp_demo.py — pre-fix snapshot of pipeline: random oracle
+         (#1's bug), string sensing (#2's bug), no push_aside at all
+       - test_pddl_integration.py — old test for the obsolete typed domain
+       - test_robot_control.py — old test, not referenced by pipeline
+       - test_wsl_pddlstream.py — old test, not referenced by pipeline
+       Verified: no active pipeline file imports from any of these (grep
+       confirmed zero import references). shadow_calculator.py, free_space.py,
+       visualization.py are NOT archived — they are modular extractions
+       actively used by boxel_env.py and will be needed when #13 unifies
+       the two BoxelTestEnv versions. README update deferred — the project
+       root is now self-documenting: test_full_pipeline.py is the only
+       test/demo script remaining.
 
 ================================================================================
 20. BoxelStreams CLASS IS NEVER USED BY THE PLANNER
@@ -1296,7 +1316,7 @@ The CODEBASE has significant organizational debt:
   - generate_pddl_facts AND _build_init both mark target boxels as
     (is_occluder) because is_occluder field is always False (#42, #32)
   - Magic constants duplicated across files (#18, #31)
-  - Stale files, temp copies, and unclear entry points (#11, #19)
+  - Stale files, temp copies, and unclear entry points (#11 — done, #19 — done)
   - config.py exists but is never used; paths hardcoded (#30)
   - Dead code: get_stream_definitions(), config.py (#31, #30)
   - Duplicate utility functions with inconsistent params (#31)
@@ -1307,7 +1327,7 @@ The CODEBASE has significant organizational debt:
   - KeyboardInterrupt silently swallowed (#45)
 
 Priority order for fixing:
-  1. Archive stale files, unify BoxelTestEnv (#11, #13, #14, #19, #40)
+  1. Archive stale files, unify BoxelTestEnv (#11 — done, #13, #14 — done, #19 — done, #40)
   2. Clean BoxelData: remove unused fields (#33), fix is_occluder (#42)
   3. Refactor PDDL domain to model capabilities, not solution (#32)
   4. Wire BoxelStreams into the planner — THE critical fix (#20, #4, #12)
