@@ -29,7 +29,6 @@ class BoxelData:
     
     Designed for PDDLStream integration with all necessary fields for:
     - Geometric queries (motion planning)
-    - Belief state representation (K-literals)
     - Spatial relationships (neighbors, occlusion)
     - Manipulation planning (reachability, placement)
     """
@@ -58,14 +57,11 @@ class BoxelData:
     on_surface: Optional[str] = None            # Which support surface (e.g., "table")
     surface_z: Optional[float] = None           # Z height of support surface
     
-    # === BELIEF STATE ===
-    possibly_contains: List[str] = field(default_factory=list)  # Objects that MIGHT be here
-    confirmed_contains: Optional[str] = None    # K(InBoxel(obj, this)) - known to contain
-    confirmed_empty: bool = False               # K(¬InBoxel(any, this)) - known empty
-    observed: bool = False                      # Has this been sensed?
-    last_observation_time: Optional[float] = None
-    
     # Note: blocking_boxels removed - use created_by_boxel_id for shadows
+    # Note: belief-state fields (possibly_contains, confirmed_contains,
+    # confirmed_empty, observed, last_observation_time) removed — they were
+    # always default values and never managed by any code path. Belief
+    # tracking is handled by BeliefState in the execution layer.
     
     @property
     def center(self) -> np.ndarray:
@@ -101,11 +97,6 @@ class BoxelData:
             "neighbor_ids": self.neighbor_ids,
             "on_surface": self.on_surface,
             "surface_z": self.surface_z,
-            "possibly_contains": self.possibly_contains,
-            "confirmed_contains": self.confirmed_contains,
-            "confirmed_empty": self.confirmed_empty,
-            "observed": self.observed,
-            "last_observation_time": self.last_observation_time,
         }
     
     @classmethod
@@ -124,11 +115,6 @@ class BoxelData:
             neighbor_ids=data.get("neighbor_ids", {}),
             on_surface=data.get("on_surface"),
             surface_z=data.get("surface_z"),
-            possibly_contains=data.get("possibly_contains", []),
-            confirmed_contains=data.get("confirmed_contains"),
-            confirmed_empty=data.get("confirmed_empty", False),
-            observed=data.get("observed", False),
-            last_observation_time=data.get("last_observation_time"),
         )
 
 
@@ -377,9 +363,6 @@ def create_boxel_registry_from_boxels(boxels, table_surface_height: float) -> Bo
         min_corner = boxel.center - boxel.extent
         max_corner = boxel.center + boxel.extent
         
-        # observed = True for objects and free space (visible), False for shadows (occluded)
-        is_observed = (boxel_type != BoxelType.SHADOW)
-        
         boxel_data = BoxelData(
             id=boxel_id,
             boxel_type=boxel_type,
@@ -387,10 +370,9 @@ def create_boxel_registry_from_boxels(boxels, table_surface_height: float) -> Bo
             max_corner=max_corner,
             object_name=boxel.object_name if boxel_type == BoxelType.OBJECT else None,
             is_occluder=boxel.is_occluder if hasattr(boxel, 'is_occluder') else False,
-            created_by_object=parent_object_name,  # For shadow boxels
+            created_by_object=parent_object_name,
             on_surface="table" if min_corner[2] <= table_surface_height + 0.01 else None,
             surface_z=table_surface_height,
-            observed=is_observed,  # Objects and free space are observed, shadows are not
         )
         
         registry.add_boxel(boxel_data)

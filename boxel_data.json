@@ -59,9 +59,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "obj_001",
@@ -119,9 +117,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "obj_002",
@@ -177,9 +173,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "obj_003",
@@ -231,9 +225,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "shadow_004",
@@ -287,9 +279,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": false,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "shadow_005",
@@ -348,9 +338,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": false,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "shadow_006",
@@ -403,9 +391,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": false,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "shadow_007",
@@ -458,9 +444,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": false,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "shadow_008",
@@ -515,9 +499,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": false,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "shadow_009",
@@ -569,9 +551,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": false,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_010",
@@ -627,9 +607,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_011",
@@ -685,9 +663,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_012",
@@ -751,9 +727,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_013",
@@ -807,9 +781,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_014",
@@ -862,9 +834,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_015",
@@ -934,9 +904,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_016",
@@ -992,9 +960,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_017",
@@ -1053,9 +1019,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_018",
@@ -1110,9 +1074,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_019",
@@ -1169,9 +1131,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_020",
@@ -1225,9 +1185,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_021",
@@ -1292,9 +1250,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_022",
@@ -1350,9 +1306,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_023",
@@ -1414,9 +1368,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_024",
@@ -1472,9 +1424,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_025",
@@ -1532,9 +1482,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_026",
@@ -1593,9 +1541,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_027",
@@ -1654,9 +1600,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_028",
@@ -1713,9 +1657,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_029",
@@ -1777,9 +1719,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_030",
@@ -1841,9 +1781,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_031",
@@ -1900,9 +1838,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_032",
@@ -1959,9 +1895,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_033",
@@ -2022,9 +1956,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_034",
@@ -2086,9 +2018,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_035",
@@ -2144,9 +2074,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_036",
@@ -2204,9 +2132,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_037",
@@ -2263,9 +2189,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_038",
@@ -2323,9 +2247,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_039",
@@ -2381,9 +2303,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_040",
@@ -2441,9 +2361,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_041",
@@ -2504,9 +2422,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_042",
@@ -2563,9 +2479,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_043",
@@ -2621,9 +2535,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_044",
@@ -2680,9 +2592,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_045",
@@ -2738,9 +2648,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_046",
@@ -2801,9 +2709,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_047",
@@ -2865,9 +2771,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_048",
@@ -2925,9 +2829,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_049",
@@ -2988,9 +2890,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_050",
@@ -3052,9 +2952,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_051",
@@ -3110,9 +3008,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_052",
@@ -3163,9 +3059,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_053",
@@ -3221,9 +3115,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_054",
@@ -3274,9 +3166,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_055",
@@ -3329,9 +3219,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     },
     {
       "id": "free_056",
@@ -3387,9 +3275,7 @@
       "confirmed_contains": null,
       "confirmed_empty": false,
       "observed": true,
-      "last_observation_time": null,
-      "is_reachable": true,
-      "is_observable": true
+      "last_observation_time": null
     }
   ],
   "summary": {

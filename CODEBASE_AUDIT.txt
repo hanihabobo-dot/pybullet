@@ -884,7 +884,7 @@ Fix:   Refactor the domain to model CAPABILITIES, not the solution:
        the specific scenario (which objects occlude which regions, etc.).
 
 ================================================================================
-33. BoxelData HAS 5 UNUSED BELIEF-STATE FIELDS
+33. BoxelData HAS 5 UNUSED BELIEF-STATE FIELDS  [DONE]
 ================================================================================
 Where: boxel_data.py lines 62-66
 What:  BoxelData defines five belief-state fields that are serialized to
@@ -908,6 +908,17 @@ Fix:   Remove all five fields from BoxelData, to_dict(), and from_dict().
        the persistent data structure. If fine-grained per-boxel belief is
        needed later, it should be a separate overlay, not default-value
        fields baked into BoxelData.
+
+Fixed: Removed all five fields from BoxelData: class definition,
+       to_dict() serialization, and from_dict() deserialization. Also
+       removed the is_observed computation and observed= assignment in
+       create_boxel_registry_from_boxels(). No code anywhere read these
+       fields for logic — grep confirmed they were only referenced in
+       boxel_data.py itself. Old JSON files that still contain these keys
+       load fine (from_dict uses explicit data.get() calls, so extra keys
+       in the dict are simply ignored). Same pattern as the #16 fix.
+       Belief tracking remains in the BeliefState class in the execution
+       layer where it belongs.
 
 ================================================================================
 34. REPLANNING ALWAYS ASSUMES ROBOT IS AT q_home
@@ -1243,7 +1254,7 @@ The CODEBASE has significant organizational debt:
   - PDDL fact generator produces facts for wrong domain (#15 — done)
   - Fields that claim to be computed but are always default (#16 — done)
   - BoxelData carries 5 unused belief-state fields serialized to JSON
-    but never managed (#33) — same anti-pattern as removed #16 fields
+    but never managed (#33 — done) — same anti-pattern as removed #16 fields
   - generate_pddl_facts AND _build_init both mark target boxels as
     (is_occluder) because is_occluder field is always False (#42, #32)
   - Magic constants duplicated across files (#18, #31)
