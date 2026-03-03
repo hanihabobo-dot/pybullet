@@ -208,6 +208,7 @@ def main(gui=True):
     max_replans = 2 * len(shadows) + 1
     grasp_constraint_id = None
     exit_reason = None
+    current_config = "q_home"
     
     while not belief.is_target_found() and plan_count < max_replans:
         plan_count += 1
@@ -226,6 +227,7 @@ def main(gui=True):
         plan = planner.plan(
             target_objects=[target_name],
             goal=('holding', target_name),
+            current_config=current_config,
             known_empty_shadows=known_empty,
             moved_occluders=list(belief.occluders_moved),
             max_time=60.0,
@@ -324,6 +326,7 @@ def main(gui=True):
                     offset = np.array([0, 0, 0.15])
                 
                 move_robot_to_pos(robot_id, base_pos + offset, gui)
+                current_config = str(q2)
                 print(f"    -> Moved to {dest_boxel_id} (offset {offset.tolist()})")
                     
             elif action_name == 'sense_shadow':

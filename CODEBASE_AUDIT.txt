@@ -1020,7 +1020,7 @@ Fixed: Removed all five fields from BoxelData: class definition,
        layer where it belongs.
 
 ================================================================================
-34. REPLANNING ALWAYS ASSUMES ROBOT IS AT q_home
+34. REPLANNING ALWAYS ASSUMES ROBOT IS AT q_home  [DONE]
 ================================================================================
 Where: test_full_pipeline.py lines 221-228, pddlstream_planner.py line 132
 What:  planner.plan() is called without a current_config parameter, so it
@@ -1038,6 +1038,20 @@ What:  planner.plan() is called without a current_config parameter, so it
 Fix:   Track the current config name (q2 from the last move) and pass it
        as current_config on each replan. Alternatively, move the robot
        back to home between plans.
+
+Fixed: Added current_config tracking to the replanning loop. Three changes:
+       (1) Initialized current_config = "q_home" before the planning loop.
+       (2) After each successful move action, updated current_config to
+           the destination config name (q2 from the plan).
+       (3) Passed current_config=current_config to planner.plan() on
+           every call. The planner's _build_init() already handles
+           arbitrary config names — it adds (Config, name) and
+           (at_config, name) to the init state. When a plan breaks
+           mid-execution (e.g., sense_shadow finds nothing), the next
+           replan starts from the last move's destination, not q_home.
+       No planner-side changes needed — the plan() method already
+       accepted current_config as a parameter; callers just weren't
+       passing it.
 
 ================================================================================
 35. push_aside REDUNDANTLY MOVES THE ROBOT  [DONE]
@@ -1396,8 +1410,7 @@ The IMPLEMENTATION shortcuts every geometric step:
   - Object positions stale after physics settling (#25 — done)
   - push_aside redundantly moves robot after preceding move (#35 — done)
   - No open_gripper before pick (#37 — done); leaked p.createConstraint (#38 — done)
-  - Replanning always assumes robot at q_home (#34) — symbolic/
-    execution mismatch
+  - Replanning always assumes robot at q_home (#34 — done)
   - Shadow/registry not recomputed after push (#44) — ray-cast
     targets stale AABB
 
@@ -1428,7 +1441,7 @@ Priority order for fixing:
   3. Refactor PDDL domain to model capabilities, not solution (#32)
   4. Wire BoxelStreams into the planner — THE critical fix (#20, #4, #12)
   5. Fix execution to use plan parameters (#6, #7)
-  6. Fix symbolic/execution mismatches: at_config tracking (#34),
+  6. Fix symbolic/execution mismatches: at_config tracking (#34 — done),
      sensing ignores robot (#36), redundant push move (#35 — done)
   7. Fix push edge cases: collision (#23), post-push verification (#41),
      orientation reset (#43), stale registry (#44)
