@@ -246,6 +246,10 @@
     (obj_at_boxel_KIF target_1 obj_007)
     (obj_at_boxel_KIF target_1 obj_008)
     (obj_at_boxel_KIF target_1 obj_009)
+    (occluder_at obj_006 obj_006)
+    (occluder_at obj_007 obj_007)
+    (occluder_at obj_008 obj_008)
+    (occluder_at obj_009 obj_009)
   )
 
   (:goal (holding target_1))

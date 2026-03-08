@@ -301,43 +301,48 @@ What:  After multiple push attempts, occluders may be physically displaced
        IS clear but verification logic doesn't know it.
 
 ================================================================================
-47. PUSH STREAM DOMAIN USES is_object AS HACK TO BIND ?b_from
+47. PUSH STREAM DOMAIN USES is_object AS HACK TO BIND ?b_from  [DONE]
 ================================================================================
 Where: pddl/stream.pddl, pddlstream_planner.py, streams.py
-What:  The push stream's domain condition is:
+What:  The push stream's domain condition was:
          (and (is_object ?obj) (is_object ?b_from))
        ?b_from is a LOCATION (the boxel where the object sits), not an
-       object. The correct condition would be (obj_at_boxel ?obj ?b_from),
-       but PDDLStream cannot bind stream inputs from fluent predicates
-       (obj_at_boxel appears in action effects). Using is_object exploits
-       the coincidence that occluders initially sit at their own
-       object-typed boxels. The generators guard against invalid pairs
-       (b_from != occluder_id → return), and the push action precondition
-       (obj_at_boxel ?obj ?b_from) enforces the real constraint at plan
-       time.
-
-       Problems:
+       object. Using is_object exploited the coincidence that occluders
+       initially sit at their own object-typed boxels. This caused:
          - Semantically wrong: a location is not "an object."
          - Over-instantiates the stream for all object×object pairs.
          - Breaks if an occluder is pushed to a non-object boxel and
            needs to be pushed again from there.
 
-Fix:   Use PDDLStream's fluent stream support. Declare obj_at_boxel as
-       a fluent predicate in the stream definition so PDDLStream can
-       bind ?b_from from the current state at each planning iteration:
+Fixed: Introduced a static predicate (occluder_at ?occ ?b) that mirrors
+       each occluder's current position. The stream domain is now:
+         (and (is_object ?obj) (occluder_at ?obj ?b_from))
 
-         (:stream sample-push-config
-           :inputs (?obj ?b_from)
-           :domain (is_object ?obj)
-           :fluents (obj_at_boxel)
-           :outputs (?b_to ?q_start ?q_end ?traj)
-           :certified (...))
+       Why not obj_at_boxel directly? PDDLStream strips fluent predicates
+       (those in action effects) from stream domains. Using obj_at_boxel
+       causes KeyError: '?b_from' because the Instantiator can't bind it
+       after stripping.
 
-       This requires calling compile_fluent_streams() from
-       pddlstream.language.fluent when building the PDDLStream problem.
-       The stream generator would receive the current obj_at_boxel facts
-       as an extra argument and bind ?b_from correctly from the current
-       state — no hack, no over-instantiation.
+       Why not :fluents (obj_at_boxel)? compile_fluent_streams() enforces
+       that fluent stream outputs cannot appear in action effects. Push
+       stream outputs (?b_to, ?q_start, ?q_end, ?traj) all appear in
+       push action effects — blocked by design.
+
+       The static predicate approach:
+       (1) domain_pddlstream.pddl: added (occluder_at ?o ?b) predicate.
+       (2) pddlstream_planner.py _build_init(): emits (occluder_at occ loc)
+           for each occluder — at original boxel or at moved destination
+           (from #48's moved_occluders dict).
+       (3) stream.pddl: push stream domain changed to (occluder_at ?obj ?b_from).
+       (4) Removed b_from != occluder_id guard from generators in both
+           pddlstream_planner.py and streams.py — the domain now guarantees
+           only valid (occluder, location) pairs reach the generator.
+
+       Result: semantically correct binding, no over-instantiation
+       (evaluations dropped from 237 to 183 in test), works with moved
+       occluder destinations from #48. Limitation: occluder_at is static
+       per planning call, so re-pushing the same occluder twice within
+       a single plan is not supported — the replanning loop handles this.
 
 ================================================================================
 48. MOVED OCCLUDERS VANISH FROM PLANNER STATE  [DONE]
@@ -391,6 +396,7 @@ The PLANNING ARCHITECTURE models spatial capabilities:
   - Push is "move object from A to B" with derived views (#32 Ph1+2 done)
   - Verification moved from push to sense (tri-state sensing) (#32 Ph3, #41 done)
   - Occluder positions tracked in planner state (#32 Ph1 — done)
+  - Push stream binds locations correctly via occluder_at (#47 — done)
   - Sensing uses fixed camera correctly (#36 — done)
   - KIF fluents for partial observability are sound
 

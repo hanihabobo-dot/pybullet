@@ -93,13 +93,9 @@ class PDDLStreamPlanner:
         Matches stream signature: inputs (?obj ?b_from), outputs (?b_to ?q_start ?q_end ?traj).
         Currently produces string placeholders; real geometry comes from BoxelStreams (#20).
 
-        The stream domain binds ?b_from to all is_object boxels (static).
-        Only the pair where b_from matches the occluder's own boxel is valid;
-        the push action precondition (obj_at_boxel ?obj ?b_from) filters the rest.
-        We skip invalid pairs here to avoid wasted generator calls.
+        The stream domain (occluder_at ?obj ?b_from) guarantees that b_from is
+        the occluder's actual current location — no guard needed.
         """
-        if b_from != occluder_id:
-            return
         boxel = self.registry.get_boxel(occluder_id)
         if boxel is None:
             return
@@ -294,8 +290,10 @@ class PDDLStreamPlanner:
                     dest = moved_occluders[boxel.id]
                     init.append(('Boxel', dest))
                     init.append(('obj_at_boxel', boxel.id, dest))
+                    init.append(('occluder_at', boxel.id, dest))
                 else:
                     init.append(('obj_at_boxel', boxel.id, boxel.id))
+                    init.append(('occluder_at', boxel.id, boxel.id))
                 for obj in target_objects:
                     init.append(('obj_at_boxel_KIF', obj, boxel.id))
 

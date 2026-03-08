@@ -3,13 +3,14 @@
   ;; Compute a push plan: where to push the object and how to get there.
   ;; Input: the object and its current location.
   ;; Output: destination boxel, robot start/end configs, push trajectory.
-  ;; Domain uses is_object (static) for both inputs so PDDLStream can bind
-  ;; them. The push action precondition (obj_at_boxel ?obj ?b_from) enforces
-  ;; that the object is actually at b_from.
-  ;; Certifies config_for_boxel so the move action can reach the start config.
+  ;; Domain binds ?b_from via occluder_at — a static mirror of each occluder's
+  ;; current position. obj_at_boxel is fluent (appears in push effects) so
+  ;; PDDLStream strips it from stream domains; occluder_at is never in effects.
+  ;; The push action precondition (obj_at_boxel ?obj ?b_from) validates at
+  ;; plan time that the binding is still correct.
   (:stream sample-push-config
     :inputs (?obj ?b_from)
-    :domain (and (is_object ?obj) (is_object ?b_from))
+    :domain (and (is_object ?obj) (occluder_at ?obj ?b_from))
     :outputs (?b_to ?q_start ?q_end ?traj)
     :certified (and
       (Boxel ?b_to)

@@ -110,23 +110,23 @@ class BoxelStreams:
         PDDLStream declaration (see pddl/stream.pddl):
             (:stream sample-push-config
               :inputs (?obj ?b_from)
-              :domain (and (is_object ?obj) (obj_at_boxel ?obj ?b_from))
+              :domain (and (is_object ?obj) (occluder_at ?obj ?b_from))
               :outputs (?b_to ?q_start ?q_end ?traj)
               :certified (and (Boxel ?b_to) (Config ?q_start) (Config ?q_end)
                               (Trajectory ?traj)
                               (push_solution ?obj ?b_from ?b_to ?q_start ?q_end ?traj)
                               (config_for_boxel ?q_start ?b_from)))
 
+        The stream domain (occluder_at ?obj ?b_from) guarantees b_from is
+        the occluder's actual current location — no guard needed.
+
         Args:
             occluder_id: ID of the occluder boxel to push
             b_from: ID of the boxel where the occluder currently is
-                    (bound from is_object; only valid when b_from == occluder_id)
 
         Yields:
             Tuples of (b_to, q_start, q_end, traj) for pushing the occluder
         """
-        if b_from != occluder_id:
-            return
         boxel = self.registry.get_boxel(occluder_id)
         if boxel is None:
             return

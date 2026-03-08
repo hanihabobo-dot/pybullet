@@ -40,6 +40,8 @@
     
     ;; --- Ground truth (actual world state) ---
     (obj_at_boxel ?o ?b)     ; Object ?o is physically at boxel ?b
+    (occluder_at ?o ?b)      ; Static mirror of obj_at_boxel for occluders only
+                             ; (obj_at_boxel is fluent — can't appear in stream domains)
     
     ;; --- Know-If fluent (do we know the value?) ---
     (obj_at_boxel_KIF ?o ?b) ; We know whether ?o is at ?b (true or false)
