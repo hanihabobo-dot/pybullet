@@ -71,6 +71,10 @@ class BeliefState:
     def mark_occluder_moved(self, occluder_id: str):
         """Mark that an occluder has been pushed aside."""
         self.occluders_moved.add(occluder_id)
+
+    def unmark_occluder_moved(self, occluder_id: str):
+        """Remove moved mark when sensing shows the view is still blocked."""
+        self.occluders_moved.discard(occluder_id)
     
     def get_unknown_shadows(self):
         """Get list of shadows we haven't checked yet."""
@@ -300,8 +304,8 @@ def main(gui=True):
                           f"dist={np.linalg.norm(push_disp[:2]):.3f}m "
                           f"from [{occ_pos[0]:.2f},{occ_pos[1]:.2f}] "
                           f"to [{new_pos[0]:.2f},{new_pos[1]:.2f}]")
-
-                    belief.mark_occluder_moved(occluder_id)
+                    # Defer symbolic moved-state update to sense().
+                    # A physical push can still leave the view blocked.
                 else:
                     occ_boxel = registry.get_boxel(occluder_id)
                     occ_name = occ_boxel.object_name if occ_boxel else None
@@ -351,6 +355,7 @@ def main(gui=True):
                 occluder_pybullet_id = None
                 if shadow_boxel.created_by_boxel_id in boxel_to_pybullet:
                     occluder_pybullet_id = boxel_to_pybullet[shadow_boxel.created_by_boxel_id]['pybullet_id']
+                shadow_occluder_id = shadow_boxel.created_by_boxel_id
 
                 sense_outcome, blocked_fraction = sense_shadow_raycasting(
                     env.camera_position,
@@ -361,14 +366,20 @@ def main(gui=True):
 
                 if sense_outcome == "found_target":
                     belief.mark_sensed(str(shadow_id), found=True)
+                    if shadow_occluder_id:
+                        belief.mark_occluder_moved(shadow_occluder_id)
                     print(f"    *** TARGET FOUND in {shadow_id}! (ray-cast) ***")
                 elif sense_outcome == "clear_but_empty":
                     belief.mark_sensed(str(shadow_id), found=False)
+                    if shadow_occluder_id:
+                        belief.mark_occluder_moved(shadow_occluder_id)
                     print(f"    Target NOT in {shadow_id} (ray-cast: view clear but no target hit)")
                     print(f"    -> REPLANNING with updated belief...")
                     break  # Exit action loop to replan
                 else:
                     # Keep this shadow UNKNOWN: blocked view is not evidence of absence.
+                    if shadow_occluder_id:
+                        belief.unmark_occluder_moved(shadow_occluder_id)
                     print(f"    View to {shadow_id} still blocked "
                           f"({blocked_fraction:.0%} rays hit occluder).")
                     print(f"    -> REPLANNING without marking shadow empty...")
