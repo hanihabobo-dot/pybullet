@@ -14,6 +14,7 @@ env/
 # IDE
 .idea/
 .vscode/
+.cursor/
 *.swp
 *.swo
 
@@ -27,6 +28,7 @@ Thumbs.db
 wsl_env/
 temp/
 statistics/
+logs/
 
 # Documentation HTML (local only)
 technical_documentation.html
