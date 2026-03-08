@@ -138,7 +138,7 @@ class PDDLStreamPlanner:
                        goal: Tuple,
                        current_config: str = "q_home",
                        known_empty_shadows: List[str] = None,
-                       moved_occluders: List[str] = None) -> PDDLProblem:
+                       moved_occluders: Dict[str, str] = None) -> PDDLProblem:
         """
         Create a PDDLStream problem from current state.
         
@@ -148,7 +148,7 @@ class PDDLStreamPlanner:
                   Passed directly to PDDLStream — must match domain predicates.
             current_config: Current robot configuration name
             known_empty_shadows: Shadows we've already checked (not containing target)
-            moved_occluders: Occluders that have been pushed aside
+            moved_occluders: Dict mapping occluder_id -> destination_boxel_id
             
         Returns:
             PDDLProblem for PDDLStream solver
@@ -173,7 +173,7 @@ class PDDLStreamPlanner:
                             goal: Tuple,
                             current_config: str = "q_home",
                             known_empty_shadows: List[str] = None,
-                            moved_occluders: List[str] = None,
+                            moved_occluders: Dict[str, str] = None,
                             filepath: str = "pddl/problem_debug.pddl") -> str:
         """
         Export the programmatically-built problem to a standalone PDDL file.
@@ -192,14 +192,14 @@ class PDDLStreamPlanner:
             goal: Goal as a tuple, e.g. ('holding', 'target_1')
             current_config: Current robot configuration name
             known_empty_shadows: Shadows already checked (empty)
-            moved_occluders: Occluders already pushed aside
+            moved_occluders: Dict mapping occluder_id -> destination_boxel_id
             filepath: Output path (default: pddl/problem_debug.pddl)
 
         Returns:
             The filepath written to
         """
         known_empty_shadows = known_empty_shadows or []
-        moved_occluders = moved_occluders or []
+        moved_occluders = moved_occluders or {}
 
         init = self._build_init(target_objects, current_config,
                                 known_empty_shadows, moved_occluders)
@@ -254,7 +254,7 @@ class PDDLStreamPlanner:
                     target_objects: List[str],
                     current_config: str = "q_home",
                     known_empty_shadows: List[str] = None,
-                    moved_occluders: List[str] = None) -> List[Tuple]:
+                    moved_occluders: Dict[str, str] = None) -> List[Tuple]:
         """
         Build the init state as a list of fact tuples.
 
@@ -265,13 +265,14 @@ class PDDLStreamPlanner:
             target_objects: Objects to reason about
             current_config: Current robot configuration name
             known_empty_shadows: Shadows already checked (empty)
-            moved_occluders: Occluders already pushed aside
+            moved_occluders: Dict mapping occluder_id -> destination_boxel_id
+                for occluders that have been pushed aside
 
         Returns:
             List of fact tuples for the init state
         """
         known_empty_shadows = known_empty_shadows or []
-        moved_occluders = moved_occluders or []
+        moved_occluders = moved_occluders or {}
 
         init = []
         shadows = []
@@ -289,7 +290,11 @@ class PDDLStreamPlanner:
 
             elif boxel.boxel_type == BoxelType.OBJECT:
                 init.append(('is_object', boxel.id))
-                if boxel.id not in moved_occluders:
+                if boxel.id in moved_occluders:
+                    dest = moved_occluders[boxel.id]
+                    init.append(('Boxel', dest))
+                    init.append(('obj_at_boxel', boxel.id, dest))
+                else:
                     init.append(('obj_at_boxel', boxel.id, boxel.id))
                 for obj in target_objects:
                     init.append(('obj_at_boxel_KIF', obj, boxel.id))
@@ -327,7 +332,7 @@ class PDDLStreamPlanner:
              goal: Tuple,
              current_config: str = "q_home",
              known_empty_shadows: List[str] = None,
-             moved_occluders: List[str] = None,
+             moved_occluders: Dict[str, str] = None,
              max_time: float = 30.0,
              verbose: bool = True) -> Optional[List[Tuple]]:
         """
@@ -338,7 +343,7 @@ class PDDLStreamPlanner:
             goal: Goal as a tuple, e.g. ('holding', 'target_1')
             current_config: Current robot config
             known_empty_shadows: Shadows already checked (empty)
-            moved_occluders: Occluders already pushed aside
+            moved_occluders: Dict mapping occluder_id -> destination_boxel_id
             max_time: Maximum planning time in seconds
             verbose: Print planning info
             

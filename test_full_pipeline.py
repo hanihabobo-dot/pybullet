@@ -58,7 +58,7 @@ class BeliefState:
         self.target = target
         self.shadow_status = {s: 'unknown' for s in shadows}
         self.target_found_in = None
-        self.occluders_moved = set()  # Which occluders have been pushed aside
+        self.occluders_moved = {}  # {occluder_id: destination_boxel_id}
     
     def mark_sensed(self, shadow_id: str, found: bool):
         """Update belief after sensing a shadow."""
@@ -68,13 +68,20 @@ class BeliefState:
         else:
             self.shadow_status[shadow_id] = 'not_here'
     
-    def mark_occluder_moved(self, occluder_id: str):
-        """Mark that an occluder has been pushed aside."""
-        self.occluders_moved.add(occluder_id)
+    def mark_occluder_moved(self, occluder_id: str, destination: str):
+        """
+        Mark that an occluder has been pushed to a new location.
+
+        Args:
+            occluder_id: Boxel ID of the occluder that was pushed
+            destination: Symbolic boxel ID for the push destination (used
+                by the planner to emit obj_at_boxel for the new location)
+        """
+        self.occluders_moved[occluder_id] = destination
 
     def unmark_occluder_moved(self, occluder_id: str):
         """Remove moved mark when sensing shows the view is still blocked."""
-        self.occluders_moved.discard(occluder_id)
+        self.occluders_moved.pop(occluder_id, None)
     
     def get_unknown_shadows(self):
         """Get list of shadows we haven't checked yet."""
@@ -238,7 +245,7 @@ def main(gui=True):
             goal=('holding', target_name),
             current_config=current_config,
             known_empty_shadows=known_empty,
-            moved_occluders=list(belief.occluders_moved),
+            moved_occluders=dict(belief.occluders_moved),
             max_time=60.0,
             verbose=False  # Quiet for replanning
         )
@@ -367,12 +374,14 @@ def main(gui=True):
                 if sense_outcome == "found_target":
                     belief.mark_sensed(str(shadow_id), found=True)
                     if shadow_occluder_id:
-                        belief.mark_occluder_moved(shadow_occluder_id)
+                        belief.mark_occluder_moved(
+                            shadow_occluder_id, f"pushed_{shadow_occluder_id}")
                     print(f"    *** TARGET FOUND in {shadow_id}! (ray-cast) ***")
                 elif sense_outcome == "clear_but_empty":
                     belief.mark_sensed(str(shadow_id), found=False)
                     if shadow_occluder_id:
-                        belief.mark_occluder_moved(shadow_occluder_id)
+                        belief.mark_occluder_moved(
+                            shadow_occluder_id, f"pushed_{shadow_occluder_id}")
                     print(f"    Target NOT in {shadow_id} (ray-cast: view clear but no target hit)")
                     print(f"    -> REPLANNING with updated belief...")
                     break  # Exit action loop to replan

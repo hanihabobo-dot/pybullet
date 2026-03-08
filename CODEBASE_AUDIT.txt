@@ -340,7 +340,7 @@ Fix:   Use PDDLStream's fluent stream support. Declare obj_at_boxel as
        state — no hack, no over-instantiation.
 
 ================================================================================
-48. MOVED OCCLUDERS VANISH FROM PLANNER STATE
+48. MOVED OCCLUDERS VANISH FROM PLANNER STATE  [DONE]
 ================================================================================
 Where: test_full_pipeline.py (BeliefState), pddlstream_planner.py (_build_init)
 What:  BeliefState.mark_occluder_moved() only records WHICH occluder was
@@ -360,11 +360,20 @@ What:  BeliefState.mark_occluder_moved() only records WHICH occluder was
        is_object hack in the stream domain would prevent binding ?b_from
        to a non-object boxel like push_dest_obj_007_14.
 
-Fix:   Track push destinations in BeliefState:
-         mark_occluder_moved(occluder_id, destination_boxel_id)
-       In _build_init(), add (obj_at_boxel occ dest) for moved occluders.
-       Requires #47 to also be fixed (fluent streams) so the push stream
-       can bind ?b_from to the new location.
+Fixed: (1) BeliefState.occluders_moved changed from set to dict
+       mapping {occluder_id: destination_boxel_id}.
+       (2) mark_occluder_moved(occluder_id, destination) now stores the
+       destination (symbolic name "pushed_{occ_id}").
+       (3) unmark_occluder_moved uses dict.pop() instead of set.discard().
+       (4) All planner interfaces (plan, create_problem, export_problem_pddl,
+       _build_init) updated: moved_occluders is now Dict[str, str].
+       (5) _build_init() emits (obj_at_boxel occ dest) and (Boxel dest) for
+       moved occluders instead of omitting them entirely.
+       The occluder now has a valid position in the planner's world model.
+       Since no (blocks_view_at occ dest shadow) exists for the destination,
+       the derived view_clear predicate correctly evaluates to true.
+       Note: re-pushing from the new destination still requires #47
+       (fluent streams) so the push stream can bind ?b_from to dest.
 
 ================================================================================
 FOR LATER
@@ -389,6 +398,7 @@ The STATE SYNCHRONIZATION between planner and physics is broken:
   - Failed push moves object physically but not symbolically (#45)
   - Planner cannot detect that views are already clear (#46)
   - Shadow/registry not recomputed after push (#44)
+  - Moved occluders now tracked with destination (#48 — done)
   - These three issues interact: #45 causes desync, #44 prevents
     registry from reflecting reality, #46 means the planner loops
     endlessly on stale symbolic state
