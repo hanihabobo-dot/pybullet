@@ -65,7 +65,7 @@ Resolved: test_visibility() and the sensing_config stream were removed
        by sense execution once #32 is properly fixed.
 
 ================================================================================
-20. BoxelStreams CLASS IS NEVER USED BY THE PLANNER
+20. BoxelStreams CLASS IS NEVER USED BY THE PLANNER  [DONE]
 ================================================================================
 Where: streams.py (BoxelStreams class, ~490 lines), pddlstream_planner.py
 What:  pddlstream_planner.py defines its OWN stub generators that produce
@@ -77,10 +77,27 @@ What:  pddlstream_planner.py defines its OWN stub generators that produce
        This is the ROOT CAUSE of issue #4 — streams produce strings
        BECAUSE the planner uses its own stubs instead of BoxelStreams.
 
-Fix:   Wire BoxelStreams generators into pddlstream_planner.py's
-       _get_stream_map(). Replace the stub generators with calls to
-       the BoxelStreams methods. This is the single most impactful fix
-       for making the planner geometry-aware.
+Fixed: Wired BoxelStreams into pddlstream_planner.py's _get_stream_map().
+       (1) PDDLStreamPlanner.__init__ now creates a BoxelStreams instance
+       (accepts robot_id + physics_client) and exposes home_config.
+       (2) _get_stream_map() delegates directly to BoxelStreams methods:
+           sample_push_config, sample_grasp, plan_motion, compute_kin_solution.
+       (3) Removed all four stub generators (_gen_push_config, _gen_grasp,
+           _gen_motion, _gen_kin_solution) and their counters.
+       (4) Made Trajectory and Grasp hashable (__hash__/__eq__ by name) —
+           PDDLStream stores stream outputs as atoms requiring hashability.
+       (5) Added __repr__ to RobotConfig, Trajectory, Grasp for clean
+           plan output (shows name instead of full data).
+       (6) test_full_pipeline.py updated: passes physics_client=env.client_id
+           to the planner; uses planner.home_config as initial current_config;
+           move handler keeps q2 as RobotConfig (not str) so replanning
+           receives real geometric data for the robot's current configuration.
+       (7) All public planner methods accept RobotConfig or string for
+           current_config (backward compatible; defaults to home_config).
+       Result: plan actions now carry real IK-solved joint configurations,
+       actual grasp poses, and interpolated trajectories. Execution still
+       uses hardcoded offsets (#6, #7) but the plan data is geometrically
+       valid. When #6/#7 are fixed, execution can use plan params directly.
 
 ================================================================================
 26. heuristic_ik() — MEANINGLESS FAKE IK FALLBACK  [DONE]
@@ -381,6 +398,48 @@ Fixed: (1) BeliefState.occluders_moved changed from set to dict
        (fluent streams) so the push stream can bind ?b_from to dest.
 
 ================================================================================
+49. STREAM IK FAILS ON REPLAN — PLANNER TIMES OUT
+================================================================================
+Where: streams.py (_pybullet_ik), test_full_pipeline.py (replanning loop)
+What:  When the target is NOT behind the first pushed occluder, Plan #1
+       succeeds (pushes, senses, finds nothing). Plan #2 then times out
+       (60s) because stream sampling produces almost nothing — evaluations
+       only increase from 183 to 185 (2 new atoms vs 15 in Plan #1).
+
+       Root cause has two parts:
+
+       (1) SEED DEPENDENCY: PyBullet's calculateInverseKinematics() uses
+       the robot's CURRENT joint state as its iterative solver seed.
+       After Plan #1 moves the robot (move_robot_to_pos in execution),
+       the joints are far from REST_POSES. On Plan #2, every IK call
+       in _pybullet_ik() starts from this displaced configuration,
+       converging to solutions that violate joint limits (filtered out)
+       or not converging at all. Plan #1 works because the robot starts
+       at REST_POSES (a good seed).
+
+       (2) NO NULL-SPACE PARAMETERS: _pybullet_ik() in streams.py calls
+       calculateInverseKinematics without lowerLimits, upperLimits,
+       jointRanges, or restPoses. Compare with compute_ik() in
+       robot_utils.py (used by execution), which provides all four —
+       making it much more robust. The stream IK is the simple variant;
+       the execution IK is the null-space variant. They should match.
+
+       Evidence: Plan #2 output shows sample_time: 0.028s (generators
+       fast but empty), search_time: 59.97s (planner retrying with no
+       new atoms). 4 skeletons found (one per occluder) but 0 solutions.
+
+Fix:   (a) Save/restore robot joint state around each IK call so the
+       solver seed is always REST_POSES (or explicitly set joints to
+       REST_POSES before each IK, then restore after).
+       (b) Use null-space IK (with lowerLimits, upperLimits, jointRanges,
+       restPoses) matching the compute_ik() in robot_utils.py.
+       Both fixes are small (~10 lines) and independent of other issues.
+
+       This is the BLOCKING issue for multi-shadow scenarios. Without
+       reliable IK on replan, the system only works when the target
+       happens to be behind the first occluder pushed.
+
+================================================================================
 FOR LATER
 ================================================================================
 - Incremental boxel recomputation after actions (without redoing everything
@@ -410,7 +469,8 @@ The STATE SYNCHRONIZATION between planner and physics is broken:
     endlessly on stale symbolic state
 
 The IMPLEMENTATION shortcuts every geometric step:
-  - Streams produce labels instead of geometry (#4 — done, #20 to wire)
+  - Streams now produce real geometry (#4 — done, #20 — done, wired)
+  - Stream IK is seed-dependent and fragile (#49 — blocks multi-shadow)
   - Execution uses type-dependent offsets; pick/push ignore plan (#6, #7)
   - Pushing is teleportation (#32 execution, FOR LATER)
   - Visibility check removed (was stub; no longer needed) (#12 — resolved)
@@ -425,8 +485,14 @@ Verification logging workflow (for non-truncated planner/execution traces):
   - Batch runs can be captured under logs/phase3_batch/run_*.log.
 
 Priority order for remaining fixes:
-  1. Wire BoxelStreams into the planner (#20)
-  2. Fix state desync after failed push (#45, #46)
-  3. Fix execution to use plan parameters (#6, #7)
+  1. Wire BoxelStreams into the planner (#20 — DONE)
+  2. Fix stream IK seed dependency + add null-space params (#49)
+     — Quick fix (~10 lines), unblocks all multi-shadow scenarios.
+       Without this, the system only works when the target is behind
+       the first occluder pushed.
+  3. Fix state desync after failed push (#45, #46)
   4. Fix stale registry after push (#44)
-  5. Add collision-free motion planning (#5)
+     — Must come before #6/#7: plan geometry is wrong if registry is
+       stale, so execution would follow incorrect configs.
+  5. Fix execution to use plan parameters (#6, #7)
+  6. Add collision-free motion planning (#5)

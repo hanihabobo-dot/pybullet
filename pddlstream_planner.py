@@ -23,7 +23,7 @@ if PDDLSTREAM_PATH not in sys.path:
     sys.path.insert(0, PDDLSTREAM_PATH)
 
 import numpy as np
-from typing import List, Tuple, Optional, Dict, Any
+from typing import List, Tuple, Optional, Dict, Any, Union
 
 from pddlstream.algorithms.meta import solve
 from pddlstream.language.constants import PDDLProblem, print_solution
@@ -31,6 +31,8 @@ from pddlstream.language.generator import from_gen_fn, from_fn, from_test
 from pddlstream.utils import read
 
 from boxel_data import BoxelRegistry, BoxelType
+from streams import BoxelStreams, RobotConfig, Trajectory, Grasp
+from robot_utils import REST_POSES
 
 
 def read_pddl_file(filename: str) -> str:
@@ -50,89 +52,53 @@ class PDDLStreamPlanner:
     """
     
     def __init__(self, registry: BoxelRegistry, robot_id: int = None,
-                 shadow_occluder_map: Dict[str, str] = None):
+                 shadow_occluder_map: Dict[str, str] = None,
+                 physics_client: int = None):
         """
         Initialize the planner.
         
         Args:
             registry: BoxelRegistry with scene boxels
-            robot_id: PyBullet robot body ID (optional, for real IK)
+            robot_id: PyBullet robot body ID (required for real IK;
+                without it, BoxelStreams falls back to heuristic IK)
             shadow_occluder_map: Dict mapping shadow_id -> occluder_id
+            physics_client: PyBullet physics client ID (0 if default)
         """
         self.registry = registry
         self.robot_id = robot_id
         self.shadow_occluder_map = shadow_occluder_map or {}
         
+        self.streams = BoxelStreams(
+            registry, robot_id=robot_id, physics_client=physics_client
+        )
+        self.home_config = self.streams.home_config
+        
         # Load PDDL files (use PDDLStream-compatible untyped domain)
         self.domain_pddl = read_pddl_file('domain_pddlstream.pddl')
         self.stream_pddl = read_pddl_file('stream.pddl')
-        
-        # Counters for unique names
-        self._config_count = 0
-        self._grasp_count = 0
-        self._traj_count = 0
     
     def _get_stream_map(self) -> Dict[str, Any]:
         """
-        Create the stream map connecting stream names to Python generators.
+        Create the stream map connecting stream names to BoxelStreams generators.
         
+        Each entry wraps a BoxelStreams method via PDDLStream's from_gen_fn.
+        The streams produce real geometric objects (RobotConfig, Grasp,
+        Trajectory) instead of placeholder strings.
+
         Returns:
             Dict mapping stream names to generator functions
         """
         return {
-            'sample-push-config': from_gen_fn(self._gen_push_config),
-            'sample-grasp': from_gen_fn(self._gen_grasp),
-            'plan-motion': from_gen_fn(self._gen_motion),
-            'compute-kin': from_gen_fn(self._gen_kin_solution),
+            'sample-push-config': from_gen_fn(self.streams.sample_push_config),
+            'sample-grasp': from_gen_fn(self.streams.sample_grasp),
+            'plan-motion': from_gen_fn(self.streams.plan_motion),
+            'compute-kin': from_gen_fn(self.streams.compute_kin_solution),
         }
-    
-    def _gen_push_config(self, occluder_id: str, b_from: str):
-        """
-        Generator for push solutions (destination + configs + trajectory).
-
-        Matches stream signature: inputs (?obj ?b_from), outputs (?b_to ?q_start ?q_end ?traj).
-        Currently produces string placeholders; real geometry comes from BoxelStreams (#20).
-
-        The stream domain (occluder_at ?obj ?b_from) guarantees that b_from is
-        the occluder's actual current location — no guard needed.
-        """
-        boxel = self.registry.get_boxel(occluder_id)
-        if boxel is None:
-            return
-        
-        for i in range(2):
-            self._config_count += 1
-            self._traj_count += 1
-            count = self._config_count
-            b_to = f"push_dest_{occluder_id}_{count}"
-            q_start = f"q_push_start_{occluder_id}_{count}"
-            q_end = f"q_push_end_{occluder_id}_{count}"
-            traj = f"traj_push_{occluder_id}_{self._traj_count}"
-            yield (b_to, q_start, q_end, traj)
-    
-    def _gen_grasp(self, obj_id: str):
-        """Generator for grasp poses."""
-        for i in range(2):
-            self._grasp_count += 1
-            grasp_name = f"grasp_{obj_id}_{self._grasp_count}"
-            yield (grasp_name,)
-    
-    def _gen_motion(self, q1: str, q2: str):
-        """Generator for motion plans."""
-        self._traj_count += 1
-        traj_name = f"traj_{self._traj_count}"
-        yield (traj_name,)
-    
-    def _gen_kin_solution(self, obj_id: str, boxel_id: str, grasp: str):
-        """Generator for kinematic solutions."""
-        self._config_count += 1
-        config_name = f"q_pick_{obj_id}_{self._config_count}"
-        yield (config_name,)
     
     def create_problem(self, 
                        target_objects: List[str],
                        goal: Tuple,
-                       current_config: str = "q_home",
+                       current_config: 'Union[RobotConfig, str]' = None,
                        known_empty_shadows: List[str] = None,
                        moved_occluders: Dict[str, str] = None) -> PDDLProblem:
         """
@@ -142,13 +108,16 @@ class PDDLStreamPlanner:
             target_objects: Objects to reason about
             goal: Goal as a tuple, e.g. ('holding', 'target_1').
                   Passed directly to PDDLStream — must match domain predicates.
-            current_config: Current robot configuration name
+            current_config: Current robot config (RobotConfig preferred;
+                string accepted for backward compat, wrapped automatically)
             known_empty_shadows: Shadows we've already checked (not containing target)
             moved_occluders: Dict mapping occluder_id -> destination_boxel_id
             
         Returns:
             PDDLProblem for PDDLStream solver
         """
+        if current_config is None:
+            current_config = self.home_config
         init = self._build_init(target_objects, current_config,
                                 known_empty_shadows, moved_occluders)
         
@@ -167,7 +136,7 @@ class PDDLStreamPlanner:
     def export_problem_pddl(self,
                             target_objects: List[str],
                             goal: Tuple,
-                            current_config: str = "q_home",
+                            current_config: 'Union[RobotConfig, str]' = None,
                             known_empty_shadows: List[str] = None,
                             moved_occluders: Dict[str, str] = None,
                             filepath: str = "pddl/problem_debug.pddl") -> str:
@@ -186,7 +155,7 @@ class PDDLStreamPlanner:
         Args:
             target_objects: Objects to reason about
             goal: Goal as a tuple, e.g. ('holding', 'target_1')
-            current_config: Current robot configuration name
+            current_config: Current robot config (RobotConfig preferred)
             known_empty_shadows: Shadows already checked (empty)
             moved_occluders: Dict mapping occluder_id -> destination_boxel_id
             filepath: Output path (default: pddl/problem_debug.pddl)
@@ -194,6 +163,8 @@ class PDDLStreamPlanner:
         Returns:
             The filepath written to
         """
+        if current_config is None:
+            current_config = self.home_config
         known_empty_shadows = known_empty_shadows or []
         moved_occluders = moved_occluders or {}
 
@@ -232,7 +203,7 @@ class PDDLStreamPlanner:
         lines.append("  )")
         lines.append("")
         lines.append("  (:init")
-        for fact in sorted(init, key=lambda f: (f[0], f[1:])):
+        for fact in sorted(init, key=lambda f: (str(f[0]),) + tuple(str(a) for a in f[1:])):
             lines.append(format_fact(fact))
         lines.append("  )")
         lines.append("")
@@ -248,7 +219,7 @@ class PDDLStreamPlanner:
 
     def _build_init(self,
                     target_objects: List[str],
-                    current_config: str = "q_home",
+                    current_config: 'Union[RobotConfig, str]' = None,
                     known_empty_shadows: List[str] = None,
                     moved_occluders: Dict[str, str] = None) -> List[Tuple]:
         """
@@ -259,7 +230,7 @@ class PDDLStreamPlanner:
 
         Args:
             target_objects: Objects to reason about
-            current_config: Current robot configuration name
+            current_config: Current robot config (RobotConfig or string)
             known_empty_shadows: Shadows already checked (empty)
             moved_occluders: Dict mapping occluder_id -> destination_boxel_id
                 for occluders that have been pushed aside
@@ -267,6 +238,8 @@ class PDDLStreamPlanner:
         Returns:
             List of fact tuples for the init state
         """
+        if current_config is None:
+            current_config = self.home_config
         known_empty_shadows = known_empty_shadows or []
         moved_occluders = moved_occluders or {}
 
@@ -328,7 +301,7 @@ class PDDLStreamPlanner:
     def plan(self,
              target_objects: List[str],
              goal: Tuple,
-             current_config: str = "q_home",
+             current_config: 'Union[RobotConfig, str]' = None,
              known_empty_shadows: List[str] = None,
              moved_occluders: Dict[str, str] = None,
              max_time: float = 30.0,
@@ -339,7 +312,7 @@ class PDDLStreamPlanner:
         Args:
             target_objects: Objects to reason about
             goal: Goal as a tuple, e.g. ('holding', 'target_1')
-            current_config: Current robot config
+            current_config: Current robot config (RobotConfig preferred)
             known_empty_shadows: Shadows already checked (empty)
             moved_occluders: Dict mapping occluder_id -> destination_boxel_id
             max_time: Maximum planning time in seconds
@@ -348,6 +321,8 @@ class PDDLStreamPlanner:
         Returns:
             List of action tuples, or None if planning fails
         """
+        if current_config is None:
+            current_config = self.home_config
         problem = self.create_problem(target_objects, goal, current_config,
                                       known_empty_shadows, moved_occluders)
         
@@ -383,7 +358,7 @@ class PDDLStreamPlanner:
 
 
 def test_planner():
-    """Test the PDDLStream planner."""
+    """Test the PDDLStream planner (uses heuristic IK without a robot)."""
     print("="*60)
     print("Testing PDDLStream Planner")
     print("="*60)
@@ -406,10 +381,10 @@ def test_planner():
             shadow_occluder_map[shadow_id] = shadow_boxel.created_by_boxel_id
     print(f"Shadow-Occluder mapping: {shadow_occluder_map}")
     
-    # Create planner
+    # Create planner (no robot_id: BoxelStreams will use heuristic IK)
     planner = PDDLStreamPlanner(registry, shadow_occluder_map=shadow_occluder_map)
     
-    # Plan
+    # Plan (uses planner.home_config as default current_config)
     print("\nPlanning to find and hold target_1...")
     plan = planner.plan(
         target_objects=['target_1'],

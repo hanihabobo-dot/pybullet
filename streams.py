@@ -39,7 +39,12 @@ class RobotConfig:
         return hash(self.name)
     
     def __eq__(self, other):
+        if not isinstance(other, RobotConfig):
+            return NotImplemented
         return self.name == other.name
+    
+    def __repr__(self):
+        return self.name if self.name else f"RobotConfig({self.joint_positions})"
 
 
 @dataclass 
@@ -47,6 +52,17 @@ class Trajectory:
     """Motion trajectory as sequence of configurations."""
     waypoints: List[RobotConfig]
     name: str = ""
+    
+    def __hash__(self):
+        return hash(self.name)
+    
+    def __eq__(self, other):
+        if not isinstance(other, Trajectory):
+            return NotImplemented
+        return self.name == other.name
+    
+    def __repr__(self):
+        return self.name if self.name else f"Trajectory({len(self.waypoints)} waypoints)"
 
 
 @dataclass
@@ -55,6 +71,17 @@ class Grasp:
     position: np.ndarray   # [x, y, z] offset
     orientation: np.ndarray  # [x, y, z, w] quaternion
     name: str = ""
+    
+    def __hash__(self):
+        return hash(self.name)
+    
+    def __eq__(self, other):
+        if not isinstance(other, Grasp):
+            return NotImplemented
+        return self.name == other.name
+    
+    def __repr__(self):
+        return self.name if self.name else f"Grasp({self.position})"
 
 
 class BoxelStreams:

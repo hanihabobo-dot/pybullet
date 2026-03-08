@@ -41,6 +41,7 @@ from boxel_env import BoxelTestEnv
 from boxel_data import BoxelRegistry, BoxelType, create_boxel_registry_from_boxels
 from cell_merger import merge_free_space_cells
 from pddlstream_planner import PDDLStreamPlanner
+from streams import RobotConfig
 from robot_utils import (END_EFFECTOR_LINK, compute_ik, move_robot_to_pos,
                          move_robot_smooth, open_gripper, close_gripper)
 
@@ -206,7 +207,8 @@ def main(gui=True):
     
     belief = BeliefState(shadows, target_name)
     planner = PDDLStreamPlanner(registry, robot_id=robot_id, 
-                                 shadow_occluder_map=shadow_occluder_map)
+                                 shadow_occluder_map=shadow_occluder_map,
+                                 physics_client=env.client_id)
     
     problem_path = planner.export_problem_pddl(
         target_objects=[target_name],
@@ -224,7 +226,7 @@ def main(gui=True):
     max_replans = 4 * len(shadows) + 1
     grasp_constraint_id = None
     exit_reason = None
-    current_config = "q_home"
+    current_config = planner.home_config
     
     while not belief.is_target_found() and plan_count < max_replans:
         plan_count += 1
@@ -322,22 +324,22 @@ def main(gui=True):
                     
             elif action_name == 'move':
                 q1, q2, dest_boxel_id, traj = params
-                dest_boxel_id = str(dest_boxel_id)
-                print(f"    Moving to boxel {dest_boxel_id} (config: {q2})...")
+                dest_boxel_id_str = str(dest_boxel_id)
+                print(f"    Moving to boxel {dest_boxel_id_str} (config: {q2})...")
                 
                 # Determine base position from plan's boxel parameter.
-                if dest_boxel_id in boxel_to_pybullet:
-                    base_pos = boxel_to_pybullet[dest_boxel_id]['position']
-                elif dest_boxel_id in boxel_centers:
-                    base_pos = boxel_centers[dest_boxel_id]
+                if dest_boxel_id_str in boxel_to_pybullet:
+                    base_pos = boxel_to_pybullet[dest_boxel_id_str]['position']
+                elif dest_boxel_id_str in boxel_centers:
+                    base_pos = boxel_centers[dest_boxel_id_str]
                 else:
-                    print(f"    WARNING: Unknown boxel {dest_boxel_id}, skipping move")
+                    print(f"    WARNING: Unknown boxel {dest_boxel_id_str}, skipping move")
                     continue
                 
                 # Approach offset depends on boxel type: shadow moves need
                 # side clearance so the arm doesn't block camera rays;
                 # occluder moves position directly above for pushing.
-                dest_boxel = registry.get_boxel(dest_boxel_id)
+                dest_boxel = registry.get_boxel(dest_boxel_id_str)
                 if dest_boxel and dest_boxel.boxel_type == BoxelType.SHADOW:
                     offset = np.array([0, -0.3, 0.2])
                 elif dest_boxel and dest_boxel.boxel_type == BoxelType.OBJECT:
@@ -346,8 +348,8 @@ def main(gui=True):
                     offset = np.array([0, 0, 0.15])
                 
                 move_robot_to_pos(robot_id, base_pos + offset, gui)
-                current_config = str(q2)
-                print(f"    -> Moved to {dest_boxel_id} (offset {offset.tolist()})")
+                current_config = q2
+                print(f"    -> Moved to {dest_boxel_id_str} (offset {offset.tolist()})")
                     
             elif action_name == 'sense':
                 obj, shadow_id = params
