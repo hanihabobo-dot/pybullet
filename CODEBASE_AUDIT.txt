@@ -166,20 +166,16 @@ Where: pddl/domain_pddlstream.pddl, test_full_pipeline.py, stream.pddl
        the push action precondition (obj_at_boxel ?obj ?b_from)
        enforces the fluent constraint at plan time.
 
-  (B) STILL WRONG: Execution embeds sensing inside push.
-       verify_push_cleared_view() casts rays from the camera after
-       every push to check if the view was cleared — this is a
-       sensing action that the planner never planned. It hardcodes
-       that every push must be followed by a view check. The planner
-       should decide what to verify and when.
-
-  PHASE 3 — Move verification from push to sense:  [TODO]
-       Remove verify_push_cleared_view() from push execution. Sense
-       needs a third outcome: "view still blocked" (rays hit the
-       occluder, not the target and not empty space). If blocked,
-       belief state must NOT mark the shadow as "not_here" — it
-       hasn't been observed yet. This prevents a failed push from
-       corrupting the belief state.
+  PHASE 3 — Move verification from push to sense:  [DONE]
+       Removed verify_push_cleared_view() from push execution. Push
+       now only moves the occluder physically and updates state.
+       Sensing now owns verification with three outcomes:
+         - found_target
+         - clear_but_empty
+         - still_blocked
+       If still_blocked, belief state keeps the shadow as unknown
+       (not "not_here"), preventing false negative observations and
+       belief corruption after insufficient pushes.
 
 ================================================================================
 36. sense_shadow IGNORES ROBOT POSITION — USES FIXED CAMERA  [DONE]
@@ -214,7 +210,7 @@ Fixed: Removed the sensing_config stream and robot-config dependency from
        move-to-sense → sense → move-to-pick → pick).
 
 ================================================================================
-41. NO VERIFICATION THAT PUSH CLEARED LINE OF SIGHT  [REOPENED — see #32]
+41. NO VERIFICATION THAT PUSH CLEARED LINE OF SIGHT  [DONE via #32 Phase 3]
 ================================================================================
 Where: test_full_pipeline.py lines 259-288
 What:  After pushing an occluder (teleportation + 30 physics steps), the
@@ -224,22 +220,15 @@ What:  After pushing an occluder (teleportation + 30 physics steps), the
        partially, the subsequent sense_shadow will fail to detect the
        target even if it IS there.
 
-Previously done: Added verify_push_cleared_view() which casts rays from
-       the camera after push + physics settling. If shadow is still
-       blocked, the occluder is not marked as moved and replanning is
-       triggered.
-
-Still wrong: verify_push_cleared_view() is sensing logic embedded in
-       push execution. The planner never planned a view-check — the
-       push executor hardcodes "after every push, do sensing." This
-       bypasses the planner and models the solution in execution.
-
-       The correct architecture is described in #32's fix: push
-       execution just moves the object. Sense execution detects
-       whether the view is blocked and reports the appropriate
-       outcome. verify_push_cleared_view() should be removed from
-       push and its logic absorbed into sense (which already casts
-       rays from the fixed camera).
+Fixed: Removed push-time view verification from push execution.
+       Verification moved into sense_shadow_raycasting(), which now
+       reports tri-state outcomes:
+         - found_target
+         - clear_but_empty
+         - still_blocked
+       When still_blocked, replanning occurs without marking the
+       shadow empty. This keeps sensing semantics aligned with the
+       planner and avoids hardcoded "sense-after-push" behavior.
 
 ================================================================================
 44. SHADOWS NOT RECOMPUTED AFTER PUSH — STALE REGISTRY
@@ -391,7 +380,7 @@ SUMMARY
 ================================================================================
 The PLANNING ARCHITECTURE models spatial capabilities:
   - Push is "move object from A to B" with derived views (#32 Ph1+2 done)
-  - Push execution still embeds sensing (#32 Ph3, #41)
+  - Verification moved from push to sense (tri-state sensing) (#32 Ph3, #41 done)
   - Occluder positions tracked in planner state (#32 Ph1 — done)
   - Sensing uses fixed camera correctly (#36 — done)
   - KIF fluents for partial observability are sound
@@ -415,9 +404,8 @@ The CODEBASE organizational debt is largely resolved:
   - Duplicate robot constants and utility functions (#31 — done)
 
 Priority order for remaining fixes:
-  1. Move verification from push to sense (#32 Phase 3)
-  2. Wire BoxelStreams into the planner (#20)
-  3. Fix state desync after failed push (#45, #46)
-  4. Fix execution to use plan parameters (#6, #7)
-  5. Fix stale registry after push (#44)
-  6. Add collision-free motion planning (#5)
+  1. Wire BoxelStreams into the planner (#20)
+  2. Fix state desync after failed push (#45, #46)
+  3. Fix execution to use plan parameters (#6, #7)
+  4. Fix stale registry after push (#44)
+  5. Add collision-free motion planning (#5)

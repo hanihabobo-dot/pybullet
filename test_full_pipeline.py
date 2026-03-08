@@ -300,27 +300,7 @@ def main(gui=True):
                           f"dist={np.linalg.norm(push_disp[:2]):.3f}m "
                           f"from [{occ_pos[0]:.2f},{occ_pos[1]:.2f}] "
                           f"to [{new_pos[0]:.2f},{new_pos[1]:.2f}]")
-                    
-                    occluder_boxel = registry.get_boxel(occluder_id)
-                    push_cleared = True
-                    if occluder_boxel:
-                        for sid in occluder_boxel.shadow_boxel_ids:
-                            shadow_b = registry.get_boxel(sid)
-                            if shadow_b is None:
-                                continue
-                            is_clear, blocked_frac = verify_push_cleared_view(
-                                env.camera_position, shadow_b, occ_pybullet_id
-                            )
-                            if not is_clear:
-                                print(f"    WARNING: Push insufficient — "
-                                      f"{blocked_frac:.0%} of rays to shadow "
-                                      f"{sid} still blocked by "
-                                      f"{occ_info['name']}. Replanning...")
-                                push_cleared = False
-                    
-                    if not push_cleared:
-                        break
-                    
+
                     belief.mark_occluder_moved(occluder_id)
                 else:
                     occ_boxel = registry.get_boxel(occluder_id)
@@ -363,15 +343,35 @@ def main(gui=True):
                 print(f"    Sensing {shadow_id} (fixed camera)...")
                 
                 shadow_boxel = registry.get_boxel(str(shadow_id))
+                if shadow_boxel is None:
+                    print(f"    WARNING: Shadow '{shadow_id}' not found in registry. Replanning...")
+                    break
+
                 target_pybullet_id = env.objects[target_name].object_id
-                found = sense_shadow_raycasting(env.camera_position, shadow_boxel, target_pybullet_id)
-                belief.mark_sensed(str(shadow_id), found)
-                
-                if found:
+                occluder_pybullet_id = None
+                if shadow_boxel.created_by_boxel_id in boxel_to_pybullet:
+                    occluder_pybullet_id = boxel_to_pybullet[shadow_boxel.created_by_boxel_id]['pybullet_id']
+
+                sense_outcome, blocked_fraction = sense_shadow_raycasting(
+                    env.camera_position,
+                    shadow_boxel,
+                    target_pybullet_id,
+                    occluder_pybullet_id
+                )
+
+                if sense_outcome == "found_target":
+                    belief.mark_sensed(str(shadow_id), found=True)
                     print(f"    *** TARGET FOUND in {shadow_id}! (ray-cast) ***")
-                else:
-                    print(f"    Target NOT in {shadow_id} (ray-cast: no hit)")
+                elif sense_outcome == "clear_but_empty":
+                    belief.mark_sensed(str(shadow_id), found=False)
+                    print(f"    Target NOT in {shadow_id} (ray-cast: view clear but no target hit)")
                     print(f"    -> REPLANNING with updated belief...")
+                    break  # Exit action loop to replan
+                else:
+                    # Keep this shadow UNKNOWN: blocked view is not evidence of absence.
+                    print(f"    View to {shadow_id} still blocked "
+                          f"({blocked_fraction:.0%} rays hit occluder).")
+                    print(f"    -> REPLANNING without marking shadow empty...")
                     break  # Exit action loop to replan
                     
             elif action_name == 'pick':
@@ -422,22 +422,29 @@ def main(gui=True):
     return belief.is_target_found()
 
 
-def sense_shadow_raycasting(camera_pos, shadow_boxel, target_pybullet_id):
+def sense_shadow_raycasting(camera_pos, shadow_boxel, target_pybullet_id, occluder_pybullet_id=None):
     """
     Sense a shadow region using PyBullet ray-casting from the fixed camera.
 
-    Once the occluder has been physically pushed aside, rays from the fixed
-    scene camera can penetrate the shadow region to detect hidden objects.
-    Casts rays into a grid of points spanning the shadow boxel's XY footprint
-    at multiple Z levels.
+    Returns one of three outcomes:
+      - found_target: at least one ray hits the target
+      - clear_but_empty: no ray hits target and no ray hits the occluder
+      - still_blocked: no ray hits target and at least one ray hits occluder
+
+    This keeps visibility verification inside the sensing action (Phase 3):
+    blocked sensing must not be treated as "target absent".
 
     Args:
         camera_pos: Fixed camera position [x, y, z]
         shadow_boxel: BoxelData for the shadow region to sense
         target_pybullet_id: PyBullet body ID of the target object
+        occluder_pybullet_id: Optional PyBullet body ID of the occluder that
+            geometrically blocks this shadow
 
     Returns:
-        True if the target was detected in the shadow region
+        Tuple[str, float]:
+          - outcome string in {"found_target", "clear_but_empty", "still_blocked"}
+          - blocked_fraction (fraction of rays that hit occluder; 0 when unknown)
     """
     ray_origin = np.array(camera_pos)
 
@@ -460,52 +467,20 @@ def sense_shadow_raycasting(camera_pos, shadow_boxel, target_pybullet_id):
                 ray_tos.append([float(xi), float(yi), float(z_target)])
 
     results = p.rayTestBatch(ray_froms, ray_tos)
+    occluder_hits = 0
+    total_rays = len(results)
+
     for hit_obj_id, _link, _frac, _pos, _normal in results:
         if hit_obj_id == target_pybullet_id:
-            return True
+            return "found_target", 0.0
+        if (occluder_pybullet_id is not None) and (hit_obj_id == occluder_pybullet_id):
+            occluder_hits += 1
 
-    return False
+    if occluder_hits > 0:
+        blocked_fraction = occluder_hits / total_rays if total_rays > 0 else 0.0
+        return "still_blocked", blocked_fraction
 
-
-def verify_push_cleared_view(camera_pos, shadow_boxel, occluder_pybullet_id):
-    """
-    Verify that pushing an occluder cleared the camera's line of sight
-    to its former shadow region.
-
-    Casts a 5x5 grid of rays from the camera through the shadow AABB at
-    mid-height. If any ray still hits the pushed occluder, the push was
-    insufficient and downstream sensing will likely fail.
-
-    Args:
-        camera_pos: Fixed camera position [x, y, z]
-        shadow_boxel: BoxelData for the shadow region to check
-        occluder_pybullet_id: PyBullet body ID of the pushed occluder
-
-    Returns:
-        Tuple of (is_clear, blocked_fraction):
-          is_clear: True if no rays hit the occluder
-          blocked_fraction: fraction of rays still blocked by the occluder
-    """
-    ray_origin = np.array(camera_pos)
-    min_c = shadow_boxel.min_corner
-    max_c = shadow_boxel.max_corner
-    z_mid = (min_c[2] + max_c[2]) / 2.0
-
-    n = 5
-    ray_froms = []
-    ray_tos = []
-    for xi in np.linspace(min_c[0], max_c[0], n):
-        for yi in np.linspace(min_c[1], max_c[1], n):
-            ray_froms.append(ray_origin.tolist())
-            ray_tos.append([float(xi), float(yi), float(z_mid)])
-
-    results = p.rayTestBatch(ray_froms, ray_tos)
-    blocked = sum(1 for hit_id, _, _, _, _ in results
-                  if hit_id == occluder_pybullet_id)
-    total = len(results)
-    blocked_fraction = blocked / total if total > 0 else 0.0
-
-    return blocked == 0, blocked_fraction
+    return "clear_but_empty", 0.0
 
 
 def execute_pick(robot_id, env, target_name, target_pos, gui):
