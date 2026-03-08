@@ -7,132 +7,123 @@ Updated: 2026-03-08
 Resolved issues archived to archive/CODEBASE_AUDIT_RESOLVED.txt.
 
 ================================================================================
-5. MOTION PLANNING — LINEAR INTERPOLATION, NO COLLISION CHECKING
+53. REPLACE PUSH WITH PICK-AND-PLACE FOR OCCLUDER RELOCATION
 ================================================================================
-Where: streams.py lines 413-432
-What:  Motion "planning" is linear interpolation in joint space between two configs.
-       No collision detection, no obstacle avoidance, no RRT/PRM.
-       Comment on line 413 says "TODO: Implement actual motion planning".
+Where: pddl/domain_pddlstream.pddl, pddl/stream.pddl, streams.py,
+       pddlstream_planner.py, test_full_pipeline.py
 
-Fix:   Implement a real motion planner (e.g., RRT-Connect or PRM using PyBullet's
-       collision checking). The motion planner should NOT reason about line of
-       sight — it should only produce collision-free paths. Line-of-sight clearing
-       is the responsibility of the push action and its streams.
+What:  Occluders are currently relocated via a push action that teleports
+       the object (p.resetBasePositionAndOrientation). The robot arm is
+       never involved. The push stream invents fake destinations. Execution
+       ignores all plan parameters and re-derives its own push direction.
+       This entire pipeline is broken (#50, #51) and unfixable without
+       rewriting it from scratch.
+
+       The domain already has PICK and PLACE as two separate actions:
+
+         pick(?o, ?b, ?g, ?q)  — grasp object ?o at boxel ?b
+         place(?o, ?b, ?g, ?q) — release object ?o at boxel ?b
+
+       These two actions, combined with move, can relocate an occluder:
+
+         pick(occluder, occ_boxel, grasp, q_pick)
+           → robot grasps the occluder and lifts it
+         move(q_pick, q_place, free_boxel, traj)
+           → robot carries the occluder to a free-space boxel
+         place(occluder, free_boxel, grasp, q_place)
+           → robot places the occluder in the free-space boxel
+
+       This is deterministic (no sliding uncertainty), uses existing robot
+       motion infrastructure (move_robot_smooth + gripper), and the planner
+       already knows how to sequence pick → move → place.
+
+       But currently only target objects have the (Obj) predicate, so the
+       planner cannot pick/place occluders.
+
+Fix:   Two parts: enable occluders for pick/place, then disable push.
+
+  PART 1 — Make occluders graspable (planner changes):
+       (a) pddlstream_planner.py _build_init(): for each OBJECT boxel,
+           add (Obj occluder_id) so the pick and place actions apply.
+           Also add (obj_at_boxel_KIF occluder_id occluder_boxel) — we
+           can see the occluder, so we know it's there. The existing
+           (obj_at_boxel occluder_id occluder_boxel) is already emitted.
+       (b) No PDDL domain changes needed — pick and place already work
+           for any (Obj ?o). The planner will generate pick → move → place
+           plans for occluders the same way it does for targets.
+       (c) No stream changes needed — sample_grasp and compute_kin_solution
+           already accept any object ID. They will produce grasps and IK
+           solutions for occluders automatically.
+       (d) The planner's derived predicates handle the rest: once the
+           occluder is placed in a free-space boxel (where no
+           blocks_view_at fact exists), view_clear becomes true, and
+           the sense action becomes available for the shadow behind it.
+
+  PART 2 — Comment out push (code cleanup):
+       (a) domain_pddlstream.pddl: comment out the push action. Keep the
+           text for reference but make the planner unable to use it.
+       (b) stream.pddl: comment out the sample-push-config stream.
+       (c) pddlstream_planner.py _get_stream_map(): remove the
+           'sample-push-config' entry.
+       (d) streams.py: comment out sample_push_config() and its helper
+           methods (the push-specific IK logic). Keep sample_grasp,
+           plan_motion, compute_kin_solution.
+       (e) test_full_pipeline.py: remove the push execution branch
+           (the entire 'if action_name == "push"' block, ~lines 280-320).
+           Remove compute_push_displacement() entirely.
+       (f) pddlstream_planner.py _build_init(): remove (occluder_at)
+           emissions — that predicate was only needed for the push stream
+           domain binding. Remove push-related predicates if unused.
+
+  PART 3 — Add place execution (new code):
+       test_full_pipeline.py needs a place execution handler alongside the
+       existing pick handler. Pick and place are separate actions:
+
+       execute_pick (already exists, see #7 for fixing it):
+         - Move robot to kin_solution config
+         - Open gripper
+         - Lower to grasp position
+         - Close gripper
+         - Attach object via p.createConstraint
+         - Lift
+
+       execute_place (new):
+         - Move robot to kin_solution config (arm above the destination)
+         - Lower to placement height
+         - Open gripper
+         - Release p.createConstraint
+         - Lift arm clear
+
+       The plan dispatcher needs a new 'elif action_name == "place"' branch
+       that calls execute_place with the plan's (obj, boxel, grasp, config)
+       parameters.
+
+  Expected plan shape after this fix:
+       1. pick(occluder_1, occ_boxel, grasp_1, q_pick)
+       2. move(q_pick, q_place, free_boxel_3, traj_1)
+       3. place(occluder_1, free_boxel_3, grasp_1, q_place)
+       4. sense(target_1, shadow_1)
+          → if found:
+       5. move(q_place, q_pick_target, shadow_1, traj_2)
+       6. pick(target_1, shadow_1, grasp_2, q_pick_target)
+          → if not found: replan for next shadow
 
 ================================================================================
-6. PUSH & MOVE — STREAM IS GEOMETRY-BLIND, EXECUTION IGNORES PLAN,
-   PUSH IS TELEPORTATION
+52. MOVE EXECUTION IGNORES PLAN CONFIGS — USES HARDCODED OFFSETS
 ================================================================================
-Where: streams.py (sample_push_config), test_full_pipeline.py (push & move
-       execution, compute_push_displacement)
-
-What:  The push pipeline has THREE compounding problems. Fixing execution
-       alone is pointless if the plan parameters are meaningless, and fixing
-       the stream is pointless if execution ignores the result.
-
-  (A) PUSH STREAM SAMPLES ARBITRARY DIRECTIONS (streams.py lines 155-199)
-       sample_push_config() tries 4 cardinal directions (0°, 90°, 180°,
-       270°) at a hardcoded 0.15m offset from the occluder center. It
-       does NOT know about:
-         - Which free-space boxels exist as valid push destinations.
-         - Whether a given destination would actually unblock any view
-           corridor (camera-to-shadow geometry).
-         - Table bounds, collisions with other objects, or reachability.
-       The stream invents fake destination names ("push_dest_obj_007_14")
-       instead of referencing real boxels from the registry. The planner
-       then picks whichever invented destination symbolically satisfies
-       view_clear — but the physical geometry behind that destination is
-       just "occluder center + 0.15m in some direction."
-
-  (B) EXECUTION IGNORES ALL PLAN PARAMETERS (test_full_pipeline.py)
-       Push execution (~lines 280-320) throws away the plan's b_to,
-       q_start, q_end, and traj. It re-calls compute_push_displacement(),
-       which independently computes a camera-perpendicular push direction.
-       Move execution (~lines 336-352) throws away the plan's q2 config
-       and uses hardcoded type-dependent offsets:
+Where: test_full_pipeline.py move execution (~lines 336-352)
+What:  When the plan says move(q1, q2, boxel, traj), execution throws
+       away q2 and uses hardcoded type-dependent offsets:
          [0, -0.3, 0.2] for shadow boxels
          [0,  0,   0.15] for object/other boxels
        Then re-runs IK from scratch via move_robot_to_pos(). The IK-solved
-       configs in the plan are dead data.
+       config q2 from the plan is dead data.
 
-  (C) PUSH IS TELEPORTATION — ROBOT ARM IS NOT INVOLVED
-       Push execution calls p.resetBasePositionAndOrientation() to teleport
-       the occluder to a new position. The robot arm never moves to a push
-       pose, never contacts the object, and never follows a push trajectory.
-       This is not a minor shortcut — it means:
-         - Even perfect stream configs would be ignored by execution.
-         - The 30 physics-settle steps after teleportation cause the object
-           to drift unpredictably (root cause of #45 position desync).
-         - There is no force model, so push distance/direction have no
-           physical basis.
-       This is the same teleportation problem noted in the summary as
-       "FOR LATER", but it is NOT separable from #6 — fixing execution to
-       "use plan parameters" requires the robot to actually perform a push
-       motion, which means replacing teleportation.
-
-Fix:   Two layers: make the plan meaningful, then make execution follow it.
-
-  LAYER 1 — Stream produces physically meaningful push destinations:
-       sample_push_config() should pick destinations from the registry's
-       FREE-SPACE boxels (not invented names). For each free-space boxel:
-         1. Would moving the occluder there unblock the view? Check: no
-            blocks_view_at(occ, free_boxel, shadow) fact exists for this
-            destination, so the derived view_clear becomes true. The stream
-            doesn't need to check this explicitly — the planner's derived
-            predicates handle it — but the stream should prefer destinations
-            that are geometrically sensible (nearby, reachable).
-         2. Is the push path collision-free? Straight-line from current
-            position to destination center, checking table bounds and other
-            object AABBs (the logic currently in compute_push_displacement
-            but applied to registry-based destinations).
-         3. Can the robot reach the push start pose? Compute IK for a pose
-            behind the occluder (opposite the push direction) — this is
-            q_start. Compute IK for a follow-through pose at the
-            destination — this is q_end.
-         4. Yield (free_boxel_id, q_start, q_end, traj) — all referencing
-            real boxels and real IK-solved configs.
-       compute_push_displacement() in test_full_pipeline.py is then deleted.
-       Its camera-perpendicular logic was the right idea but in the wrong
-       place — it belongs inside the stream, where the planner can reason
-       about it.
-
-  LAYER 2 — Execution follows the plan parameters:
-       - move: call move_robot_smooth(robot_id, q2.joint_positions) to
-         drive the arm to the plan's IK-solved configuration. Remove all
-         hardcoded offsets and move_robot_to_pos() calls. compute_ik() and
-         move_robot_to_pos() in robot_utils.py become dead code once this
-         is done (as noted in #31).
-       - push: move robot to q_start, then either:
-         (a) INTERIM: teleport the occluder to the plan's b_to center
-             (not a separately-computed displacement). Move robot to q_end.
-             This at least makes the robot's motion match the plan, even
-             though the object motion is still simulated.
-         (b) FINAL: robot follows the push trajectory, contacts the object,
-             and pushes it physically. Requires collision-free motion
-             planning (#5) and a force/velocity controller. This is the
-             real solution but depends on #5.
-
-  ALTERNATIVE — Pick-and-Place instead of Push:
-       The domain already has pick and place actions. If occluders are
-       within the gripper's grasp envelope, the planner could generate:
-         pick(occluder, b_from, grasp, q_pick) →
-         move(q_pick, q_place, b_to, traj) →
-         place(occluder, b_to, grasp, q_place)
-       This is MORE RELIABLE than pushing: deterministic placement, no
-       sliding uncertainty, no teleportation needed. It reuses the existing
-       IK and grasp streams. The main requirement is adding occluders to
-       the Obj predicate so pick/place actions apply to them (currently
-       only target objects are Obj). Consider making this the primary
-       strategy for moving occluders, with push reserved for objects too
-       large or heavy to grasp.
-
-  TELEPORTATION relationship to this issue:
-       Teleportation was listed under "FOR LATER" as if it were independent.
-       It is not. The push action's entire value chain is: stream computes
-       where/how to push → planner decides which push to use → execution
-       moves the robot and pushes the object. Teleportation breaks the last
-       link. Fixing #6 Layer 2(b) and fixing teleportation are the SAME
-       work. The interim Layer 2(a) is an acceptable stepping stone.
+Fix:   Call move_robot_smooth(robot_id, q2.joint_positions) to drive the
+       arm to the plan's IK-solved configuration. Remove all hardcoded
+       offsets and move_robot_to_pos() calls. After this, compute_ik()
+       and move_robot_to_pos() in robot_utils.py become dead code (see
+       #31 note in archive).
 
 ================================================================================
 7. PICK — HARDCODED OFFSETS, IGNORES PLAN GRASP
@@ -146,9 +137,13 @@ What:  execute_pick() uses hardcoded offsets from target_pos:
        ignored. IK is recomputed from scratch via move_robot_to_pos().
        Object attachment uses p.createConstraint (not physics-based grasping).
 
-       Same pattern as #6(B): the plan carries real geometric data (grasp
+       Same pattern as #52: the plan carries real geometric data (grasp
        pose from sample_grasp, IK-solved config from compute_kin_solution)
        but execution throws it away and uses hardcoded offsets.
+
+       This is now MORE CRITICAL because pick is used for both targets
+       AND occluders (after #53). Every occluder relocation and every
+       target pickup goes through execute_pick().
 
 Fix:   (1) Move robot to the plan's kin_solution config (the IK-solved
        joint angles for the grasp approach) using move_robot_smooth().
@@ -159,447 +154,73 @@ Fix:   (1) Move robot to the plan's kin_solution config (the IK-solved
        acceptable for simulation — physics-based grasping with friction
        is a separate improvement.
        (4) Once this is done, compute_ik() and move_robot_to_pos() in
-       robot_utils.py become fully dead code (see #31 note).
+       robot_utils.py become fully dead code (see #31 note in archive).
 
 ================================================================================
-12. VISIBILITY CHECK — ALWAYS RETURNS TRUE (STUB)  [RESOLVED — no longer applicable]
+44. SHADOWS NOT RECOMPUTED AFTER OCCLUDER RELOCATION — STALE REGISTRY
 ================================================================================
-Where: streams.py (formerly lines 475-488)
-What:  test_visibility() always returned True regardless of inputs.
-       This was the stream-level visibility test for sensing configs.
+Where: test_full_pipeline.py, boxel_data.py
+What:  After relocating an occluder (via pick-and-place), the BoxelRegistry
+       is NOT updated. The shadow boxels (their AABBs, centers, extents)
+       still reflect the pre-relocation geometry. The sensing function
+       (sense_shadow_raycasting) uses the shadow boxel's AABB to determine
+       where to cast rays — but that AABB is for the old shadow, not the
+       actual post-relocation geometry.
 
-Resolved: test_visibility() and the sensing_config stream were removed
-       as part of #36. Sensing uses the fixed scene camera, not a
-       robot-positioned viewpoint, so there is no robot config whose
-       visibility needs testing. View clearance is tracked by the
-       view_clear predicate in the PDDL domain and will be verified
-       by sense execution once #32 is properly fixed.
+       With pick-and-place this is LESS CRITICAL than with push: since the
+       occluder is physically removed (picked up and placed elsewhere),
+       rays through the old shadow AABB will pass through empty space and
+       can detect the target. The stale AABB just means rays may cover a
+       slightly wrong area, but the target is detected by body ID, so any
+       ray that hits it works.
 
-================================================================================
-20. BoxelStreams CLASS IS NEVER USED BY THE PLANNER  [DONE]
-================================================================================
-Where: streams.py (BoxelStreams class, ~490 lines), pddlstream_planner.py
-What:  pddlstream_planner.py defines its OWN stub generators that produce
-       string names (_gen_push_config, _gen_sensing_config, etc.).
-       The real BoxelStreams class in streams.py (with actual IK via
-       PyBullet, proper viewpoint sampling, grasp generation) is NEVER
-       connected to the planner.
-
-       This is the ROOT CAUSE of issue #4 — streams produce strings
-       BECAUSE the planner uses its own stubs instead of BoxelStreams.
-
-Fixed: Wired BoxelStreams into pddlstream_planner.py's _get_stream_map().
-       (1) PDDLStreamPlanner.__init__ now creates a BoxelStreams instance
-       (accepts robot_id + physics_client) and exposes home_config.
-       (2) _get_stream_map() delegates directly to BoxelStreams methods:
-           sample_push_config, sample_grasp, plan_motion, compute_kin_solution.
-       (3) Removed all four stub generators (_gen_push_config, _gen_grasp,
-           _gen_motion, _gen_kin_solution) and their counters.
-       (4) Made Trajectory and Grasp hashable (__hash__/__eq__ by name) —
-           PDDLStream stores stream outputs as atoms requiring hashability.
-       (5) Added __repr__ to RobotConfig, Trajectory, Grasp for clean
-           plan output (shows name instead of full data).
-       (6) test_full_pipeline.py updated: passes physics_client=env.client_id
-           to the planner; uses planner.home_config as initial current_config;
-           move handler keeps q2 as RobotConfig (not str) so replanning
-           receives real geometric data for the robot's current configuration.
-       (7) All public planner methods accept RobotConfig or string for
-           current_config (backward compatible; defaults to home_config).
-       Result: plan actions now carry real IK-solved joint configurations,
-       actual grasp poses, and interpolated trajectories. Execution still
-       uses hardcoded offsets (#6, #7) but the plan data is geometrically
-       valid. When #6/#7 are fixed, execution can use plan params directly.
-
-================================================================================
-26. heuristic_ik() — MEANINGLESS FAKE IK FALLBACK  [DONE]
-================================================================================
-Where: streams.py lines 268-285
-What:  When robot_id is None (no PyBullet robot loaded),
-       _compute_sensing_ik() falls back to _heuristic_ik() which
-       produces "plausible-looking" joint configs by:
-         offset = (ee_pos - [0.5, 0, 0.5]) * 0.5
-         perturb home config by offset * 0.3
-
-       These are NOT inverse kinematics — they are random perturbations
-       of the home pose. The resulting configurations have no relationship
-       to the requested end-effector position. They exist only to let
-       tests run without a robot, but they could silently corrupt
-       results if used when a robot IS expected.
-
-Fixed: (1) Added is_heuristic flag to RobotConfig (default False). Configs
-       from _heuristic_ik() are marked is_heuristic=True so downstream
-       code can detect and reject them when real IK is expected.
-       (2) BoxelStreams.__init__ logs a WARNING when robot_id is None,
-       alerting early that all IK will use the heuristic fallback.
-       (3) _heuristic_ik() logs a WARNING on every call with the
-       requested ee_pos, making it impossible to miss silently.
-       (4) Docstring rewritten to honestly describe what the function
-       does (arbitrary perturbation, NOT inverse kinematics).
-
-================================================================================
-31. DEAD CODE AND DUPLICATE UTILITIES  [DONE]
-================================================================================
-Where: Multiple files
-What:  Several functions and constants are dead code or copy-pasted across
-       files with inconsistent values:
-
-       DEAD CODE:
-         - config.py: Entire file is dead code (see resolved #30).
-
-       DUPLICATED ROBOT CONSTANTS (slightly different values each time):
-         - rest_pose / REST_POSE: streams.py, test_full_pipeline.py
-         - joint_limits_high[3]: -0.0698 in streams.py, -0.07 in
-           test_full_pipeline.py
-         - END_EFFECTOR_LINK: defined as 11 in both files independently
-
-       DUPLICATED UTILITY FUNCTIONS:
-         - move_robot_smooth(), close_gripper(), compute_ik():
-           defined in test_full_pipeline.py, partially duplicated
-           in streams.py with different iteration counts
-
-Fixed: Created robot_utils.py as the single source of truth for all Panda
-       constants (ARM_JOINT_INDICES, END_EFFECTOR_LINK, FINGER_JOINTS,
-       JOINT_LIMITS_LOW/HIGH, JOINT_RANGES, REST_POSES) using the precise
-       datasheet values from streams.py. Moved compute_ik, move_robot_smooth,
-       move_robot_to_pos, open_gripper, close_gripper into robot_utils.py.
-       Updated streams.py and test_full_pipeline.py to import from
-       robot_utils — removed all duplicate definitions. The rounded
-       joint-limit values in test_full_pipeline.py (-2.9 vs -2.8973, etc.)
-       are now replaced by the precise Panda spec values everywhere.
-
-       Note: compute_ik and move_robot_to_pos are interim — they exist
-       because execution currently recomputes IK from hardcoded offsets
-       instead of using plan parameters (#6). Once #20 wires BoxelStreams
-       into the planner and #6 makes execution use plan configs, these
-       two functions become unnecessary. The permanent utilities are
-       move_robot_smooth (motor interpolation), open_gripper, close_gripper.
-
-================================================================================
-32. PDDL DOMAIN MODELS SOLUTION, NOT ROBOT CAPABILITIES
-================================================================================
-Where: pddl/domain_pddlstream.pddl, test_full_pipeline.py, stream.pddl
-
-  PHASE 1 — Track occluder positions:  [DONE]
-       _build_init() now adds (obj_at_boxel ?occ ?occ) for every
-       OBJECT boxel not in moved_occluders. generate_pddl_facts()
-       updated to match.
-
-  PHASE 2 — Rewrite push as spatial + derived predicates:  [DONE]
-       Push is now push(?obj ?b_from ?b_to ?q_start ?q_end ?traj)
-       with purely spatial effects (obj moves, config updates).
-       blocks_view and view_clear are derived predicates computed
-       from obj_at_boxel + static blocks_view_at geometry facts.
-       Push stream outputs destination + configs + trajectory.
-       Stream domain uses is_object (static) for both inputs;
-       the push action precondition (obj_at_boxel ?obj ?b_from)
-       enforces the fluent constraint at plan time.
-
-  PHASE 3 — Move verification from push to sense:  [DONE]
-       Removed verify_push_cleared_view() from push execution. Push
-       now only moves the occluder physically and updates state.
-       Sensing now owns verification with three outcomes:
-         - found_target
-         - clear_but_empty
-         - still_blocked
-       If still_blocked, belief state keeps the shadow as unknown
-       (not "not_here"), preventing false negative observations and
-       belief corruption after insufficient pushes.
-
-================================================================================
-36. sense_shadow IGNORES ROBOT POSITION — USES FIXED CAMERA  [DONE]
-================================================================================
-Where: test_full_pipeline.py lines 324-338
-What:  The PDDL plan moves the robot to a sensing config before sensing:
-         1. move(q, q_sense, shadow_boxel, traj)
-         2. sense_shadow(obj, shadow, occ, q_sense)
-
-       But sense_shadow_raycasting() casts rays from the FIXED camera
-       position (env.camera_position), not from the robot's end-effector
-       or any config-dependent viewpoint. The robot's actual position has
-       zero effect on sensing.
-
-Fixed: Removed the sensing_config stream and robot-config dependency from
-       the sense action entirely. We use a fixed scene camera, so the plan
-       should not pretend the robot needs to be positioned for sensing.
-       (1) domain_pddlstream.pddl: sense action now takes (?o ?region)
-           instead of (?o ?region ?q). Removed (at_config ?q),
-           (sensing_config ?region ?q) preconditions. Removed
-           sensing_config predicate.
-       (2) stream.pddl: removed sample-sensing-config stream.
-       (3) pddlstream_planner.py: removed _gen_sensing_config generator
-           and its stream-map entry.
-       (4) test_full_pipeline.py: sense dispatch unpacks 2 params
-           instead of 3.
-       (5) streams.py: removed sample_sensing_config() and
-           test_visibility() (both were dead code for the fixed-camera
-           architecture). Updated module docstring.
-       The planner will no longer generate move-to-sense steps. Plans
-       become: push → sense → move-to-pick → pick (was: push →
-       move-to-sense → sense → move-to-pick → pick).
-
-================================================================================
-41. NO VERIFICATION THAT PUSH CLEARED LINE OF SIGHT  [DONE via #32 Phase 3]
-================================================================================
-Where: test_full_pipeline.py lines 259-288
-What:  After pushing an occluder (teleportation + 30 physics steps), the
-       code proceeds to the next action without verifying that camera
-       rays can now penetrate the shadow region. If the push displacement
-       was insufficient, or physics settling moved the occluder back
-       partially, the subsequent sense_shadow will fail to detect the
-       target even if it IS there.
-
-Fixed: Removed push-time view verification from push execution.
-       Verification moved into sense_shadow_raycasting(), which now
-       reports tri-state outcomes:
-         - found_target
-         - clear_but_empty
-         - still_blocked
-       When still_blocked, replanning occurs without marking the
-       shadow empty. This keeps sensing semantics aligned with the
-       planner and avoids hardcoded "sense-after-push" behavior.
-
-================================================================================
-44. SHADOWS NOT RECOMPUTED AFTER PUSH — STALE REGISTRY
-================================================================================
-Where: test_full_pipeline.py lines 259-288, boxel_data.py
-What:  After pushing an occluder, the BoxelRegistry is NOT updated. The
-       shadow boxels (their AABBs, centers, extents) still reflect the
-       pre-push geometry. The sensing function (sense_shadow_raycasting)
-       uses the shadow boxel's AABB to determine where to cast rays —
-       but that AABB is for the pre-push shadow, not the actual post-push
-       geometry.
-
-Fix:   After pushing, either:
-       (a) Recompute shadows for the pushed occluder only (incremental).
+Fix:   After relocating, either:
+       (a) Recompute shadows for the relocated occluder only (incremental).
        (b) Re-run the full boxel computation (expensive but correct).
-       (c) At minimum, use the target's actual PyBullet position for
-           ray-casting rather than the stale shadow AABB.
-       Option (c) is partially in place — the target is detected by body
-       ID, so it works if any ray happens to hit it. The stale AABB just
-       means rays may not cover the right area.
+       (c) Accept the stale AABB as good enough (target detection by body
+           ID compensates). Document this as a known simplification.
 
 ================================================================================
-45. OCCLUDER POSITION DESYNCS AFTER FAILED PUSH
+5. MOTION PLANNING — LINEAR INTERPOLATION, NO COLLISION CHECKING
 ================================================================================
-Where: test_full_pipeline.py (push execution + replanning loop)
-What:  When verify_push_cleared_view() fails, the occluder IS physically
-       moved in PyBullet (via teleportation + physics settling), but
-       belief.mark_occluder_moved() is NOT called. On replan the init
-       still has (obj_at_boxel occ occ) and (blocks_view_at occ occ shadow),
-       so the planner plans to push the same occluder "from its original
-       position" again. But execution reads the actual PyBullet position
-       (via boxel_to_pybullet), which has drifted. Additionally, robot arm
-       movements during intervening move/push actions step the physics
-       simulation, which can further displace previously-pushed objects
-       through collisions or settling. The result is objects appearing to
-       "return" to near their original positions or moving unpredictably
-       between replans.
+Where: streams.py lines 413-432
+What:  Motion "planning" is linear interpolation in joint space between two
+       configs. No collision detection, no obstacle avoidance, no RRT/PRM.
+       Comment on line 413 says "TODO: Implement actual motion planning".
 
-       Observed: occluder_2 (obj_007) was pushed to [0.42,-0.08] in
-       Plan #8 (failed verification). By Plan #11, its physical position
-       had drifted to [0.61,-0.02] — nearly back to original [0.60,-0.10].
-       It was then pushed again from that drifted position.
-
-================================================================================
-46. PLANNER CANNOT DETECT PHYSICALLY CLEAR VIEWS
-================================================================================
-Where: pddlstream_planner.py (_build_init), test_full_pipeline.py
-What:  After multiple push attempts, occluders may be physically displaced
-       enough that all targets become visible (confirmed by user observing
-       the PyBullet GUI). But the planner keeps planning push actions
-       because its symbolic state still shows views as blocked:
-         - Occluders that failed verification are never marked as moved
-         - (obj_at_boxel occ occ) remains in the init
-         - Derived blocks_view(occ, shadow) remains true
-         - Derived view_clear(shadow) remains false
-       The planner has no mechanism to discover that a view is physically
-       clear without going through the mark_occluder_moved path.
-
-       Observed: Plans #12-25 repeatedly attempted to push obj_006
-       (occluder_1). compute_push_displacement() returned None every
-       time (object was already at the table edge from Plan #10's
-       partial push). The planner kept generating the same plan because
-       its symbolic state never changed. Meanwhile, all target objects
-       were visually unobstructed in the simulation.
-
-       This is related to #44 (stale registry) and #32 Phase 3 (moving
-       verification to sense). The core issue: the planner's only path
-       to learning "view is clear" is mark_occluder_moved(), which
-       requires push verification to succeed — a catch-22 when the view
-       IS clear but verification logic doesn't know it.
-
-================================================================================
-47. PUSH STREAM DOMAIN USES is_object AS HACK TO BIND ?b_from  [DONE]
-================================================================================
-Where: pddl/stream.pddl, pddlstream_planner.py, streams.py
-What:  The push stream's domain condition was:
-         (and (is_object ?obj) (is_object ?b_from))
-       ?b_from is a LOCATION (the boxel where the object sits), not an
-       object. Using is_object exploited the coincidence that occluders
-       initially sit at their own object-typed boxels. This caused:
-         - Semantically wrong: a location is not "an object."
-         - Over-instantiates the stream for all object×object pairs.
-         - Breaks if an occluder is pushed to a non-object boxel and
-           needs to be pushed again from there.
-
-Fixed: Introduced a static predicate (occluder_at ?occ ?b) that mirrors
-       each occluder's current position. The stream domain is now:
-         (and (is_object ?obj) (occluder_at ?obj ?b_from))
-
-       Why not obj_at_boxel directly? PDDLStream strips fluent predicates
-       (those in action effects) from stream domains. Using obj_at_boxel
-       causes KeyError: '?b_from' because the Instantiator can't bind it
-       after stripping.
-
-       Why not :fluents (obj_at_boxel)? compile_fluent_streams() enforces
-       that fluent stream outputs cannot appear in action effects. Push
-       stream outputs (?b_to, ?q_start, ?q_end, ?traj) all appear in
-       push action effects — blocked by design.
-
-       The static predicate approach:
-       (1) domain_pddlstream.pddl: added (occluder_at ?o ?b) predicate.
-       (2) pddlstream_planner.py _build_init(): emits (occluder_at occ loc)
-           for each occluder — at original boxel or at moved destination
-           (from #48's moved_occluders dict).
-       (3) stream.pddl: push stream domain changed to (occluder_at ?obj ?b_from).
-       (4) Removed b_from != occluder_id guard from generators in both
-           pddlstream_planner.py and streams.py — the domain now guarantees
-           only valid (occluder, location) pairs reach the generator.
-
-       Result: semantically correct binding, no over-instantiation
-       (evaluations dropped from 237 to 183 in test), works with moved
-       occluder destinations from #48. Limitation: occluder_at is static
-       per planning call, so re-pushing the same occluder twice within
-       a single plan is not supported — the replanning loop handles this.
-
-================================================================================
-48. MOVED OCCLUDERS VANISH FROM PLANNER STATE  [DONE]
-================================================================================
-Where: test_full_pipeline.py (BeliefState), pddlstream_planner.py (_build_init)
-What:  BeliefState.mark_occluder_moved() only records WHICH occluder was
-       moved (adds ID to a set), not WHERE it was moved to. When
-       replanning, _build_init() skips (obj_at_boxel occ occ) for moved
-       occluders (line 292-293) but has no destination to add instead.
-       The occluder has no position in the planner state — it effectively
-       disappears.
-
-       Consequence: the planner cannot push a moved occluder again. This
-       is correct for the current scenario (once moved, view_clear is
-       derived as true, so no second push is needed). But it prevents
-       multi-push scenarios where an occluder must be pushed incrementally
-       or re-pushed after drifting back (see #45).
-
-       Interacts with #47: even if the destination were tracked, the
-       is_object hack in the stream domain would prevent binding ?b_from
-       to a non-object boxel like push_dest_obj_007_14.
-
-Fixed: (1) BeliefState.occluders_moved changed from set to dict
-       mapping {occluder_id: destination_boxel_id}.
-       (2) mark_occluder_moved(occluder_id, destination) now stores the
-       destination (symbolic name "pushed_{occ_id}").
-       (3) unmark_occluder_moved uses dict.pop() instead of set.discard().
-       (4) All planner interfaces (plan, create_problem, export_problem_pddl,
-       _build_init) updated: moved_occluders is now Dict[str, str].
-       (5) _build_init() emits (obj_at_boxel occ dest) and (Boxel dest) for
-       moved occluders instead of omitting them entirely.
-       The occluder now has a valid position in the planner's world model.
-       Since no (blocks_view_at occ dest shadow) exists for the destination,
-       the derived view_clear predicate correctly evaluates to true.
-       Note: re-pushing from the new destination still requires #47
-       (fluent streams) so the push stream can bind ?b_from to dest.
-
-================================================================================
-49. STREAM IK FAILS ON REPLAN — PLANNER TIMES OUT  [DONE]
-================================================================================
-Where: streams.py (_pybullet_ik), test_full_pipeline.py (replanning loop)
-What:  When the target is NOT behind the first pushed occluder, Plan #1
-       succeeds (pushes, senses, finds nothing). Plan #2 then times out
-       (60s) because stream sampling produces almost nothing — evaluations
-       only increase from 183 to 185 (2 new atoms vs 15 in Plan #1).
-
-       Root cause has two parts:
-
-       (1) SEED DEPENDENCY: PyBullet's calculateInverseKinematics() uses
-       the robot's CURRENT joint state as its iterative solver seed.
-       After Plan #1 moves the robot (move_robot_to_pos in execution),
-       the joints are far from REST_POSES. On Plan #2, every IK call
-       in _pybullet_ik() starts from this displaced configuration,
-       converging to solutions that violate joint limits (filtered out)
-       or not converging at all. Plan #1 works because the robot starts
-       at REST_POSES (a good seed).
-
-       (2) NO NULL-SPACE PARAMETERS: _pybullet_ik() in streams.py calls
-       calculateInverseKinematics without lowerLimits, upperLimits,
-       jointRanges, or restPoses. Compare with compute_ik() in
-       robot_utils.py (used by execution), which provides all four —
-       making it much more robust. The stream IK is the simple variant;
-       the execution IK is the null-space variant. They should match.
-
-       Evidence: Plan #2 output shows sample_time: 0.028s (generators
-       fast but empty), search_time: 59.97s (planner retrying with no
-       new atoms). 4 skeletons found (one per occluder) but 0 solutions.
-
-Fixed: (a) _pybullet_ik() now saves the robot's current joint state,
-       resets all arm joints to REST_POSES (providing a consistent seed),
-       runs IK, then restores the original state in a finally block.
-       This makes stream IK results independent of where plan execution
-       left the robot.
-       (b) calculateInverseKinematics call now includes lowerLimits,
-       upperLimits, jointRanges, and restPoses — matching compute_ik()
-       in robot_utils.py. The null-space parameters bias solutions toward
-       the rest configuration, dramatically improving convergence.
-       (c) Added JOINT_RANGES to the imports from robot_utils.
-       Result: Plan #2 now finds solutions in ~19s with 212 evaluations
-       (was: timeout at 60s with 185 evaluations). Multi-shadow scenarios
-       work — tested with target behind the second occluder pushed.
+Fix:   Implement a real motion planner (e.g., RRT-Connect or PRM using
+       PyBullet's collision checking). The motion planner should NOT reason
+       about line of sight — it should only produce collision-free paths.
+       Line-of-sight clearing is the responsibility of pick-and-place
+       occluder relocation, not motion planning.
 
 ================================================================================
 FOR LATER
 ================================================================================
-- Incremental boxel recomputation after actions (without redoing everything
-  from scratch). After pushing an occluder, the shadow it cast changes.
-  Only the affected shadows and free space cells need recomputation.
-- Physics-based pushing with robot contact + force control (#6 Layer 2b).
-  Depends on collision-free motion planning (#5). The interim teleportation
-  (#6 Layer 2a) is acceptable until then.
-- Add collision-free motion planning (RRT/PRM) (#5)
+- Incremental boxel recomputation after occluder relocation (without redoing
+  everything from scratch). After picking and placing an occluder, only the
+  affected shadows and free-space cells need recomputation.
+- Physics-based pushing as an alternative to pick-and-place for objects that
+  are too large or heavy to grasp. Requires collision-free motion planning
+  (#5) and a force/velocity controller. Currently all push logic is
+  commented out, not deleted — can be revived if needed.
 
 ================================================================================
 SUMMARY
 ================================================================================
 The PLANNING ARCHITECTURE models spatial capabilities:
-  - Push is "move object from A to B" with derived views (#32 Ph1+2 done)
-  - Verification moved from push to sense (tri-state sensing) (#32 Ph3, #41 done)
-  - Occluder positions tracked in planner state (#32 Ph1 — done)
-  - Push stream binds locations correctly via occluder_at (#47 — done)
+  - Occluder relocation via pick → move → place (#53 — to be implemented)
+  - Push action commented out (superseded by pick-and-place)
+  - Derived predicates for visibility (view_clear) still work — placing an
+    occluder in free space removes blocks_view, just as push did
+  - Verification via sense (tri-state: found / clear_but_empty / still_blocked)
   - Sensing uses fixed camera correctly (#36 — done)
   - KIF fluents for partial observability are sound
 
-The PUSH PIPELINE is broken end-to-end (#6 — highest priority):
-  - Push stream samples arbitrary directions, not real free-space boxels (#6A)
-  - Execution ignores all plan parameters, re-derives everything (#6B)
-  - Push teleports the object instead of using the robot arm (#6C)
-  - These three problems are not separable: fixing execution to follow the
-    plan requires the plan to be meaningful (Layer 1), and actually moving
-    the robot requires replacing teleportation (Layer 2).
-  - Pick-and-place is a viable alternative for occluder relocation (#6 alt)
-  - Pick execution has the same ignore-plan-params problem (#7)
-
-The STATE SYNCHRONIZATION between planner and physics is broken:
-  - Failed push moves object physically but not symbolically (#45)
-  - Planner cannot detect that views are already clear (#46)
-  - Shadow/registry not recomputed after push (#44)
-  - Moved occluders now tracked with destination (#48 — done)
-  - These three issues interact: #45 causes desync, #44 prevents
-    registry from reflecting reality, #46 means the planner loops
-    endlessly on stale symbolic state
-
-The IMPLEMENTATION shortcuts resolved so far:
-  - Streams produce real geometry (#4 — done, #20 — done, wired)
-  - Stream IK uses null-space params + seed reset (#49 — done)
-  - Visibility check removed (was stub; no longer needed) (#12 — resolved)
-  - Heuristic IK produces meaningless configs (#26 — done, now flagged+warned)
-  - Duplicate robot constants and utility functions (#31 — done)
+The EXECUTION does not follow the plan:
+  - Move execution ignores plan configs, uses hardcoded offsets (#52)
+  - Pick execution ignores plan grasp + kin_solution (#7)
+  - Place execution does not exist yet (part of #53)
 
 Environment note: the default shell is PowerShell (not bash). Heredocs,
   `&&` chaining, and `cd /d` do not work. See .cursor/rules/powershell-shell.mdc.
@@ -610,16 +231,9 @@ Verification logging workflow (for non-truncated planner/execution traces):
   - Batch runs can be captured under logs/phase3_batch/run_*.log.
 
 Priority order for remaining fixes:
-  1. Wire BoxelStreams into the planner (#20 — DONE)
-  2. Fix stream IK seed dependency + add null-space params (#49 — DONE)
-     — Unblocked all multi-shadow scenarios.
-  3. Fix the push pipeline end-to-end (#6)  ← HIGHEST PRIORITY
-     — Layer 1: stream samples real free-space boxels as destinations
-     — Layer 2a (interim): execution follows plan configs, teleports
-       occluder to plan's b_to center (not separately computed)
-     — Layer 2b (final): robot physically pushes via trajectory (needs #5)
-     — Alternative: pick-and-place for occluder relocation
-  4. Fix pick execution to use plan grasp + kin_solution (#7)
-  5. Fix state desync after failed push (#45, #46)
-  6. Fix stale registry after push (#44)
-  7. Add collision-free motion planning (#5)
+  1. Replace push with pick-and-place for occluder relocation (#53)
+     — Enable occluders as Obj, comment out push, add place execution
+  2. Move execution uses plan configs instead of hardcoded offsets (#52)
+  3. Pick execution uses plan grasp + kin_solution (#7)
+  4. Fix stale registry after occluder relocation (#44)
+  5. Add collision-free motion planning (#5)
