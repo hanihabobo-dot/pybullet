@@ -2,7 +2,7 @@
 CODEBASE AUDIT — OPEN ISSUES
 ================================================================================
 Date: 2026-02-25 (original audit, merged from 3 audit passes)
-Updated: 2026-03-03
+Updated: 2026-03-08
 
 Resolved issues archived to archive/CODEBASE_AUDIT_RESOLVED.txt.
 
@@ -20,35 +20,146 @@ Fix:   Implement a real motion planner (e.g., RRT-Connect or PRM using PyBullet'
        is the responsibility of the push action and its streams.
 
 ================================================================================
-6. EXECUTION — PARSES STRING NAMES, IGNORES PLAN PARAMETERS
+6. PUSH & MOVE — STREAM IS GEOMETRY-BLIND, EXECUTION IGNORES PLAN,
+   PUSH IS TELEPORTATION
 ================================================================================
-Where: test_full_pipeline.py (move: ~280, push: ~239, pick: ~324)
-What:  Move now uses the boxel parameter from the plan (issue #8 fixed config
-       name parsing). Execution still uses type-dependent hardcoded offsets
-       ([0,-0.3,0.2] for shadows, [0,-0.2,0.15] for occluders, [0,0,0.15]
-       otherwise) instead of real geometry from streams. Pick and push ignore
-       grasp/kin_solution from the plan.
+Where: streams.py (sample_push_config), test_full_pipeline.py (push & move
+       execution, compute_push_displacement)
 
-Fix:   The plan should carry real geometric data (joint configs, trajectories).
-       Execution should use these directly:
-       - move: follow the trajectory from the plan
-       - push: use the push config from the plan + physics-based pushing
-       - pick: use the grasp and kin_solution from the plan
+What:  The push pipeline has THREE compounding problems. Fixing execution
+       alone is pointless if the plan parameters are meaningless, and fixing
+       the stream is pointless if execution ignores the result.
+
+  (A) PUSH STREAM SAMPLES ARBITRARY DIRECTIONS (streams.py lines 155-199)
+       sample_push_config() tries 4 cardinal directions (0°, 90°, 180°,
+       270°) at a hardcoded 0.15m offset from the occluder center. It
+       does NOT know about:
+         - Which free-space boxels exist as valid push destinations.
+         - Whether a given destination would actually unblock any view
+           corridor (camera-to-shadow geometry).
+         - Table bounds, collisions with other objects, or reachability.
+       The stream invents fake destination names ("push_dest_obj_007_14")
+       instead of referencing real boxels from the registry. The planner
+       then picks whichever invented destination symbolically satisfies
+       view_clear — but the physical geometry behind that destination is
+       just "occluder center + 0.15m in some direction."
+
+  (B) EXECUTION IGNORES ALL PLAN PARAMETERS (test_full_pipeline.py)
+       Push execution (~lines 280-320) throws away the plan's b_to,
+       q_start, q_end, and traj. It re-calls compute_push_displacement(),
+       which independently computes a camera-perpendicular push direction.
+       Move execution (~lines 336-352) throws away the plan's q2 config
+       and uses hardcoded type-dependent offsets:
+         [0, -0.3, 0.2] for shadow boxels
+         [0,  0,   0.15] for object/other boxels
+       Then re-runs IK from scratch via move_robot_to_pos(). The IK-solved
+       configs in the plan are dead data.
+
+  (C) PUSH IS TELEPORTATION — ROBOT ARM IS NOT INVOLVED
+       Push execution calls p.resetBasePositionAndOrientation() to teleport
+       the occluder to a new position. The robot arm never moves to a push
+       pose, never contacts the object, and never follows a push trajectory.
+       This is not a minor shortcut — it means:
+         - Even perfect stream configs would be ignored by execution.
+         - The 30 physics-settle steps after teleportation cause the object
+           to drift unpredictably (root cause of #45 position desync).
+         - There is no force model, so push distance/direction have no
+           physical basis.
+       This is the same teleportation problem noted in the summary as
+       "FOR LATER", but it is NOT separable from #6 — fixing execution to
+       "use plan parameters" requires the robot to actually perform a push
+       motion, which means replacing teleportation.
+
+Fix:   Two layers: make the plan meaningful, then make execution follow it.
+
+  LAYER 1 — Stream produces physically meaningful push destinations:
+       sample_push_config() should pick destinations from the registry's
+       FREE-SPACE boxels (not invented names). For each free-space boxel:
+         1. Would moving the occluder there unblock the view? Check: no
+            blocks_view_at(occ, free_boxel, shadow) fact exists for this
+            destination, so the derived view_clear becomes true. The stream
+            doesn't need to check this explicitly — the planner's derived
+            predicates handle it — but the stream should prefer destinations
+            that are geometrically sensible (nearby, reachable).
+         2. Is the push path collision-free? Straight-line from current
+            position to destination center, checking table bounds and other
+            object AABBs (the logic currently in compute_push_displacement
+            but applied to registry-based destinations).
+         3. Can the robot reach the push start pose? Compute IK for a pose
+            behind the occluder (opposite the push direction) — this is
+            q_start. Compute IK for a follow-through pose at the
+            destination — this is q_end.
+         4. Yield (free_boxel_id, q_start, q_end, traj) — all referencing
+            real boxels and real IK-solved configs.
+       compute_push_displacement() in test_full_pipeline.py is then deleted.
+       Its camera-perpendicular logic was the right idea but in the wrong
+       place — it belongs inside the stream, where the planner can reason
+       about it.
+
+  LAYER 2 — Execution follows the plan parameters:
+       - move: call move_robot_smooth(robot_id, q2.joint_positions) to
+         drive the arm to the plan's IK-solved configuration. Remove all
+         hardcoded offsets and move_robot_to_pos() calls. compute_ik() and
+         move_robot_to_pos() in robot_utils.py become dead code once this
+         is done (as noted in #31).
+       - push: move robot to q_start, then either:
+         (a) INTERIM: teleport the occluder to the plan's b_to center
+             (not a separately-computed displacement). Move robot to q_end.
+             This at least makes the robot's motion match the plan, even
+             though the object motion is still simulated.
+         (b) FINAL: robot follows the push trajectory, contacts the object,
+             and pushes it physically. Requires collision-free motion
+             planning (#5) and a force/velocity controller. This is the
+             real solution but depends on #5.
+
+  ALTERNATIVE — Pick-and-Place instead of Push:
+       The domain already has pick and place actions. If occluders are
+       within the gripper's grasp envelope, the planner could generate:
+         pick(occluder, b_from, grasp, q_pick) →
+         move(q_pick, q_place, b_to, traj) →
+         place(occluder, b_to, grasp, q_place)
+       This is MORE RELIABLE than pushing: deterministic placement, no
+       sliding uncertainty, no teleportation needed. It reuses the existing
+       IK and grasp streams. The main requirement is adding occluders to
+       the Obj predicate so pick/place actions apply to them (currently
+       only target objects are Obj). Consider making this the primary
+       strategy for moving occluders, with push reserved for objects too
+       large or heavy to grasp.
+
+  TELEPORTATION relationship to this issue:
+       Teleportation was listed under "FOR LATER" as if it were independent.
+       It is not. The push action's entire value chain is: stream computes
+       where/how to push → planner decides which push to use → execution
+       moves the robot and pushes the object. Teleportation breaks the last
+       link. Fixing #6 Layer 2(b) and fixing teleportation are the SAME
+       work. The interim Layer 2(a) is an acceptable stepping stone.
 
 ================================================================================
 7. PICK — HARDCODED OFFSETS, IGNORES PLAN GRASP
 ================================================================================
-Where: test_full_pipeline.py lines 384-401
+Where: test_full_pipeline.py execute_pick() (~lines 510-540)
 What:  execute_pick() uses hardcoded offsets from target_pos:
        - +0.15 Z (move above)
        - +0.05 Z (lower to grasp)
        - +0.3 Z (lift)
-       The grasp parameter from the plan is completely ignored.
+       The grasp and kin_solution parameters from the plan are completely
+       ignored. IK is recomputed from scratch via move_robot_to_pos().
        Object attachment uses p.createConstraint (not physics-based grasping).
 
-Fix:   Use the grasp pose and kin_solution from the plan to position the
-       end-effector. The constraint-based attachment is acceptable for
-       simulation but should be noted as a simplification.
+       Same pattern as #6(B): the plan carries real geometric data (grasp
+       pose from sample_grasp, IK-solved config from compute_kin_solution)
+       but execution throws it away and uses hardcoded offsets.
+
+Fix:   (1) Move robot to the plan's kin_solution config (the IK-solved
+       joint angles for the grasp approach) using move_robot_smooth().
+       (2) Use the grasp pose from the plan to compute the approach,
+       contact, and lift waypoints relative to the object's actual
+       position — not hardcoded Z offsets.
+       (3) The constraint-based attachment (p.createConstraint) is
+       acceptable for simulation — physics-based grasping with friction
+       is a separate improvement.
+       (4) Once this is done, compute_ik() and move_robot_to_pos() in
+       robot_utils.py become fully dead code (see #31 note).
 
 ================================================================================
 12. VISIBILITY CHECK — ALWAYS RETURNS TRUE (STUB)  [RESOLVED — no longer applicable]
@@ -448,8 +559,10 @@ FOR LATER
 - Incremental boxel recomputation after actions (without redoing everything
   from scratch). After pushing an occluder, the shadow it cast changes.
   Only the affected shadows and free space cells need recomputation.
-- Implement physics-based pushing (replace teleportation)
-- Add collision-free motion planning (RRT/PRM)
+- Physics-based pushing with robot contact + force control (#6 Layer 2b).
+  Depends on collision-free motion planning (#5). The interim teleportation
+  (#6 Layer 2a) is acceptable until then.
+- Add collision-free motion planning (RRT/PRM) (#5)
 
 ================================================================================
 SUMMARY
@@ -462,6 +575,16 @@ The PLANNING ARCHITECTURE models spatial capabilities:
   - Sensing uses fixed camera correctly (#36 — done)
   - KIF fluents for partial observability are sound
 
+The PUSH PIPELINE is broken end-to-end (#6 — highest priority):
+  - Push stream samples arbitrary directions, not real free-space boxels (#6A)
+  - Execution ignores all plan parameters, re-derives everything (#6B)
+  - Push teleports the object instead of using the robot arm (#6C)
+  - These three problems are not separable: fixing execution to follow the
+    plan requires the plan to be meaningful (Layer 1), and actually moving
+    the robot requires replacing teleportation (Layer 2).
+  - Pick-and-place is a viable alternative for occluder relocation (#6 alt)
+  - Pick execution has the same ignore-plan-params problem (#7)
+
 The STATE SYNCHRONIZATION between planner and physics is broken:
   - Failed push moves object physically but not symbolically (#45)
   - Planner cannot detect that views are already clear (#46)
@@ -471,15 +594,11 @@ The STATE SYNCHRONIZATION between planner and physics is broken:
     registry from reflecting reality, #46 means the planner loops
     endlessly on stale symbolic state
 
-The IMPLEMENTATION shortcuts every geometric step:
-  - Streams now produce real geometry (#4 — done, #20 — done, wired)
-  - Stream IK now uses null-space params + seed reset (#49 — done)
-  - Execution uses type-dependent offsets; pick/push ignore plan (#6, #7)
-  - Pushing is teleportation (#32 execution, FOR LATER)
+The IMPLEMENTATION shortcuts resolved so far:
+  - Streams produce real geometry (#4 — done, #20 — done, wired)
+  - Stream IK uses null-space params + seed reset (#49 — done)
   - Visibility check removed (was stub; no longer needed) (#12 — resolved)
   - Heuristic IK produces meaningless configs (#26 — done, now flagged+warned)
-
-The CODEBASE organizational debt is largely resolved:
   - Duplicate robot constants and utility functions (#31 — done)
 
 Environment note: the default shell is PowerShell (not bash). Heredocs,
@@ -494,9 +613,13 @@ Priority order for remaining fixes:
   1. Wire BoxelStreams into the planner (#20 — DONE)
   2. Fix stream IK seed dependency + add null-space params (#49 — DONE)
      — Unblocked all multi-shadow scenarios.
-  3. Fix state desync after failed push (#45, #46)
-  4. Fix stale registry after push (#44)
-     — Must come before #6/#7: plan geometry is wrong if registry is
-       stale, so execution would follow incorrect configs.
-  5. Fix execution to use plan parameters (#6, #7)
-  6. Add collision-free motion planning (#5)
+  3. Fix the push pipeline end-to-end (#6)  ← HIGHEST PRIORITY
+     — Layer 1: stream samples real free-space boxels as destinations
+     — Layer 2a (interim): execution follows plan configs, teleports
+       occluder to plan's b_to center (not separately computed)
+     — Layer 2b (final): robot physically pushes via trajectory (needs #5)
+     — Alternative: pick-and-place for occluder relocation
+  4. Fix pick execution to use plan grasp + kin_solution (#7)
+  5. Fix state desync after failed push (#45, #46)
+  6. Fix stale registry after push (#44)
+  7. Add collision-free motion planning (#5)
