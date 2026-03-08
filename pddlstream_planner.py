@@ -89,7 +89,6 @@ class PDDLStreamPlanner:
             Dict mapping stream names to generator functions
         """
         return {
-            'sample-push-config': from_gen_fn(self.streams.sample_push_config),
             'sample-grasp': from_gen_fn(self.streams.sample_grasp),
             'plan-motion': from_gen_fn(self.streams.plan_motion),
             'compute-kin': from_gen_fn(self.streams.compute_kin_solution),
@@ -259,14 +258,15 @@ class PDDLStreamPlanner:
 
             elif boxel.boxel_type == BoxelType.OBJECT:
                 init.append(('is_object', boxel.id))
+                init.append(('Obj', boxel.id))
                 if boxel.id in moved_occluders:
                     dest = moved_occluders[boxel.id]
                     init.append(('Boxel', dest))
                     init.append(('obj_at_boxel', boxel.id, dest))
-                    init.append(('occluder_at', boxel.id, dest))
+                    init.append(('obj_at_boxel_KIF', boxel.id, dest))
                 else:
                     init.append(('obj_at_boxel', boxel.id, boxel.id))
-                    init.append(('occluder_at', boxel.id, boxel.id))
+                    init.append(('obj_at_boxel_KIF', boxel.id, boxel.id))
                 for obj in target_objects:
                     init.append(('obj_at_boxel_KIF', obj, boxel.id))
 

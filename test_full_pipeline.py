@@ -220,10 +220,9 @@ def main(gui=True):
     boxel_centers = {b.id: b.center for b in registry.boxels.values()}
     
     plan_count = 0
-    # Budget: each shadow may need multiple push attempts before the view
-    # clears (push verification can fail due to insufficient displacement).
-    # Allow up to 4 attempts per shadow + 1 for the final pick.
-    max_replans = 4 * len(shadows) + 1
+    # Budget: each shadow needs one pick-place-sense cycle; allow extra for
+    # sensing failures (view still blocked after relocation). +1 for final pick.
+    max_replans = 2 * len(shadows) + 1
     grasp_constraint_id = None
     exit_reason = None
     current_config = planner.home_config
@@ -268,61 +267,7 @@ def main(gui=True):
             
             print(f"\n  Executing: {action_name}")
             
-            if action_name == 'push':
-                occluder_id = params[0]
-                b_from = params[1]
-                b_to = params[2]
-                q_start = params[3]
-                q_end = params[4]
-                traj = params[5]
-                print(f"    Pushing {occluder_id} from {b_from} to {b_to}...")
-                
-                # Actually move the occluder in PyBullet
-                if occluder_id in boxel_to_pybullet:
-                    occ_info = boxel_to_pybullet[occluder_id]
-                    occ_pybullet_id = occ_info['pybullet_id']
-                    occ_pos = occ_info['position']
-                    
-                    push_disp = compute_push_displacement(
-                        env.camera_position, occluder_id, registry, boxel_to_pybullet,
-                        table_x_range=env.table_x_range, table_y_range=env.table_y_range
-                    )
-                    if push_disp is None:
-                        print(f"    WARNING: No valid push direction for {occ_info['name']} "
-                              f"— all directions fail bounds/collision checks. Replanning...")
-                        break
-
-                    new_pos = occ_pos + push_disp
-                    _, cur_orn = p.getBasePositionAndOrientation(occ_pybullet_id)
-                    p.resetBasePositionAndOrientation(
-                        occ_pybullet_id, new_pos.tolist(), cur_orn
-                    )
-                    
-                    for _ in range(30):
-                        p.stepSimulation()
-                    
-                    env.update_object_positions()
-                    for bid, binfo in boxel_to_pybullet.items():
-                        obj_name = binfo['name']
-                        if obj_name in env.objects:
-                            binfo['position'] = np.array(env.objects[obj_name].position)
-                    
-                    push_dir_xy = push_disp[:2] / (np.linalg.norm(push_disp[:2]) + 1e-8)
-                    print(f"    -> Pushed {occ_info['name']} "
-                          f"dir=[{push_dir_xy[0]:.2f},{push_dir_xy[1]:.2f}] "
-                          f"dist={np.linalg.norm(push_disp[:2]):.3f}m "
-                          f"from [{occ_pos[0]:.2f},{occ_pos[1]:.2f}] "
-                          f"to [{new_pos[0]:.2f},{new_pos[1]:.2f}]")
-                    # Defer symbolic moved-state update to sense().
-                    # A physical push can still leave the view blocked.
-                else:
-                    occ_boxel = registry.get_boxel(occluder_id)
-                    occ_name = occ_boxel.object_name if occ_boxel else None
-                    print(f"    ERROR: Occluder '{occluder_id}' (object_name={occ_name}) "
-                          f"has no PyBullet mapping — cannot execute push. Replanning...")
-                    break
-                    
-            elif action_name == 'move':
+            if action_name == 'move':
                 q1, q2, dest_boxel_id, traj = params
                 dest_boxel_id_str = str(dest_boxel_id)
                 print(f"    Moving to boxel {dest_boxel_id_str} (config: {q2})...")
@@ -375,22 +320,13 @@ def main(gui=True):
 
                 if sense_outcome == "found_target":
                     belief.mark_sensed(str(shadow_id), found=True)
-                    if shadow_occluder_id:
-                        belief.mark_occluder_moved(
-                            shadow_occluder_id, f"pushed_{shadow_occluder_id}")
                     print(f"    *** TARGET FOUND in {shadow_id}! (ray-cast) ***")
                 elif sense_outcome == "clear_but_empty":
                     belief.mark_sensed(str(shadow_id), found=False)
-                    if shadow_occluder_id:
-                        belief.mark_occluder_moved(
-                            shadow_occluder_id, f"pushed_{shadow_occluder_id}")
                     print(f"    Target NOT in {shadow_id} (ray-cast: view clear but no target hit)")
                     print(f"    -> REPLANNING with updated belief...")
                     break  # Exit action loop to replan
                 else:
-                    # Keep this shadow UNKNOWN: blocked view is not evidence of absence.
-                    if shadow_occluder_id:
-                        belief.unmark_occluder_moved(shadow_occluder_id)
                     print(f"    View to {shadow_id} still blocked "
                           f"({blocked_fraction:.0%} rays hit occluder).")
                     print(f"    -> REPLANNING without marking shadow empty...")
@@ -398,11 +334,54 @@ def main(gui=True):
                     
             elif action_name == 'pick':
                 obj, boxel_id, grasp, config = params
-                print(f"    Picking {obj}...")
-                
-                fresh_target_pos = np.array(env.objects[target_name].position)
-                grasp_constraint_id = execute_pick(robot_id, env, target_name, fresh_target_pos, gui)
-                print(f"    *** {obj} PICKED UP! ***")
+                obj_str = str(obj)
+                print(f"    Picking {obj_str} from {boxel_id}...")
+
+                if obj_str in boxel_to_pybullet:
+                    pick_obj_name = boxel_to_pybullet[obj_str]['name']
+                    pick_pos = np.array(env.objects[pick_obj_name].position)
+                elif obj_str == target_name:
+                    pick_obj_name = target_name
+                    pick_pos = np.array(env.objects[target_name].position)
+                else:
+                    print(f"    ERROR: Cannot resolve PyBullet object for '{obj_str}'")
+                    break
+
+                grasp_constraint_id = execute_pick(robot_id, env, pick_obj_name, pick_pos, gui)
+                current_config = config
+                print(f"    *** {pick_obj_name} PICKED UP! ***")
+
+            elif action_name == 'place':
+                obj, boxel_id, grasp, config = params
+                obj_str = str(obj)
+                boxel_id_str = str(boxel_id)
+                print(f"    Placing {obj_str} at {boxel_id_str}...")
+
+                if boxel_id_str in boxel_centers:
+                    place_pos = boxel_centers[boxel_id_str]
+                elif boxel_id_str in boxel_to_pybullet:
+                    place_pos = boxel_to_pybullet[boxel_id_str]['position']
+                else:
+                    print(f"    ERROR: Cannot resolve position for boxel '{boxel_id_str}'")
+                    break
+
+                execute_place(robot_id, env, obj_str, place_pos, grasp_constraint_id, gui)
+                grasp_constraint_id = None
+
+                env.update_object_positions()
+                for bid, binfo in boxel_to_pybullet.items():
+                    bname = binfo['name']
+                    if bname in env.objects:
+                        binfo['position'] = np.array(env.objects[bname].position)
+
+                if obj_str in boxel_to_pybullet:
+                    placed_obj_name = boxel_to_pybullet[obj_str]['name']
+                    belief.mark_occluder_moved(obj_str, boxel_id_str)
+                    print(f"    *** {placed_obj_name} PLACED at {boxel_id_str}! ***")
+                else:
+                    print(f"    *** {obj_str} PLACED at {boxel_id_str}! ***")
+
+                current_config = config
     
     # =========================================================
     # PHASE 6: Results
@@ -505,131 +484,79 @@ def sense_shadow_raycasting(camera_pos, shadow_boxel, target_pybullet_id, occlud
     return "clear_but_empty", 0.0
 
 
-def execute_pick(robot_id, env, target_name, target_pos, gui):
+def execute_pick(robot_id, env, obj_name, obj_pos, gui):
     """
-    Execute pick action with robot.
+    Execute pick action: approach, grasp, and lift an object.
+
+    Works for any object in env.objects (targets, occluders, etc.).
+
+    Args:
+        robot_id: PyBullet body ID of the robot
+        env: BoxelTestEnv instance
+        obj_name: Name key in env.objects (e.g. "target_1", "occluder_2")
+        obj_pos: Current object position [x, y, z]
+        gui: Whether GUI is active (for step_simulation timing)
 
     Returns:
         int: PyBullet constraint ID for the grasp attachment. Callers must
         store this and call p.removeConstraint() when placing the object
         or resetting the environment.
     """
-    # Move above target
-    move_robot_to_pos(robot_id, target_pos + np.array([0, 0, 0.15]), gui)
+    move_robot_to_pos(robot_id, obj_pos + np.array([0, 0, 0.15]), gui)
 
-    # Open gripper before lowering — required for real robots; constraint-based
-    # attachment works regardless in simulation but would fail if gripper stayed closed
     open_gripper(robot_id, gui)
 
-    # Lower to grasp
-    move_robot_to_pos(robot_id, target_pos + np.array([0, 0, 0.05]), gui)
-    
-    # Close gripper
+    move_robot_to_pos(robot_id, obj_pos + np.array([0, 0, 0.05]), gui)
+
     close_gripper(robot_id, gui)
-    
-    # Attach object
-    target_id = env.objects[target_name].object_id
+
+    obj_id = env.objects[obj_name].object_id
     grasp_constraint_id = p.createConstraint(
-        robot_id, END_EFFECTOR_LINK, target_id, -1,
+        robot_id, END_EFFECTOR_LINK, obj_id, -1,
         p.JOINT_FIXED, [0,0,0], [0,0,0.05], [0,0,0]
     )
-    
-    # Lift
-    move_robot_to_pos(robot_id, target_pos + np.array([0, 0, 0.3]), gui)
-    
+
+    move_robot_to_pos(robot_id, obj_pos + np.array([0, 0, 0.3]), gui)
+
     return grasp_constraint_id
 
 
-def compute_push_displacement(camera_pos, occluder_id, registry, boxel_to_pybullet,
-                              table_x_range=(0.0, 1.0), table_y_range=(-0.5, 0.5)):
+def execute_place(robot_id, env, obj_name, place_pos, grasp_constraint_id, gui):
     """
-    Compute the displacement vector to push an occluder out of the camera's
-    line of sight to its shadow region(s).
+    Execute place action: lower held object to placement position and release.
 
-    The push direction is perpendicular to the camera-to-shadow viewing line
-    (in the XY plane). The distance ensures the occluder's AABB clears the
-    viewing corridor. Between the two perpendicular candidates, the one that
-    avoids collisions with other objects and stays within table bounds is chosen.
+    Mirrors execute_pick() in reverse: move above destination, lower to
+    placement height, open gripper, remove constraint, lift arm clear.
 
     Args:
-        camera_pos: Camera position [x, y, z]
-        occluder_id: Boxel ID of the occluder to push
-        registry: BoxelRegistry with scene geometry
-        boxel_to_pybullet: Dict mapping boxel IDs to PyBullet info
-        table_x_range: (min, max) X bounds of the table surface
-        table_y_range: (min, max) Y bounds of the table surface
+        robot_id: PyBullet body ID of the robot
+        env: BoxelTestEnv instance
+        obj_name: Name of the object being placed (for logging)
+        place_pos: Destination position [x, y, z] (boxel center)
+        grasp_constraint_id: PyBullet constraint ID from execute_pick()
+        gui: Whether GUI is active (for step_simulation timing)
 
     Returns:
-        np.ndarray or None: Push displacement vector [dx, dy, 0], or None if
-        no valid direction exists (both perpendiculars fail bounds/collision).
+        None (constraint is released inside this function)
     """
-    occluder_boxel = registry.get_boxel(occluder_id)
-    if occluder_boxel is None:
-        print(f"    WARNING: compute_push_displacement — occluder '{occluder_id}' not found in registry")
-        return None
+    move_robot_to_pos(robot_id, place_pos + np.array([0, 0, 0.15]), gui)
 
-    occ_extent = occluder_boxel.extent
+    move_robot_to_pos(robot_id, place_pos + np.array([0, 0, 0.05]), gui)
 
-    shadow_boxels = [registry.get_boxel(sid)
-                     for sid in occluder_boxel.shadow_boxel_ids
-                     if registry.get_boxel(sid) is not None]
+    open_gripper(robot_id, gui)
 
-    if not shadow_boxels:
-        print(f"    WARNING: compute_push_displacement — no shadow boxels linked to occluder '{occluder_id}'")
-        return None
+    if grasp_constraint_id is not None:
+        p.removeConstraint(grasp_constraint_id)
 
-    shadow_center = np.mean([sb.center for sb in shadow_boxels], axis=0)
+    for _ in range(30):
+        p.stepSimulation()
 
-    cam_to_shadow_xy = np.array([
-        shadow_center[0] - camera_pos[0],
-        shadow_center[1] - camera_pos[1]
-    ])
-    view_len = np.linalg.norm(cam_to_shadow_xy)
-    if view_len < 1e-6:
-        print(f"    WARNING: compute_push_displacement — degenerate camera-to-shadow direction for '{occluder_id}'")
-        return None
-    cam_to_shadow_xy /= view_len
+    move_robot_to_pos(robot_id, place_pos + np.array([0, 0, 0.3]), gui)
 
-    perp = np.array([-cam_to_shadow_xy[1], cam_to_shadow_xy[0]])
 
-    half_width = abs(occ_extent[0] * perp[0]) + abs(occ_extent[1] * perp[1])
-    push_dist = half_width + 0.10
-
-    TABLE_X_MIN, TABLE_X_MAX = table_x_range
-    TABLE_Y_MIN, TABLE_Y_MAX = table_y_range
-
-    occ_pos_xy = occluder_boxel.center[:2]
-    if occluder_id in boxel_to_pybullet:
-        occ_pos_xy = np.array(boxel_to_pybullet[occluder_id]['position'][:2])
-
-    for sign in [1.0, -1.0]:
-        direction = sign * perp
-        new_xy = occ_pos_xy + direction * push_dist
-
-        if (new_xy[0] - occ_extent[0] < TABLE_X_MIN or
-                new_xy[0] + occ_extent[0] > TABLE_X_MAX or
-                new_xy[1] - occ_extent[1] < TABLE_Y_MIN or
-                new_xy[1] + occ_extent[1] > TABLE_Y_MAX):
-            continue
-
-        collision = False
-        for bid, binfo in boxel_to_pybullet.items():
-            if bid == occluder_id:
-                continue
-            other_boxel = registry.get_boxel(bid)
-            if other_boxel is None:
-                continue
-            other_pos = np.array(binfo['position'][:2])
-            other_ext = other_boxel.extent
-            if (abs(new_xy[0] - other_pos[0]) < occ_extent[0] + other_ext[0] and
-                    abs(new_xy[1] - other_pos[1]) < occ_extent[1] + other_ext[1]):
-                collision = True
-                break
-
-        if not collision:
-            return np.array([direction[0] * push_dist, direction[1] * push_dist, 0.0])
-
-    return None
+# compute_push_displacement() removed (#53): push superseded by pick-and-place.
+# The function teleported occluders via p.resetBasePositionAndOrientation without
+# involving the robot arm. Occluder relocation now uses pick → move → place.
 
 
 if __name__ == "__main__":

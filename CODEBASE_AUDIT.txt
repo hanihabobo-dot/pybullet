@@ -7,152 +7,102 @@ Updated: 2026-03-08
 Resolved issues archived to archive/CODEBASE_AUDIT_RESOLVED.txt.
 
 ================================================================================
-53. REPLACE PUSH WITH PICK-AND-PLACE FOR OCCLUDER RELOCATION
+53. REPLACE PUSH WITH PICK-AND-PLACE FOR OCCLUDER RELOCATION  [DONE]
 ================================================================================
 Where: pddl/domain_pddlstream.pddl, pddl/stream.pddl, streams.py,
        pddlstream_planner.py, test_full_pipeline.py
 
-What:  Occluders are currently relocated via a push action that teleports
-       the object (p.resetBasePositionAndOrientation). The robot arm is
-       never involved. The push stream invents fake destinations. Execution
-       ignores all plan parameters and re-derives its own push direction.
-       This entire pipeline is broken (#50, #51) and unfixable without
-       rewriting it from scratch.
+Fixed: All three parts implemented:
 
-       The domain already has PICK and PLACE as two separate actions:
+  PART 1 — Make occluders graspable:
+       _build_init() now emits (Obj occ_id) and (obj_at_boxel_KIF occ_id boxel)
+       for each OBJECT boxel. The planner can now generate pick → move → place
+       plans for occluders using the same streams as targets. (occluder_at)
+       predicate removed — it was only needed for the push stream domain.
 
-         pick(?o, ?b, ?g, ?q)  — grasp object ?o at boxel ?b
-         place(?o, ?b, ?g, ?q) — release object ?o at boxel ?b
+  PART 2 — Push commented out:
+       (a) domain_pddlstream.pddl: push action commented out, push_solution
+           and occluder_at predicates commented out.
+       (b) stream.pddl: sample-push-config stream commented out.
+       (c) pddlstream_planner.py: 'sample-push-config' removed from stream map.
+       (d) streams.py: sample_push_config() commented out.
+       (e) test_full_pipeline.py: push execution branch removed,
+           compute_push_displacement() removed.
 
-       These two actions, combined with move, can relocate an occluder:
-
-         pick(occluder, occ_boxel, grasp, q_pick)
-           → robot grasps the occluder and lifts it
-         move(q_pick, q_place, free_boxel, traj)
-           → robot carries the occluder to a free-space boxel
-         place(occluder, free_boxel, grasp, q_place)
-           → robot places the occluder in the free-space boxel
-
-       This is deterministic (no sliding uncertainty), uses existing robot
-       motion infrastructure (move_robot_smooth + gripper), and the planner
-       already knows how to sequence pick → move → place.
-
-       But currently only target objects have the (Obj) predicate, so the
-       planner cannot pick/place occluders.
-
-Fix:   Two parts: enable occluders for pick/place, then disable push.
-
-  PART 1 — Make occluders graspable (planner changes):
-       (a) pddlstream_planner.py _build_init(): for each OBJECT boxel,
-           add (Obj occluder_id) so the pick and place actions apply.
-           Also add (obj_at_boxel_KIF occluder_id occluder_boxel) — we
-           can see the occluder, so we know it's there. The existing
-           (obj_at_boxel occluder_id occluder_boxel) is already emitted.
-       (b) No PDDL domain changes needed — pick and place already work
-           for any (Obj ?o). The planner will generate pick → move → place
-           plans for occluders the same way it does for targets.
-       (c) No stream changes needed — sample_grasp and compute_kin_solution
-           already accept any object ID. They will produce grasps and IK
-           solutions for occluders automatically.
-       (d) The planner's derived predicates handle the rest: once the
-           occluder is placed in a free-space boxel (where no
-           blocks_view_at fact exists), view_clear becomes true, and
-           the sense action becomes available for the shadow behind it.
-
-  PART 2 — Comment out push (code cleanup):
-       (a) domain_pddlstream.pddl: comment out the push action. Keep the
-           text for reference but make the planner unable to use it.
-       (b) stream.pddl: comment out the sample-push-config stream.
-       (c) pddlstream_planner.py _get_stream_map(): remove the
-           'sample-push-config' entry.
-       (d) streams.py: comment out sample_push_config() and its helper
-           methods (the push-specific IK logic). Keep sample_grasp,
-           plan_motion, compute_kin_solution.
-       (e) test_full_pipeline.py: remove the push execution branch
-           (the entire 'if action_name == "push"' block, ~lines 280-320).
-           Remove compute_push_displacement() entirely.
-       (f) pddlstream_planner.py _build_init(): remove (occluder_at)
-           emissions — that predicate was only needed for the push stream
-           domain binding. Remove push-related predicates if unused.
-
-  PART 3 — Add place execution (new code):
-       test_full_pipeline.py needs a place execution handler alongside the
-       existing pick handler. Pick and place are separate actions:
-
-       execute_pick (already exists, see #7 for fixing it):
-         - Move robot to kin_solution config
-         - Open gripper
-         - Lower to grasp position
-         - Close gripper
-         - Attach object via p.createConstraint
-         - Lift
-
-       execute_place (new):
-         - Move robot to kin_solution config (arm above the destination)
-         - Lower to placement height
-         - Open gripper
-         - Release p.createConstraint
-         - Lift arm clear
-
-       The plan dispatcher needs a new 'elif action_name == "place"' branch
-       that calls execute_place with the plan's (obj, boxel, grasp, config)
-       parameters.
-
-  Expected plan shape after this fix:
-       1. pick(occluder_1, occ_boxel, grasp_1, q_pick)
-       2. move(q_pick, q_place, free_boxel_3, traj_1)
-       3. place(occluder_1, free_boxel_3, grasp_1, q_place)
-       4. sense(target_1, shadow_1)
-          → if found:
-       5. move(q_place, q_pick_target, shadow_1, traj_2)
-       6. pick(target_1, shadow_1, grasp_2, q_pick_target)
-          → if not found: replan for next shadow
+  PART 3 — Place execution added:
+       execute_place() function added (lower, open gripper, release constraint,
+       lift). Place dispatch branch in execution loop resolves destination from
+       boxel_centers, calls execute_place(), updates env positions and belief.
+       Pick dispatch generalized to work with any object (not just targets).
+       Sense handler simplified — occluder moved-state now tracked by place
+       branch, not sense.
 
 ================================================================================
-52. MOVE EXECUTION IGNORES PLAN CONFIGS — USES HARDCODED OFFSETS
+52. MOVE EXECUTION IGNORES PLAN CONFIGS — RE-DERIVES IK FROM HARDCODED OFFSETS
 ================================================================================
-Where: test_full_pipeline.py move execution (~lines 336-352)
+Where: test_full_pipeline.py move execution (~lines 270-297)
 What:  When the plan says move(q1, q2, boxel, traj), execution throws
-       away q2 and uses hardcoded type-dependent offsets:
+       away q2, the trajectory traj, and computes its own target from
+       hardcoded type-dependent Cartesian offsets:
          [0, -0.3, 0.2] for shadow boxels
          [0,  0,   0.15] for object/other boxels
-       Then re-runs IK from scratch via move_robot_to_pos(). The IK-solved
-       config q2 from the plan is dead data.
+       It then calls move_robot_to_pos(), which re-runs IK from scratch
+       (compute_ik) and passes the result to move_robot_smooth(). The
+       plan's IK-solved config q2 and planned trajectory traj are dead
+       data — the execution invents its own target pose every time.
 
-Fix:   Call move_robot_smooth(robot_id, q2.joint_positions) to drive the
-       arm to the plan's IK-solved configuration. Remove all hardcoded
-       offsets and move_robot_to_pos() calls. After this, compute_ik()
-       and move_robot_to_pos() in robot_utils.py become dead code (see
-       #31 note in archive).
+       move_robot_to_pos is a redundant wrapper: it calls compute_ik()
+       then move_robot_smooth(). There is no reason for two move
+       functions. Everything should call move_robot_smooth() directly
+       with the plan's pre-computed joint angles.
+
+       The same pattern exists in execute_pick() and execute_place()
+       (see #7) — all use move_robot_to_pos() with hardcoded offsets.
+
+Fix:   Call move_robot_smooth(robot_id, q2.joint_positions) directly
+       to drive the arm to the plan's IK-solved configuration. Remove
+       all hardcoded Cartesian offsets and move_robot_to_pos() calls.
+       After this, compute_ik() and move_robot_to_pos() in robot_utils.py
+       become dead code and should be removed (see #31 note in archive).
 
 ================================================================================
-7. PICK — HARDCODED OFFSETS, IGNORES PLAN GRASP
+7. PICK/PLACE — HARDCODED OFFSETS, IGNORES PLAN GRASP, MAGIC ATTACHMENT
 ================================================================================
-Where: test_full_pipeline.py execute_pick() (~lines 510-540)
-What:  execute_pick() uses hardcoded offsets from target_pos:
-       - +0.15 Z (move above)
-       - +0.05 Z (lower to grasp)
-       - +0.3 Z (lift)
+Where: test_full_pipeline.py execute_pick(), execute_place()
+What:  Two problems:
+
+       (A) Hardcoded offsets, plan data ignored (same pattern as #52):
+       execute_pick() uses hardcoded Z offsets from the object position:
+         +0.15 Z (move above), +0.05 Z (lower to grasp), +0.3 Z (lift)
+       execute_place() uses the same offsets for the destination boxel.
        The grasp and kin_solution parameters from the plan are completely
        ignored. IK is recomputed from scratch via move_robot_to_pos().
-       Object attachment uses p.createConstraint (not physics-based grasping).
+       The plan carries real geometric data (grasp pose from sample_grasp,
+       IK-solved config from compute_kin_solution) but execution throws
+       it all away.
 
-       Same pattern as #52: the plan carries real geometric data (grasp
-       pose from sample_grasp, IK-solved config from compute_kin_solution)
-       but execution throws it away and uses hardcoded offsets.
+       This is CRITICAL because pick/place are used for both targets AND
+       occluders (after #53). Every occluder relocation and every target
+       pickup goes through these functions.
 
-       This is now MORE CRITICAL because pick is used for both targets
-       AND occluders (after #53). Every occluder relocation and every
-       target pickup goes through execute_pick().
+       (B) Grasping is a magic weld, not real contact:
+       execute_pick() attaches the object to the gripper via
+       p.createConstraint() — a rigid fixed joint that welds the object
+       to the end-effector. The gripper open/close calls are cosmetic;
+       the object sticks regardless of finger position or contact forces.
+       execute_place() releases the weld via p.removeConstraint().
+       There is no friction, no contact detection, no force closure.
+       Objects cannot slip or be dropped.
 
-Fix:   (1) Move robot to the plan's kin_solution config (the IK-solved
-       joint angles for the grasp approach) using move_robot_smooth().
-       (2) Use the grasp pose from the plan to compute the approach,
+Fix:   (1) Move robot to the plan's kin_solution config using
+       move_robot_smooth() — not hardcoded Cartesian offsets.
+       (2) Use the grasp pose from the plan to compute approach,
        contact, and lift waypoints relative to the object's actual
-       position — not hardcoded Z offsets.
+       position.
        (3) The constraint-based attachment (p.createConstraint) is
-       acceptable for simulation — physics-based grasping with friction
-       is a separate improvement.
+       acceptable as a simulation simplification for now. Physics-based
+       grasping with friction and contact forces is a separate
+       improvement (not blocking other work).
        (4) Once this is done, compute_ik() and move_robot_to_pos() in
        robot_utils.py become fully dead code (see #31 note in archive).
 
@@ -195,6 +145,94 @@ Fix:   Implement a real motion planner (e.g., RRT-Connect or PRM using
        occluder relocation, not motion planning.
 
 ================================================================================
+54. ORACLE VISIBILITY — SINGLE RAY WITH MAGIC THRESHOLD
+================================================================================
+Where: boxel_env.py oracle_detect_objects() line 397
+What:  Object visibility is determined by casting a SINGLE ray from the
+       camera to the object's center. If the hit body is not the object
+       and hit_fraction < 0.95, the object is considered occluded.
+       Problems:
+       (a) A single center ray misses cases where the object is partially
+           visible (edge sticking out from behind an occluder).
+       (b) The 0.95 threshold is an unexplained magic number — appears
+           to be a fudge factor to avoid self-hit issues.
+       (c) This is an oracle function (ground-truth detection), but even
+           an oracle should be geometrically correct.
+
+Fix:   Cast multiple rays to the object's bounding box corners (at least
+       8 corners). Object is visible if ANY ray reaches it without
+       hitting another object first. Remove the 0.95 threshold.
+
+================================================================================
+55. HARDCODED SCENE — NO SCENARIO VARIATION
+================================================================================
+Where: boxel_env.py _create_occluders(), _create_targets()
+What:  The scene has exactly 3 occluders and 4 targets at hardcoded
+       positions. Object sizes are fixed (0.15m cubes for occluders,
+       0.08m cubes for targets). There is no randomization, no
+       parameterization, no difficulty scaling. The proposal (Section 5)
+       says "We will vary the number of occluders and the complexity of
+       the scene to test scalability" but only one scene exists.
+
+Fix:   Parameterize BoxelTestEnv to accept scene configs: number of
+       occluders, targets, size ranges, randomized positions. Create
+       a scene generator for evaluation. This is required for any
+       evaluation section in the thesis.
+
+================================================================================
+56. DEAD COMPUTATION — POINT CLOUD AND NEIGHBORS NEVER USED
+================================================================================
+Where: boxel_env.py get_camera_observation(), boxel_data.py compute_neighbors()
+What:  (a) Every get_camera_observation() call generates an RGB image,
+       depth image, and point cloud. None are used by the planner or
+       execution — only the boxels list is consumed. The point cloud
+       computation is wasted work.
+       (b) BoxelRegistry.compute_neighbors() runs O(n²) adjacency checks
+       and populates neighbor_ids on every boxel. No code ever reads
+       these relationships. They're serialized to JSON and ignored.
+
+Fix:   (a) Make point cloud / image generation optional (lazy).
+       (b) Remove compute_neighbors() call from
+       create_boxel_registry_from_boxels(), or document it as a
+       future-use feature. Don't compute what nothing consumes.
+
+================================================================================
+PROPOSAL ALIGNMENT GAPS
+================================================================================
+These are features described in the proposal that have no corresponding
+implementation. They are not code bugs — they are missing functionality
+that the thesis promises.
+
+PA-1. No evaluation framework (proposal Section 5)
+      The proposal defines metrics (success rate, planning time, plan cost,
+      scalability) and three baselines (uniform voxelization, fixed semantic
+      regions, POMDP-based TAMP). None exist in the codebase. There is no
+      benchmarking code, no baseline implementations, no metric collection,
+      no experiment runner.
+
+PA-2. No recursive object discovery in free space (proposal Section 4.2)
+      The proposal says: "If new objects are found within a partition, the
+      process repeats: bound the biggest object and define its occluded
+      space." The actual FreeSpaceGenerator does a single-pass octree that
+      marks cells as FREE or OCCUPIED. It never detects new objects inside
+      partitions — all objects are detected upfront by oracle_detect_objects.
+
+PA-3. K-literal design differs from proposal (proposal Section 4.4.1)
+      The proposal defines two predicates: obj_in_Boxel (K(p)) and
+      obj_not_in_Boxel (K(¬p)), with "possibly in" being the absence of
+      both. The implementation uses a single obj_at_boxel_KIF predicate:
+      present = "we know", absent = "unknown". This is a valid KIF
+      simplification (Bonet & Geffner style), but it deviates from the
+      proposal's two-predicate design without documenting the change.
+
+PA-4. Sensing requires no robot positioning (proposal Section 4.4.2)
+      The proposal's sense action requires stream_find_sensing_config — the
+      robot must move to a sensing pose. The implementation uses a fixed
+      scene camera with no robot positioning requirement. This was a
+      deliberate simplification (resolved audit #36) but contradicts the
+      proposal's design.
+
+================================================================================
 FOR LATER
 ================================================================================
 - Incremental boxel recomputation after occluder relocation (without redoing
@@ -209,7 +247,7 @@ FOR LATER
 SUMMARY
 ================================================================================
 The PLANNING ARCHITECTURE models spatial capabilities:
-  - Occluder relocation via pick → move → place (#53 — to be implemented)
+  - Occluder relocation via pick → move → place (#53 — done)
   - Push action commented out (superseded by pick-and-place)
   - Derived predicates for visibility (view_clear) still work — placing an
     occluder in free space removes blocks_view, just as push did
@@ -217,10 +255,13 @@ The PLANNING ARCHITECTURE models spatial capabilities:
   - Sensing uses fixed camera correctly (#36 — done)
   - KIF fluents for partial observability are sound
 
-The EXECUTION does not follow the plan:
-  - Move execution ignores plan configs, uses hardcoded offsets (#52)
+The EXECUTION does not follow the plan — it re-derives everything:
+  - move_robot_to_pos() is a redundant wrapper: re-runs IK from a Cartesian
+    position then calls move_robot_smooth(). The plan's IK-solved configs
+    and trajectories are thrown away. Should call move_robot_smooth() directly.
+  - Move execution ignores plan configs + trajectory, uses hardcoded offsets (#52)
   - Pick execution ignores plan grasp + kin_solution (#7)
-  - Place execution does not exist yet (part of #53)
+  - Place execution exists (#53 — done) but uses same re-derived IK (#7)
 
 Environment note: the default shell is PowerShell (not bash). Heredocs,
   `&&` chaining, and `cd /d` do not work. See .cursor/rules/powershell-shell.mdc.
@@ -231,9 +272,13 @@ Verification logging workflow (for non-truncated planner/execution traces):
   - Batch runs can be captured under logs/phase3_batch/run_*.log.
 
 Priority order for remaining fixes:
-  1. Replace push with pick-and-place for occluder relocation (#53)
-     — Enable occluders as Obj, comment out push, add place execution
-  2. Move execution uses plan configs instead of hardcoded offsets (#52)
-  3. Pick execution uses plan grasp + kin_solution (#7)
-  4. Fix stale registry after occluder relocation (#44)
-  5. Add collision-free motion planning (#5)
+  1. Move execution uses plan configs instead of hardcoded offsets (#52)
+  2. Pick/place execution uses plan grasp + kin_solution (#7)
+  3. Fix stale registry after occluder relocation (#44)
+  4. Add collision-free motion planning (#5)
+  5. Multi-ray visibility oracle (#54)
+  6. Parameterized scene generation (#55)
+  7. Remove dead computation (#56)
+
+Proposal alignment work (PA-1 through PA-4) is tracked separately above
+and must be addressed before thesis submission.

@@ -129,73 +129,42 @@ class BoxelStreams:
         self.ik_residual_threshold = 1e-4
     
     # =========================================================================
-    # STREAM: Sample Push Solution (spatial push planning)
+    # STREAM: Sample Push Solution — superseded by pick-and-place (#53)
     # =========================================================================
-    def sample_push_config(self, occluder_id: str, b_from: str) -> Iterator[Tuple]:
-        """
-        Generate push solutions: destination, start/end configs, and trajectory.
-
-        PDDLStream declaration (see pddl/stream.pddl):
-            (:stream sample-push-config
-              :inputs (?obj ?b_from)
-              :domain (and (is_object ?obj) (occluder_at ?obj ?b_from))
-              :outputs (?b_to ?q_start ?q_end ?traj)
-              :certified (and (Boxel ?b_to) (Config ?q_start) (Config ?q_end)
-                              (Trajectory ?traj)
-                              (push_solution ?obj ?b_from ?b_to ?q_start ?q_end ?traj)
-                              (config_for_boxel ?q_start ?b_from)))
-
-        The stream domain (occluder_at ?obj ?b_from) guarantees b_from is
-        the occluder's actual current location — no guard needed.
-
-        Args:
-            occluder_id: ID of the occluder boxel to push
-            b_from: ID of the boxel where the occluder currently is
-
-        Yields:
-            Tuples of (b_to, q_start, q_end, traj) for pushing the occluder
-        """
-        boxel = self.registry.get_boxel(occluder_id)
-        if boxel is None:
-            return
-
-        occluder_center = boxel.center
-
-        for angle in np.linspace(0, 2*np.pi, 4, endpoint=False):
-            push_pos = occluder_center + np.array([
-                0.15 * np.cos(angle),
-                0.15 * np.sin(angle),
-                0.1
-            ])
-
-            q_start_config = self._compute_sensing_ik(push_pos, occluder_center)
-            if q_start_config is None:
-                continue
-
-            self._config_counter += 1
-            q_start_config.name = f"q_push_start_{occluder_id}_{self._config_counter}"
-
-            # Push destination: offset along the push direction from the occluder
-            push_direction = np.array([np.cos(angle), np.sin(angle), 0.0])
-            push_dist = np.max(boxel.extent[:2]) + 0.10
-            dest_center = occluder_center + push_direction * push_dist
-            dest_pos = dest_center + np.array([0.0, 0.0, 0.1])
-            q_end_config = self._compute_sensing_ik(dest_pos, dest_center)
-            if q_end_config is None:
-                continue
-
-            self._config_counter += 1
-            q_end_config.name = f"q_push_end_{occluder_id}_{self._config_counter}"
-
-            self._traj_counter += 1
-            traj = Trajectory(
-                waypoints=[q_start_config, q_end_config],
-                name=f"traj_push_{occluder_id}_{self._traj_counter}"
-            )
-
-            b_to_name = f"push_dest_{occluder_id}_{self._config_counter}"
-
-            yield (b_to_name, q_start_config, q_end_config, traj)
+    # def sample_push_config(self, occluder_id: str, b_from: str) -> Iterator[Tuple]:
+    #     """
+    #     Generate push solutions: destination, start/end configs, and trajectory.
+    #     Superseded by pick → move → place for occluder relocation (#53).
+    #     """
+    #     boxel = self.registry.get_boxel(occluder_id)
+    #     if boxel is None:
+    #         return
+    #     occluder_center = boxel.center
+    #     for angle in np.linspace(0, 2*np.pi, 4, endpoint=False):
+    #         push_pos = occluder_center + np.array([
+    #             0.15 * np.cos(angle), 0.15 * np.sin(angle), 0.1
+    #         ])
+    #         q_start_config = self._compute_sensing_ik(push_pos, occluder_center)
+    #         if q_start_config is None:
+    #             continue
+    #         self._config_counter += 1
+    #         q_start_config.name = f"q_push_start_{occluder_id}_{self._config_counter}"
+    #         push_direction = np.array([np.cos(angle), np.sin(angle), 0.0])
+    #         push_dist = np.max(boxel.extent[:2]) + 0.10
+    #         dest_center = occluder_center + push_direction * push_dist
+    #         dest_pos = dest_center + np.array([0.0, 0.0, 0.1])
+    #         q_end_config = self._compute_sensing_ik(dest_pos, dest_center)
+    #         if q_end_config is None:
+    #             continue
+    #         self._config_counter += 1
+    #         q_end_config.name = f"q_push_end_{occluder_id}_{self._config_counter}"
+    #         self._traj_counter += 1
+    #         traj = Trajectory(
+    #             waypoints=[q_start_config, q_end_config],
+    #             name=f"traj_push_{occluder_id}_{self._traj_counter}"
+    #         )
+    #         b_to_name = f"push_dest_{occluder_id}_{self._config_counter}"
+    #         yield (b_to_name, q_start_config, q_end_config, traj)
     
     def _compute_sensing_ik(self, ee_pos: np.ndarray, 
                             look_at: np.ndarray) -> Optional[RobotConfig]:
@@ -283,6 +252,7 @@ class BoxelStreams:
             return RobotConfig(joint_positions=arm_joints)
             
         except Exception as e:
+            logger.error("IK failed for pos=%s: %s", ee_pos.tolist(), e)
             return None
 
         finally:
@@ -384,30 +354,33 @@ class BoxelStreams:
     # =========================================================================
     def sample_grasp(self, obj_id: str) -> Iterator[Tuple[Grasp]]:
         """
-        Generate valid grasp poses for an object.
-        
+        Generate a grasp pose for an object.
+
+        Currently yields a single top-down grasp. Execution uses
+        p.createConstraint (magic weld) so grasp geometry is not used —
+        this stream exists only to satisfy the planner's type constraints.
+        Expand to multiple orientations when execution uses real grasps.
+
         PDDLStream declaration (see pddl/stream.pddl):
             (:stream sample-grasp
               :inputs (?o)
               :domain (Obj ?o)
               :outputs (?g)
               :certified (and (Grasp ?g) (valid_grasp ?o ?g)))
-        
+
         Args:
             obj_id: ID of the object to grasp
-            
+
         Yields:
             Tuples of (grasp,) for the object
         """
-        # Generate top-down grasps at different orientations
-        for yaw in np.linspace(0, np.pi, 4, endpoint=False):
-            self._grasp_counter += 1
-            grasp = Grasp(
-                position=np.array([0, 0, 0.05]),  # Approach from above
-                orientation=self._euler_to_quat(0, np.pi, yaw),
-                name=f"grasp_{obj_id}_{self._grasp_counter}"
-            )
-            yield (grasp,)
+        self._grasp_counter += 1
+        grasp = Grasp(
+            position=np.array([0, 0, 0.05]),
+            orientation=self._euler_to_quat(0, np.pi, 0),
+            name=f"grasp_{obj_id}_{self._grasp_counter}"
+        )
+        yield (grasp,)
     
     def _euler_to_quat(self, roll: float, pitch: float, yaw: float) -> np.ndarray:
         """Convert Euler angles to quaternion [x, y, z, w]."""
@@ -429,12 +402,12 @@ class BoxelStreams:
         """
         Plan collision-free motion between configurations.
         
-        PDDLStream declaration:
+        PDDLStream declaration (see pddl/stream.pddl):
             (:stream plan-motion
-              :inputs (?q1 ?q2 - config)
-              :domain (and (at_config ?q1))
-              :outputs (?t - trajectory)
-              :certified (motion_plan ?q1 ?q2 ?t))
+              :inputs (?q1 ?q2)
+              :domain (and (Config ?q1) (Config ?q2))
+              :outputs (?t)
+              :certified (and (Trajectory ?t) (motion ?q1 ?q2 ?t)))
         
         Args:
             q1: Start configuration
@@ -472,12 +445,13 @@ class BoxelStreams:
         """
         Compute IK solution for picking object from boxel with grasp.
         
-        PDDLStream declaration:
+        PDDLStream declaration (see pddl/stream.pddl):
             (:stream compute-kin
-              :inputs (?o - obj ?b - boxel ?g - grasp)
-              :domain (and (obj_at_boxel ?o ?b) (valid_grasp ?o ?g))
-              :outputs (?q - config)
-              :certified (kin_solution ?o ?b ?g ?q))
+              :inputs (?o ?b ?g)
+              :domain (and (Obj ?o) (Boxel ?b) (valid_grasp ?o ?g))
+              :outputs (?q)
+              :certified (and (Config ?q) (kin_solution ?o ?b ?g ?q)
+                              (config_for_boxel ?q ?b)))
         
         Args:
             obj_id: Object to grasp
