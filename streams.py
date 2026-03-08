@@ -25,7 +25,8 @@ logger = logging.getLogger(__name__)
 
 from boxel_data import BoxelRegistry, BoxelData, BoxelType
 from robot_utils import (ARM_JOINT_INDICES, END_EFFECTOR_LINK, FINGER_JOINTS,
-                         JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH, REST_POSES)
+                         JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH, JOINT_RANGES,
+                         REST_POSES)
 
 
 @dataclass
@@ -227,7 +228,13 @@ class BoxelStreams:
     def _pybullet_ik(self, ee_pos: np.ndarray, 
                      ee_orn: np.ndarray) -> Optional[RobotConfig]:
         """
-        Compute IK using PyBullet's calculateInverseKinematics.
+        Compute IK using PyBullet's null-space calculateInverseKinematics.
+        
+        Saves the robot's current joint state, resets to REST_POSES (giving
+        the iterative solver a consistent seed), runs IK with null-space
+        parameters, then restores the original state.  This makes IK results
+        independent of where execution left the robot — critical for
+        replanning after Plan #1 moves the arm.
         
         Args:
             ee_pos: Desired end-effector position
@@ -236,13 +243,27 @@ class BoxelStreams:
         Returns:
             RobotConfig if valid solution found, None otherwise
         """
+        saved_joints = None
         try:
-            # Simple IK call - more robust than null-space version
+            saved_joints = [
+                p.getJointState(self.robot_id, i,
+                                physicsClientId=self.physics_client)[0]
+                for i in ARM_JOINT_INDICES
+            ]
+
+            for i, angle in zip(ARM_JOINT_INDICES, REST_POSES):
+                p.resetJointState(self.robot_id, i, angle,
+                                  physicsClientId=self.physics_client)
+
             joint_positions = p.calculateInverseKinematics(
                 bodyUniqueId=self.robot_id,
                 endEffectorLinkIndex=END_EFFECTOR_LINK,
                 targetPosition=ee_pos.tolist(),
                 targetOrientation=ee_orn.tolist(),
+                lowerLimits=JOINT_LIMITS_LOW.tolist(),
+                upperLimits=JOINT_LIMITS_HIGH.tolist(),
+                jointRanges=JOINT_RANGES.tolist(),
+                restPoses=REST_POSES,
                 maxNumIterations=self.ik_max_iterations,
                 residualThreshold=self.ik_residual_threshold,
                 physicsClientId=self.physics_client
@@ -251,25 +272,24 @@ class BoxelStreams:
             if joint_positions is None or len(joint_positions) < 7:
                 return None
             
-            # Extract only the arm joints (first 7)
             arm_joints = np.array(joint_positions[:7])
             
-            # Validate joint limits (with small tolerance)
             if np.any(arm_joints < JOINT_LIMITS_LOW - 0.1) or \
                np.any(arm_joints > JOINT_LIMITS_HIGH + 0.1):
                 return None
             
-            # Clamp to limits
             arm_joints = np.clip(arm_joints, JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH)
-            
-            # Verify solution by checking forward kinematics error
-            # (skip for now to avoid state changes)
             
             return RobotConfig(joint_positions=arm_joints)
             
         except Exception as e:
-            # IK failed
             return None
+
+        finally:
+            if saved_joints is not None:
+                for i, angle in zip(ARM_JOINT_INDICES, saved_joints):
+                    p.resetJointState(self.robot_id, i, angle,
+                                      physicsClientId=self.physics_client)
     
     def _heuristic_ik(self, ee_pos: np.ndarray, 
                       look_at: np.ndarray) -> Optional[RobotConfig]:

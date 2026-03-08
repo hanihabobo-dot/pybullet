@@ -398,7 +398,7 @@ Fixed: (1) BeliefState.occluders_moved changed from set to dict
        (fluent streams) so the push stream can bind ?b_from to dest.
 
 ================================================================================
-49. STREAM IK FAILS ON REPLAN — PLANNER TIMES OUT
+49. STREAM IK FAILS ON REPLAN — PLANNER TIMES OUT  [DONE]
 ================================================================================
 Where: streams.py (_pybullet_ik), test_full_pipeline.py (replanning loop)
 What:  When the target is NOT behind the first pushed occluder, Plan #1
@@ -428,16 +428,19 @@ What:  When the target is NOT behind the first pushed occluder, Plan #1
        fast but empty), search_time: 59.97s (planner retrying with no
        new atoms). 4 skeletons found (one per occluder) but 0 solutions.
 
-Fix:   (a) Save/restore robot joint state around each IK call so the
-       solver seed is always REST_POSES (or explicitly set joints to
-       REST_POSES before each IK, then restore after).
-       (b) Use null-space IK (with lowerLimits, upperLimits, jointRanges,
-       restPoses) matching the compute_ik() in robot_utils.py.
-       Both fixes are small (~10 lines) and independent of other issues.
-
-       This is the BLOCKING issue for multi-shadow scenarios. Without
-       reliable IK on replan, the system only works when the target
-       happens to be behind the first occluder pushed.
+Fixed: (a) _pybullet_ik() now saves the robot's current joint state,
+       resets all arm joints to REST_POSES (providing a consistent seed),
+       runs IK, then restores the original state in a finally block.
+       This makes stream IK results independent of where plan execution
+       left the robot.
+       (b) calculateInverseKinematics call now includes lowerLimits,
+       upperLimits, jointRanges, and restPoses — matching compute_ik()
+       in robot_utils.py. The null-space parameters bias solutions toward
+       the rest configuration, dramatically improving convergence.
+       (c) Added JOINT_RANGES to the imports from robot_utils.
+       Result: Plan #2 now finds solutions in ~19s with 212 evaluations
+       (was: timeout at 60s with 185 evaluations). Multi-shadow scenarios
+       work — tested with target behind the second occluder pushed.
 
 ================================================================================
 FOR LATER
@@ -470,7 +473,7 @@ The STATE SYNCHRONIZATION between planner and physics is broken:
 
 The IMPLEMENTATION shortcuts every geometric step:
   - Streams now produce real geometry (#4 — done, #20 — done, wired)
-  - Stream IK is seed-dependent and fragile (#49 — blocks multi-shadow)
+  - Stream IK now uses null-space params + seed reset (#49 — done)
   - Execution uses type-dependent offsets; pick/push ignore plan (#6, #7)
   - Pushing is teleportation (#32 execution, FOR LATER)
   - Visibility check removed (was stub; no longer needed) (#12 — resolved)
@@ -479,6 +482,9 @@ The IMPLEMENTATION shortcuts every geometric step:
 The CODEBASE organizational debt is largely resolved:
   - Duplicate robot constants and utility functions (#31 — done)
 
+Environment note: the default shell is PowerShell (not bash). Heredocs,
+  `&&` chaining, and `cd /d` do not work. See .cursor/rules/powershell-shell.mdc.
+
 Verification logging workflow (for non-truncated planner/execution traces):
   - PowerShell command:
     wsl bash -lc "cd /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels && source wsl_env/bin/activate && python3 -u test_full_pipeline.py --no-gui" 2>&1 | Tee-Object -FilePath .\logs\phase3_run.log
@@ -486,10 +492,8 @@ Verification logging workflow (for non-truncated planner/execution traces):
 
 Priority order for remaining fixes:
   1. Wire BoxelStreams into the planner (#20 — DONE)
-  2. Fix stream IK seed dependency + add null-space params (#49)
-     — Quick fix (~10 lines), unblocks all multi-shadow scenarios.
-       Without this, the system only works when the target is behind
-       the first occluder pushed.
+  2. Fix stream IK seed dependency + add null-space params (#49 — DONE)
+     — Unblocked all multi-shadow scenarios.
   3. Fix state desync after failed push (#45, #46)
   4. Fix stale registry after push (#44)
      — Must come before #6/#7: plan geometry is wrong if registry is
