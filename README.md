@@ -28,6 +28,18 @@ python -m http.server 8080
 # Then open: http://localhost:8080/boxel_viewer.html
 ```
 
+## Full Pipeline Logging (No Truncation)
+
+Use this command from PowerShell to run the full planner/execution loop and
+capture the entire output to a log file for debugging:
+
+```powershell
+wsl bash -lc "cd /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels && source wsl_env/bin/activate && python3 -u test_full_pipeline.py --no-gui" 2>&1 | Tee-Object -FilePath .\logs\phase3_run.log
+```
+
+For stress tests with repeated runs, save each run to its own file under
+`logs/phase3_batch/`.
+
 ## Project Structure
 
 ```

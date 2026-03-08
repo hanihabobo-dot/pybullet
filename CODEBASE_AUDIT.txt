@@ -403,6 +403,11 @@ The IMPLEMENTATION shortcuts every geometric step:
 The CODEBASE organizational debt is largely resolved:
   - Duplicate robot constants and utility functions (#31 — done)
 
+Verification logging workflow (for non-truncated planner/execution traces):
+  - PowerShell command:
+    wsl bash -lc "cd /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels && source wsl_env/bin/activate && python3 -u test_full_pipeline.py --no-gui" 2>&1 | Tee-Object -FilePath .\logs\phase3_run.log
+  - Batch runs can be captured under logs/phase3_batch/run_*.log.
+
 Priority order for remaining fixes:
   1. Wire BoxelStreams into the planner (#20)
   2. Fix state desync after failed push (#45, #46)
