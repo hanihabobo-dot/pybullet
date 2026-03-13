@@ -821,7 +821,7 @@ class BoxelStreams:
             if config is not None:
                 config.ignored_body_ids = ignored
                 self._config_counter += 1
-                config.name = f"q_pick_{obj_id}_{self._config_counter}"
+                config.name = f"q_kin_{obj_id}_{self._config_counter}"
                 yield (config,)
             return
 
@@ -839,7 +839,7 @@ class BoxelStreams:
 
             config.ignored_body_ids = ignored
             self._config_counter += 1
-            config.name = f"q_pick_{obj_id}_{self._config_counter}"
+            config.name = f"q_kin_{obj_id}_{self._config_counter}"
             logger.debug("compute_kin: %s at %s -> %s  "
                          "ee_target=%s ignored_body=%s seed=%d",
                          obj_id, boxel_id, config.name,
