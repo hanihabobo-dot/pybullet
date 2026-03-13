@@ -9,7 +9,6 @@ Sensing uses the fixed scene camera (not the robot's end-effector), so there
 is no sensing_config stream. See issue #36 in CODEBASE_AUDIT.txt.
 
 Streams:
-    - sample_push_config: Generate push solutions (destination, configs, trajectory)
     - sample_grasp: Generate grasp poses for an object
     - plan_motion: Plan collision-free trajectory between configs
     - compute_kin_solution: Compute IK for pick/place
