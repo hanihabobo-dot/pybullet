@@ -158,6 +158,15 @@
   ;; PICK: Pick up an object from a boxel
   ;; =========================================================================
   ;; Must KNOW object is there (KIF=true AND at=true)
+  ;;
+  ;; NOTE (accepted simplification): pick does not update at_config.
+  ;; Physically, execution moves through approach → contact → lift waypoints
+  ;; and ends at the lift config, not ?q.  The PDDL state still says
+  ;; (at_config ?q) after pick.  This is safe because:
+  ;;   (a) The reactive replanning loop re-initializes at_config with the
+  ;;       robot's actual joint state before every new plan.
+  ;;   (b) Plans rarely chain pick → move without an intervening replan.
+  ;; See CODEBASE_AUDIT #62 and PF-2.
   (:action pick
     :parameters (?o ?b ?g ?q)
     :precondition (and
@@ -182,6 +191,9 @@
   ;; PLACE: Place an object in a boxel
   ;; =========================================================================
   ;; Destination must be free space
+  ;;
+  ;; NOTE (accepted simplification): place does not update at_config.
+  ;; Same reasoning as pick — see above and CODEBASE_AUDIT #62 / PF-3.
   (:action place
     :parameters (?o ?b ?g ?q)
     :precondition (and

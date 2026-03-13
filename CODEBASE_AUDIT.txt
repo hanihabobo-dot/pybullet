@@ -140,69 +140,6 @@ Impact: The planner cannot produce a plan like "sense shadow_A; if empty,
        "not found" branch.  Every plan assumes the first sense succeeds.
 
 ================================================================================
-62. PDDL-EXECUTION CONFIG STATE DRIFT — pick/place DON'T UPDATE at_config
-================================================================================
-Where: pddl/domain_pddlstream.pddl (pick: lines 161-179, place: 185-203),
-       test_full_pipeline.py execute_pick(), execute_place()
-
-What:  The pick action requires (at_config ?q) in its precondition and
-       does NOT delete or replace it in effects.  After pick, the PDDL
-       state still says the robot is at the pick config ?q.  But physically
-       the robot has moved through approach → contact → close → lift
-       waypoints and is at the lift position.
-
-       Same issue for place: PDDL says robot is at the place config,
-       but physically the robot is at the retreat position.
-
-       Within a single multi-action plan, the PDDL model and physical
-       robot state diverge after every pick or place.  The next move
-       action's precondition (at_config ?q1) checks against the PDDL
-       state (the pick/place config), but the actual robot joint positions
-       are at the lift/retreat config.  The trajectory that plan_motion
-       computed was from ?q_pick to ?q_next, not from ?q_lift to ?q_next,
-       so the first segment of the trajectory is a jump.
-
-       The execution code compensates by updating current_config after
-       each pick/place (line 354 and 373) and passing it to the next
-       planner.plan() call.  But within a SINGLE plan that has multiple
-       pick/place/move sequences, the drift accumulates.
-
-Fix:   Either:
-       (a) Add (not (at_config ?q)) to pick/place effects, plus a new
-           "post_pick_config" or similar that is set by the action.
-       (b) Accept this as a modeling simplification and document it.
-           The reactive replanning loop means each plan rarely has more
-           than one pick/place before replanning resets state.
-
-================================================================================
-63. HEURISTIC IK FALLBACK REACHABLE IN PRODUCTION — NO GUARD AT EXECUTION
-================================================================================
-Where: streams.py _heuristic_ik() (lines 311-335),
-       streams.py BoxelStreams.__init__() (lines 126-130),
-       pddlstream_planner.py test_planner() (line 395),
-       test_full_pipeline.py (execution loop)
-
-What:  _heuristic_ik() produces joint angles with NO kinematic relationship
-       to the requested end-effector pose.  It perturbs the home config by
-       an arbitrary function of the target position.  The resulting config
-       is marked is_heuristic=True, and a warning is logged.
-
-       HOWEVER, no code in the execution pipeline ever checks is_heuristic.
-       If BoxelStreams is constructed without robot_id (which test_planner()
-       does on line 395), the planner generates kinematically invalid
-       configs that execute_pick/execute_place/move would blindly follow.
-
-       In the normal test_full_pipeline.py flow, robot_id is always set,
-       so _heuristic_ik is never reached.  But there is no assertion or
-       guard preventing it.  A single misconfiguration (e.g., robot_id=None
-       due to a setup error) would produce silent garbage behavior.
-
-Fix:   Add an assertion at the top of plan() or at the beginning of
-       execution: if any config in the plan has is_heuristic=True, abort
-       with a clear error message.  Or remove the fallback entirely —
-       if robot_id is None, refuse to plan.
-
-================================================================================
 66. config.py EXISTS BUT IS NEVER IMPORTED — DEAD MODULE
 ================================================================================
 Where: config.py (entire file), test_full_pipeline.py line 32,
@@ -556,10 +493,6 @@ CRITICAL ISSUES (must address before academic evaluation):
        deviation.  Planner cannot reason about "not found" outcome.
   #76  No evaluation framework (PA-1) — thesis cannot have a Results
        section without metrics, baselines, or scene variation.
-  #62  pick/place don't update at_config — PDDL state drifts from
-       physical robot state within multi-action plans.
-  #63  Heuristic IK fallback produces garbage configs; no guard at
-       execution prevents them from being followed.
 
 MODERATE ISSUES (should address):
   #66  config.py is dead code; paths hardcoded in two files.
@@ -577,9 +510,9 @@ STILL OPEN FROM PRIOR AUDITS:
 
 PDDL/PYTHON ALIGNMENT:
   PF-1 sense: MISMATCH — no conditional effects, no observation stream.
-  PF-2 pick: MISMATCH — Python does multi-waypoint execution, re-derives
-       IK; PDDL models it as instantaneous single-config operation.
-  PF-3 place: MISMATCH — same as PF-2.
+  PF-2 pick: MISMATCH (documented) — Python does multi-waypoint execution;
+       PDDL models as instantaneous.  at_config drift accepted (#62).
+  PF-3 place: MISMATCH (documented) — same as PF-2.
   PF-4 move: CONSISTENT.
   PF-5 compute-kin stream: hidden side-channel (ignored_body_ids).
 
@@ -610,7 +543,7 @@ The EXECUTION follows the plan:
   - Collision checks exclude grasped object via ignored_body_ids (archived #57)
   - move_robot_to_pos() and compute_ik() removed — solve_ik() replaces them
   - Post-pick/place config tracked by execution loop; PDDL model does
-    not update at_config for these actions (#62)
+    not update at_config — accepted simplification, documented (#62)
 
 AUDIT INTEGRITY NOTES (second-pass cross-check):
   - [DONE] items (#5, #7, #52, #53, #54, #57, #58) verified as genuinely
@@ -635,24 +568,22 @@ Verification logging workflow (archived #58):
 
 Priority order for remaining fixes:
   CRITICAL (blocks academic evaluation):
-    1. Heuristic IK guard (#63) — add assertion, quick safety fix
-    2. at_config drift (#62) — document as accepted simplification
-    3. Conditional sensing (#61) — align with proposal or document deviation
-    4. Evaluation framework (#76/PA-1) — metrics, baselines, scene variation
+    1. Conditional sensing (#61) — align with proposal or document deviation
+    2. Evaluation framework (#76/PA-1) — metrics, baselines, scene variation
 
   MODERATE:
-    5. Remove dead code (#68) — clean up 15+ functions before submission
-    6. Document magic numbers (#69) — ~30 constants need justification
-    7. Remove dead computation (#56) — point cloud / compute_neighbors
-    8. Clean up dead config.py / hardcoded paths (#66)
-    9. _build_init targets-only-in-shadows assumption (#67) — low impact
+    3. Remove dead code (#68) — clean up 15+ functions before submission
+    4. Document magic numbers (#69) — ~30 constants need justification
+    5. Remove dead computation (#56) — point cloud / compute_neighbors
+    6. Clean up dead config.py / hardcoded paths (#66)
+    7. _build_init targets-only-in-shadows assumption (#67) — low impact
 
   LOW PRIORITY (accepted simplifications):
-   10. Stale registry after occluder relocation (#44) — accepted
-   11. Stale shadow_occluder_map on replan (#73) — low impact
-   12. Parameterized scene generation (#55) — needed for evaluation (#76)
-   13. Fix objects flying away (#59)
-   14. Fix simulation flickering (#60)
+    8. Stale registry after occluder relocation (#44) — accepted
+    9. Stale shadow_occluder_map on replan (#73) — low impact
+   10. Parameterized scene generation (#55) — needed for evaluation (#76)
+   11. Fix objects flying away (#59)
+   12. Fix simulation flickering (#60)
 
 Proposal alignment work (PA-1 through PA-6) and PDDL/Python alignment
 (PF-1 through PF-5) are tracked in their respective sections above and

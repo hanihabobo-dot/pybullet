@@ -1020,3 +1020,40 @@ Where: boxel_types.py line 82
 What:  Type annotation said List[Boxel] but default value was None.
 
 Fixed: Changed to Optional[List[Boxel]] = None. Commit 1e08918.
+
+================================================================================
+63. HEURISTIC IK FALLBACK REACHABLE IN PRODUCTION — NO GUARD AT EXECUTION  [DONE]
+================================================================================
+Where: streams.py BoxelStreams.__init__(), pddlstream_planner.py
+       PDDLStreamPlanner.__init__(), test_planner()
+
+What:  _heuristic_ik() produces kinematically invalid configs when
+       robot_id is None.  No guard prevented these from reaching execution.
+
+Fixed: BoxelStreams.__init__() now raises ValueError if robot_id is None
+       unless allow_heuristic=True is explicitly passed.  The parameter
+       is threaded through PDDLStreamPlanner.  Only test_planner() (the
+       symbolic-only test) passes allow_heuristic=True.  The production
+       pipeline (test_full_pipeline.py) does not opt in, so any accidental
+       robot_id=None fails immediately with a clear error. Commit 74cb345.
+
+================================================================================
+62. PDDL-EXECUTION CONFIG STATE DRIFT — pick/place DON'T UPDATE at_config
+    [ACCEPTED SIMPLIFICATION — DOCUMENTED]
+================================================================================
+Where: pddl/domain_pddlstream.pddl (pick, place actions),
+       test_full_pipeline.py execute_pick(), execute_place()
+
+What:  pick/place PDDL actions do not update at_config in their effects.
+       After pick, the PDDL state still says the robot is at the pick
+       config, but physically it is at the lift position.
+
+Resolved: Accepted as a modeling simplification and documented:
+       (a) PDDL domain: comments added to pick and place actions
+           explaining the simplification and why it is safe.
+       (b) The reactive replanning loop re-initializes at_config from
+           the robot's actual joint state before every new plan, so
+           drift does not accumulate across plans.
+       (c) Plans rarely chain pick → move without an intervening replan.
+       Adding post-action configs to PDDL would require additional
+       streams and complicate the model without practical benefit.
