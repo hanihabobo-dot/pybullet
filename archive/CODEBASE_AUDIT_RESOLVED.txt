@@ -2,7 +2,7 @@
 CODEBASE AUDIT — RESOLVED ISSUES
 ================================================================================
 Date: 2026-02-25 (original audit, merged from 3 audit passes)
-Archived: 2026-03-13
+Archived: 2026-03-13 (added #64, #70, #71, #72, #74, #75)
 
 These issues have been fixed, reclassified as not-an-issue, or corrected.
 The active audit with remaining open issues is in CODEBASE_AUDIT.txt.
@@ -955,3 +955,68 @@ Fixed: (a) Added logger.warning() in the except clause (matches the
            getJointState comprehension inside try, and added
            "if saved is not None:" guard in finally — matching the
            safe pattern already used in _pybullet_ik (streams.py line 248).
+
+================================================================================
+64. SHADOW RAYCAST USES WRONG RAY ORIGINS — ray_starts VARIABLE UNUSED  [DONE]
+================================================================================
+Where: shadow_calculator.py, line 92 vs line 102
+
+What:  ray_starts = [cam_pos] * len(corners) was computed but never passed
+       to p.rayTestBatch(). Rays started from object corners instead of the
+       camera position. The corner-outward method is a valid approximation
+       for shadow extent on the tabletop scene.
+
+Fixed: Removed the unused ray_starts variable. Added a comment documenting
+       that the corner-outward ray method is intentional (rays trace shadow
+       boundary outward from the occluder's back face, not camera-through-
+       corner projection). Commit 8b58b6f.
+
+================================================================================
+70. boxel_facts.pddl — ORPHANED FILE AT PROJECT ROOT  [DONE]
+================================================================================
+Where: boxel_facts.pddl (project root)
+
+What:  Orphaned PDDL file never generated or referenced by any active code.
+
+Fixed: Moved to archive/. Commit 89efda8.
+
+================================================================================
+71. MISLEADING DOCSTRINGS — FILES CLAIM config.py IS USED  [DONE]
+================================================================================
+Where: test_full_pipeline.py line 22-23, pddlstream_planner.py line 13-14
+
+What:  Both docstrings falsely claimed "PDDLStream path is resolved
+       automatically via config.py". Neither file imports config.py.
+
+Fixed: Removed the false claims from both docstrings. The hardcoded
+       PDDLSTREAM_PATH is now the documented source of truth. Commit 54744bd.
+
+================================================================================
+72. compute_kin_solution NAMES ALL CONFIGS q_pick_* — EVEN FOR PLACE  [DONE]
+================================================================================
+Where: streams.py compute_kin_solution()
+
+What:  All RobotConfig names used "q_pick_" prefix regardless of whether
+       the config would be used for pick or place actions.
+
+Fixed: Renamed to "q_kin_{obj_id}_{counter}" to avoid implying action
+       type. Commit 68556bb.
+
+================================================================================
+74. MODULE DOCSTRING LISTS DEAD STREAM AS ACTIVE  [DONE]
+================================================================================
+Where: streams.py lines 12-13
+
+What:  Module docstring listed sample_push_config as an active stream,
+       but it was commented out since #53.
+
+Fixed: Removed the dead stream reference from the docstring. Commit 54d855d.
+
+================================================================================
+75. CameraObservation.boxels TYPE ANNOTATION INCONSISTENT WITH DEFAULT  [DONE]
+================================================================================
+Where: boxel_types.py line 82
+
+What:  Type annotation said List[Boxel] but default value was None.
+
+Fixed: Changed to Optional[List[Boxel]] = None. Commit 1e08918.

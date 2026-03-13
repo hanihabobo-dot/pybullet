@@ -2,7 +2,7 @@
 CODEBASE AUDIT — OPEN ISSUES
 ================================================================================
 Date: 2026-02-25 (original audit, merged from 3 audit passes)
-Updated: 2026-03-13 (full code-level audit against proposal + second-pass verification)
+Updated: 2026-03-13 (archived #64, #65, #70, #71, #72, #74, #75 as resolved)
 
 Resolved issues archived to archive/CODEBASE_AUDIT_RESOLVED.txt.
 
@@ -203,35 +203,6 @@ Fix:   Add an assertion at the top of plan() or at the beginning of
        if robot_id is None, refuse to plan.
 
 ================================================================================
-64. SHADOW RAYCAST USES WRONG RAY ORIGINS — ray_starts VARIABLE UNUSED
-================================================================================
-Where: shadow_calculator.py, line 92 vs line 102
-
-What:  Line 92 creates ray_starts = [cam_pos] * len(corners), which is
-       the camera position repeated for each back corner — the correct
-       origin for camera-through-corner shadow projection.
-
-       Line 102 calls p.rayTestBatch(corners, ray_ends), using corners
-       (the object's back corners) as ray origins instead of ray_starts.
-       The variable ray_starts is computed but never passed to the API.
-
-       The actual behavior: rays start from the object's back corners
-       and go outward along the camera-to-corner direction.  This is
-       a reasonable approximation for shadow extent — the rays trace
-       the shadow boundary outward from the object.  But it is NOT the
-       standard camera-to-surface projection described in the proposal.
-       The ray_starts variable is dead computation.
-
-Impact: The shadow geometry may be slightly different from what a camera-
-       through-corner projection would produce, particularly for objects
-       far from the camera or at extreme angles.  In practice, the
-       approximation works for the current tabletop scene.
-
-Fix:   Either use ray_starts (camera-through-corner projection) or
-       document the current corner-outward method as intentional and
-       remove the unused ray_starts variable.
-
-================================================================================
 66. config.py EXISTS BUT IS NEVER IMPORTED — DEAD MODULE
 ================================================================================
 Where: config.py (entire file), test_full_pipeline.py line 32,
@@ -375,17 +346,6 @@ What:  Hardcoded values with no comments explaining their origin, rationale,
        tuning process.
 
 ================================================================================
-70. boxel_facts.pddl — ORPHANED FILE AT PROJECT ROOT
-================================================================================
-Where: boxel_facts.pddl (project root)
-
-What:  This file exists but is never generated or referenced by any active
-       code path.  It may be a leftover from manual testing.  Its presence
-       in the root could confuse someone inspecting the project.
-
-Fix:   Move to archive/ or delete.
-
-================================================================================
 55. HARDCODED SCENE — NO SCENARIO VARIATION
 ================================================================================
 Where: boxel_env.py _create_occluders(), _create_targets()
@@ -527,40 +487,6 @@ PF-5. compute-kin stream — HIDDEN SIDE-CHANNEL
         share Python objects by design) but invisible to formal analysis.
 
 ================================================================================
-71. MISLEADING DOCSTRINGS — FILES CLAIM config.py IS USED
-================================================================================
-Where: test_full_pipeline.py line 22-23, pddlstream_planner.py line 13-14
-
-What:  Both files contain docstrings claiming:
-         "PDDLStream path is resolved automatically via config.py"
-       This is false.  Neither file imports config.py.  Both hardcode
-       the absolute WSL path on the very next line:
-         PDDLSTREAM_PATH = '/mnt/c/Users/HaniAlassiriAlhabbou/git/pddlstream_lib'
-
-       Misleading documentation is worse than no documentation — it
-       actively misdirects anyone reading the code.
-
-Fix:   Either import and use config.setup_pddlstream() (making the
-       docstring true), or delete the claim from both docstrings and
-       document the hardcoded path as intentional.
-
-================================================================================
-72. compute_kin_solution NAMES ALL CONFIGS q_pick_* — EVEN FOR PLACE
-================================================================================
-Where: streams.py line 842
-
-What:  Every RobotConfig produced by compute_kin_solution() is named
-       "q_pick_{obj_id}_{counter}", regardless of whether PDDLStream
-       will use it for a pick or place action.  The stream has no way
-       to know the consumer, so this is technically correct — but it
-       makes log output and debug traces confusing.  A config named
-       "q_pick_obj_005_3" might actually be the place config for an
-       occluder relocation.
-
-Fix:   Rename to "q_kin_{obj_id}_{counter}" to avoid implying the
-       action type.
-
-================================================================================
 73. shadow_occluder_map GOES STALE ON REPLAN — blocks_view_at MAY BE WRONG
 ================================================================================
 Where: test_full_pipeline.py lines 185-189,
@@ -585,29 +511,6 @@ What:  shadow_occluder_map is built once from the registry before the
        Current impact: LOW because the derived predicates compensate.
        But the stale data structure is architecturally fragile and
        should be documented or refreshed on replan.
-
-================================================================================
-74. MODULE DOCSTRING LISTS DEAD STREAM AS ACTIVE
-================================================================================
-Where: streams.py lines 12-13
-
-What:  The module-level docstring says:
-         "- sample_push_config: Generate push solutions (...)"
-       This stream was commented out in #53 but the docstring was not
-       updated.  Minor, but misleading.
-
-Fix:   Remove or mark as "(commented out, superseded by pick-and-place)".
-
-================================================================================
-75. CameraObservation.boxels TYPE ANNOTATION INCONSISTENT WITH DEFAULT
-================================================================================
-Where: boxel_types.py line 82
-
-What:  The type annotation says List[Boxel] but the default value is
-       None.  Should be Optional[List[Boxel]] = None, or use
-       field(default_factory=list) with the List[Boxel] annotation.
-
-Fix:   Change to: boxels: Optional[List[Boxel]] = None
 
 ================================================================================
 76. PA-1 SEVERITY UNDERRATED — EVALUATION FRAMEWORK IS CRITICAL
@@ -657,20 +560,12 @@ CRITICAL ISSUES (must address before academic evaluation):
        physical robot state within multi-action plans.
   #63  Heuristic IK fallback produces garbage configs; no guard at
        execution prevents them from being followed.
-  #64  Shadow raycast uses object corners as ray origins instead of
-       camera position — ray_starts variable computed but unused.
-  #65  solve_ik() swallows all exceptions silently (bare except).
 
 MODERATE ISSUES (should address):
   #66  config.py is dead code; paths hardcoded in two files.
-  #71  Misleading docstrings claim config.py is used (related to #66).
   #67  _build_init() hardcodes assumption targets are only in shadows.
   #68  15+ dead functions across active modules (see expanded list).
   #69  ~30 magic numbers with no justification (see expanded table).
-  #70  Orphaned boxel_facts.pddl at project root.
-  #72  compute_kin names all configs q_pick_* even for place actions.
-  #74  streams.py module docstring lists dead sample_push_config stream.
-  #75  CameraObservation.boxels type annotation inconsistent with default.
 
 STILL OPEN FROM PRIOR AUDITS:
   #44  Stale shadow registry after occluder relocation (accepted).
@@ -720,6 +615,7 @@ The EXECUTION follows the plan:
 AUDIT INTEGRITY NOTES (second-pass cross-check):
   - [DONE] items (#5, #7, #52, #53, #54, #57, #58) verified as genuinely
     implemented and archived to CODEBASE_AUDIT_RESOLVED.txt on 2026-03-13.
+  - #64, #65, #70, #71, #72, #74, #75 fixed and archived on 2026-03-13.
   - #68 dead code list was incomplete; 5 additional dead functions added.
   - #69 magic number table was incomplete; ~12 additional constants added.
   - No fabricated fixes found — the audit does not inflate progress.
@@ -739,30 +635,24 @@ Verification logging workflow (archived #58):
 
 Priority order for remaining fixes:
   CRITICAL (blocks academic evaluation):
-    1. Conditional sensing (#61) — align with proposal or document deviation
-    2. Evaluation framework (#76/PA-1) — metrics, baselines, scene variation
-    3. at_config drift (#62) — fix PDDL model or document simplification
-    4. Heuristic IK guard (#63) — add assertion, quick fix
-    5. Shadow raycast fix (#64) — use ray_starts or document approximation
-    6. Exception logging in solve_ik (#65) — one-line fix
+    1. Heuristic IK guard (#63) — add assertion, quick safety fix
+    2. at_config drift (#62) — document as accepted simplification
+    3. Conditional sensing (#61) — align with proposal or document deviation
+    4. Evaluation framework (#76/PA-1) — metrics, baselines, scene variation
 
   MODERATE:
-    7. Fix misleading docstrings (#71) — quick fix
-    8. Remove dead computation (#56)
-    9. Remove dead code (#68) — clean up before submission
-   10. Document magic numbers (#69)
-   11. Clean up dead config.py / hardcoded paths (#66)
-   12. Remove orphaned boxel_facts.pddl (#70)
-   13. Rename q_pick configs to q_kin (#72)
-   14. Fix stale module docstring (#74)
-   15. Fix type annotation (#75)
+    5. Remove dead code (#68) — clean up 15+ functions before submission
+    6. Document magic numbers (#69) — ~30 constants need justification
+    7. Remove dead computation (#56) — point cloud / compute_neighbors
+    8. Clean up dead config.py / hardcoded paths (#66)
+    9. _build_init targets-only-in-shadows assumption (#67) — low impact
 
   LOW PRIORITY (accepted simplifications):
-   16. Stale registry after occluder relocation (#44) — accepted
-   17. Stale shadow_occluder_map on replan (#73) — low impact
-   18. Parameterized scene generation (#55) — needed for evaluation (#76)
-   19. Fix objects flying away (#59)
-   20. Fix simulation flickering (#60)
+   10. Stale registry after occluder relocation (#44) — accepted
+   11. Stale shadow_occluder_map on replan (#73) — low impact
+   12. Parameterized scene generation (#55) — needed for evaluation (#76)
+   13. Fix objects flying away (#59)
+   14. Fix simulation flickering (#60)
 
 Proposal alignment work (PA-1 through PA-6) and PDDL/Python alignment
 (PF-1 through PF-5) are tracked in their respective sections above and
