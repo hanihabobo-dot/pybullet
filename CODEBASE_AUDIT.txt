@@ -38,32 +38,27 @@ Fixed: All three parts implemented:
        branch, not sense.
 
 ================================================================================
-52. MOVE EXECUTION IGNORES PLAN CONFIGS — RE-DERIVES IK FROM HARDCODED OFFSETS
+52. MOVE EXECUTION IGNORES PLAN CONFIGS — RE-DERIVES IK FROM HARDCODED OFFSETS  [DONE]
 ================================================================================
-Where: test_full_pipeline.py move execution (~lines 270-297)
-What:  When the plan says move(q1, q2, boxel, traj), execution throws
-       away q2, the trajectory traj, and computes its own target from
-       hardcoded type-dependent Cartesian offsets:
-         [0, -0.3, 0.2] for shadow boxels
-         [0,  0,   0.15] for object/other boxels
-       It then calls move_robot_to_pos(), which re-runs IK from scratch
-       (compute_ik) and passes the result to move_robot_smooth(). The
-       plan's IK-solved config q2 and planned trajectory traj are dead
-       data — the execution invents its own target pose every time.
+Where: test_full_pipeline.py move execution (~lines 271-277)
 
-       move_robot_to_pos is a redundant wrapper: it calls compute_ik()
-       then move_robot_smooth(). There is no reason for two move
-       functions. Everything should call move_robot_smooth() directly
-       with the plan's pre-computed joint angles.
+Fixed: Move execution now calls move_robot_smooth(robot_id, q2.joint_positions, gui)
+       directly with the plan's IK-solved config. Removed:
+       - Boxel center lookup (boxel_to_pybullet / boxel_centers)
+       - Hardcoded Cartesian offsets ([0,-0.3,0.2] and [0,0,0.15])
+       - move_robot_to_pos() call (which re-ran IK from scratch)
+       - Unused compute_ik import
 
-       The same pattern exists in execute_pick() and execute_place()
-       (see #7) — all use move_robot_to_pos() with hardcoded offsets.
+       The robot now drives to the exact joint configuration that
+       compute_kin_solution() solved during planning. The trajectory
+       parameter (traj) is unpacked but not yet executed waypoint-by-
+       waypoint — since plan_motion() currently produces linear
+       interpolation (#5), and move_robot_smooth() also interpolates
+       linearly, the result is equivalent. When real motion planning
+       is added (#5), execution should iterate through traj.waypoints.
 
-Fix:   Call move_robot_smooth(robot_id, q2.joint_positions) directly
-       to drive the arm to the plan's IK-solved configuration. Remove
-       all hardcoded Cartesian offsets and move_robot_to_pos() calls.
-       After this, compute_ik() and move_robot_to_pos() in robot_utils.py
-       become dead code and should be removed (see #31 note in archive).
+       move_robot_to_pos() and compute_ik() remain in robot_utils.py
+       because execute_pick() and execute_place() still use them (#7).
 
 ================================================================================
 7. PICK/PLACE — HARDCODED OFFSETS, IGNORES PLAN GRASP, MAGIC ATTACHMENT
@@ -255,13 +250,11 @@ The PLANNING ARCHITECTURE models spatial capabilities:
   - Sensing uses fixed camera correctly (#36 — done)
   - KIF fluents for partial observability are sound
 
-The EXECUTION does not follow the plan — it re-derives everything:
-  - move_robot_to_pos() is a redundant wrapper: re-runs IK from a Cartesian
-    position then calls move_robot_smooth(). The plan's IK-solved configs
-    and trajectories are thrown away. Should call move_robot_smooth() directly.
-  - Move execution ignores plan configs + trajectory, uses hardcoded offsets (#52)
+The EXECUTION partially follows the plan:
+  - Move execution uses the plan's IK-solved config (#52 — done)
   - Pick execution ignores plan grasp + kin_solution (#7)
   - Place execution exists (#53 — done) but uses same re-derived IK (#7)
+  - move_robot_to_pos() still used in pick/place — becomes dead code after #7
 
 Environment note: the default shell is PowerShell (not bash). Heredocs,
   `&&` chaining, and `cd /d` do not work. See .cursor/rules/powershell-shell.mdc.
@@ -272,13 +265,12 @@ Verification logging workflow (for non-truncated planner/execution traces):
   - Batch runs can be captured under logs/phase3_batch/run_*.log.
 
 Priority order for remaining fixes:
-  1. Move execution uses plan configs instead of hardcoded offsets (#52)
-  2. Pick/place execution uses plan grasp + kin_solution (#7)
-  3. Fix stale registry after occluder relocation (#44)
-  4. Add collision-free motion planning (#5)
-  5. Multi-ray visibility oracle (#54)
-  6. Parameterized scene generation (#55)
-  7. Remove dead computation (#56)
+  1. Pick/place execution uses plan grasp + kin_solution (#7)
+  2. Fix stale registry after occluder relocation (#44)
+  3. Add collision-free motion planning (#5)
+  4. Multi-ray visibility oracle (#54)
+  5. Parameterized scene generation (#55)
+  6. Remove dead computation (#56)
 
 Proposal alignment work (PA-1 through PA-4) is tracked separately above
 and must be addressed before thesis submission.

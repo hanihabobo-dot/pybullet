@@ -42,7 +42,7 @@ from boxel_data import BoxelRegistry, BoxelType, create_boxel_registry_from_boxe
 from cell_merger import merge_free_space_cells
 from pddlstream_planner import PDDLStreamPlanner
 from streams import RobotConfig
-from robot_utils import (END_EFFECTOR_LINK, compute_ik, move_robot_to_pos,
+from robot_utils import (END_EFFECTOR_LINK, move_robot_to_pos,
                          move_robot_smooth, open_gripper, close_gripper)
 
 
@@ -270,32 +270,11 @@ def main(gui=True):
             
             if action_name == 'move':
                 q1, q2, dest_boxel_id, traj = params
-                dest_boxel_id_str = str(dest_boxel_id)
-                print(f"    Moving to boxel {dest_boxel_id_str} (config: {q2})...")
-                
-                # Determine base position from plan's boxel parameter.
-                if dest_boxel_id_str in boxel_to_pybullet:
-                    base_pos = boxel_to_pybullet[dest_boxel_id_str]['position']
-                elif dest_boxel_id_str in boxel_centers:
-                    base_pos = boxel_centers[dest_boxel_id_str]
-                else:
-                    print(f"    WARNING: Unknown boxel {dest_boxel_id_str}, skipping move")
-                    continue
-                
-                # Approach offset depends on boxel type: shadow moves need
-                # side clearance so the arm doesn't block camera rays;
-                # occluder moves position directly above for pushing.
-                dest_boxel = registry.get_boxel(dest_boxel_id_str)
-                if dest_boxel and dest_boxel.boxel_type == BoxelType.SHADOW:
-                    offset = np.array([0, -0.3, 0.2])
-                elif dest_boxel and dest_boxel.boxel_type == BoxelType.OBJECT:
-                    offset = np.array([0, 0, 0.15])
-                else:
-                    offset = np.array([0, 0, 0.15])
-                
-                move_robot_to_pos(robot_id, base_pos + offset, gui)
+                print(f"    Moving to {dest_boxel_id} (config: {q2})...")
+
+                move_robot_smooth(robot_id, q2.joint_positions, gui)
                 current_config = q2
-                print(f"    -> Moved to {dest_boxel_id_str} (offset {offset.tolist()})")
+                print(f"    -> Arrived at {dest_boxel_id}")
                     
             elif action_name == 'sense':
                 obj, shadow_id = params
