@@ -2,7 +2,7 @@
 CODEBASE AUDIT — OPEN ISSUES
 ================================================================================
 Date: 2026-02-25 (original audit, merged from 3 audit passes)
-Updated: 2026-03-08
+Updated: 2026-03-13 (full code-level audit against proposal)
 
 Resolved issues archived to archive/CODEBASE_AUDIT_RESOLVED.txt.
 
@@ -374,6 +374,276 @@ Debug: Log the number of COV_ENABLE_RENDERING toggle calls per planning
        rendering disabled for the full planning phase vs per-call toggle.
 
 ================================================================================
+61. SENSE ACTION DEVIATES FROM PROPOSAL — NO CONDITIONAL EFFECTS  [CRITICAL]
+================================================================================
+Where: pddl/domain_pddlstream.pddl (sense action, lines 120-133),
+       test_full_pipeline.py (sense execution, lines 303-337),
+       proposal Section 4.4.2 (Listing 2)
+
+What:  The PDDL sense action unconditionally adds (obj_at_boxel ?o ?region)
+       and (obj_pose_known ?o).  It assumes the target will always be found
+       ("optimistic" comment in the domain file).  It has NO observation
+       stream, NO conditional effects, and NO ?obs_status parameter.
+
+       The proposal explicitly defines sense_Boxel_for_object with:
+         - stream_find_sensing_config (robot must move to a sensing pose)
+         - stream_get_sensing_outcome (returns found / not_found)
+         - (when (= ?obs_status found) ...) → sets obj_in_Boxel
+         - (when (= ?obs_status not_found) ...) → sets obj_not_in_Boxel
+
+       None of these exist.  The planner always produces plans that assume
+       sensing succeeds on the first shadow it checks.  When execution
+       reveals the target is NOT there, the Python code breaks out of the
+       action loop and replans from scratch.
+
+       This is a fundamental architectural deviation: the proposal's design
+       lets the planner reason about both sensing outcomes in a single plan.
+       The implementation uses purely reactive replanning — plan optimistically,
+       execute, replan on failure.  While this works, it cannot produce
+       multi-step search strategies and is strictly less capable than the
+       proposed conditional design.
+
+Impact: The planner cannot produce a plan like "sense shadow_A; if empty,
+       sense shadow_B" because the PDDL model has no way to represent the
+       "not found" branch.  Every plan assumes the first sense succeeds.
+
+================================================================================
+62. PDDL-EXECUTION CONFIG STATE DRIFT — pick/place DON'T UPDATE at_config
+================================================================================
+Where: pddl/domain_pddlstream.pddl (pick: lines 161-179, place: 185-203),
+       test_full_pipeline.py execute_pick(), execute_place()
+
+What:  The pick action requires (at_config ?q) in its precondition and
+       does NOT delete or replace it in effects.  After pick, the PDDL
+       state still says the robot is at the pick config ?q.  But physically
+       the robot has moved through approach → contact → close → lift
+       waypoints and is at the lift position.
+
+       Same issue for place: PDDL says robot is at the place config,
+       but physically the robot is at the retreat position.
+
+       Within a single multi-action plan, the PDDL model and physical
+       robot state diverge after every pick or place.  The next move
+       action's precondition (at_config ?q1) checks against the PDDL
+       state (the pick/place config), but the actual robot joint positions
+       are at the lift/retreat config.  The trajectory that plan_motion
+       computed was from ?q_pick to ?q_next, not from ?q_lift to ?q_next,
+       so the first segment of the trajectory is a jump.
+
+       The execution code compensates by updating current_config after
+       each pick/place (line 354 and 373) and passing it to the next
+       planner.plan() call.  But within a SINGLE plan that has multiple
+       pick/place/move sequences, the drift accumulates.
+
+Fix:   Either:
+       (a) Add (not (at_config ?q)) to pick/place effects, plus a new
+           "post_pick_config" or similar that is set by the action.
+       (b) Accept this as a modeling simplification and document it.
+           The reactive replanning loop means each plan rarely has more
+           than one pick/place before replanning resets state.
+
+================================================================================
+63. HEURISTIC IK FALLBACK REACHABLE IN PRODUCTION — NO GUARD AT EXECUTION
+================================================================================
+Where: streams.py _heuristic_ik() (lines 311-335),
+       streams.py BoxelStreams.__init__() (lines 126-130),
+       pddlstream_planner.py test_planner() (line 395),
+       test_full_pipeline.py (execution loop)
+
+What:  _heuristic_ik() produces joint angles with NO kinematic relationship
+       to the requested end-effector pose.  It perturbs the home config by
+       an arbitrary function of the target position.  The resulting config
+       is marked is_heuristic=True, and a warning is logged.
+
+       HOWEVER, no code in the execution pipeline ever checks is_heuristic.
+       If BoxelStreams is constructed without robot_id (which test_planner()
+       does on line 395), the planner generates kinematically invalid
+       configs that execute_pick/execute_place/move would blindly follow.
+
+       In the normal test_full_pipeline.py flow, robot_id is always set,
+       so _heuristic_ik is never reached.  But there is no assertion or
+       guard preventing it.  A single misconfiguration (e.g., robot_id=None
+       due to a setup error) would produce silent garbage behavior.
+
+Fix:   Add an assertion at the top of plan() or at the beginning of
+       execution: if any config in the plan has is_heuristic=True, abort
+       with a clear error message.  Or remove the fallback entirely —
+       if robot_id is None, refuse to plan.
+
+================================================================================
+64. SHADOW RAYCAST USES WRONG RAY ORIGINS — ray_starts VARIABLE UNUSED
+================================================================================
+Where: shadow_calculator.py, line 92 vs line 102
+
+What:  Line 92 creates ray_starts = [cam_pos] * len(corners), which is
+       the camera position repeated for each back corner — the correct
+       origin for camera-through-corner shadow projection.
+
+       Line 102 calls p.rayTestBatch(corners, ray_ends), using corners
+       (the object's back corners) as ray origins instead of ray_starts.
+       The variable ray_starts is computed but never passed to the API.
+
+       The actual behavior: rays start from the object's back corners
+       and go outward along the camera-to-corner direction.  This is
+       a reasonable approximation for shadow extent — the rays trace
+       the shadow boundary outward from the object.  But it is NOT the
+       standard camera-to-surface projection described in the proposal.
+       The ray_starts variable is dead computation.
+
+Impact: The shadow geometry may be slightly different from what a camera-
+       through-corner projection would produce, particularly for objects
+       far from the camera or at extreme angles.  In practice, the
+       approximation works for the current tabletop scene.
+
+Fix:   Either use ray_starts (camera-through-corner projection) or
+       document the current corner-outward method as intentional and
+       remove the unused ray_starts variable.
+
+================================================================================
+65. solve_ik() SWALLOWS ALL EXCEPTIONS SILENTLY
+================================================================================
+Where: robot_utils.py, lines 259-260
+
+What:  solve_ik() has a bare "except Exception:" that catches ALL errors
+       and returns None without logging.  This silently swallows bugs,
+       assertion errors, or PyBullet crashes.  Compare with _pybullet_ik()
+       in streams.py line 291 which at least logs the error.
+
+       During execution (execute_pick, execute_place), solve_ik() failures
+       trigger a fallback to config.joint_positions with a printed WARNING.
+       But if the failure was caused by a real bug (not just IK divergence),
+       the root cause is hidden.
+
+Fix:   Log the exception at WARNING or ERROR level before returning None.
+
+================================================================================
+66. config.py EXISTS BUT IS NEVER IMPORTED — DEAD MODULE
+================================================================================
+Where: config.py (entire file), test_full_pipeline.py line 32,
+       pddlstream_planner.py line 21
+
+What:  config.py defines setup_pddlstream() to automatically resolve and
+       add PDDLStream to sys.path using relative paths from the project
+       root.  Neither test_full_pipeline.py nor pddlstream_planner.py
+       imports it.  Both hardcode the absolute WSL path instead:
+
+         PDDLSTREAM_PATH = '/mnt/c/Users/HaniAlassiriAlhabbou/git/pddlstream_lib'
+
+       The config module is dead code.  The hardcoded paths make the
+       codebase non-portable.
+
+Fix:   Have both files import and use config.setup_pddlstream(), or
+       delete config.py and document the hardcoded path as intentional.
+
+================================================================================
+67. _build_init() HARDCODES ASSUMPTION THAT TARGETS ARE ONLY IN SHADOWS
+================================================================================
+Where: pddlstream_planner.py _build_init(), lines 269-286
+
+What:  For every OBJECT boxel (line 280-281) and every FREE_SPACE boxel
+       (lines 285-286), the code adds:
+         (obj_at_boxel_KIF target boxel_id)
+       This means "we know the target is NOT in this boxel" — because
+       obj_at_boxel is not also added.  Only shadow boxels are left as
+       "unknown" (no KIF fact emitted unless in known_empty_shadows).
+
+       This hardcodes the assumption that targets can ONLY be hidden in
+       shadow regions.  The proposal's formulation is more general — a
+       target could be anywhere the robot hasn't looked.  The current
+       implementation precludes scenarios where a target is on an open
+       part of the table but the robot doesn't know which one it is.
+
+Impact: Low for the current hidden-object scenario (targets are always
+       behind occluders by construction).  But this prevents extending
+       the system to more general search tasks without reworking _build_init.
+
+================================================================================
+68. DEAD CODE — FUNCTIONS DEFINED BUT NEVER CALLED IN ACTIVE PIPELINE
+================================================================================
+Where: Multiple files
+
+What:  The following functions/methods exist in active (non-archive) code
+       but are never called by any active code path:
+
+       boxel_env.py:
+         - get_object_point_cloud() (line 424) — never called
+         - handle_keyboard_camera() (line 454) — debug utility, never called
+         - set_debug_camera() (line 545) — never called
+         - merge_free_space() (line 283) — wrapper for CellMerger; pipeline
+           uses cell_merger.merge_free_space_cells() directly instead
+         - draw_boxels() (line 299) — call is commented out in pipeline
+         - clear_all_debug_items() (line 304) — never called
+
+       boxel_data.py:
+         - generate_pddl_facts() (line 262) — never called; planner builds
+           init programmatically in _build_init()
+         - save_pddl_facts() (line 295) — never called
+
+       visualization.py:
+         - save_point_cloud_to_ply() (line 147) — never called
+
+       test_full_pipeline.py:
+         - BeliefState.unmark_occluder_moved() (line 84) — method defined
+           but never invoked; the still_blocked branch doesn't call it
+
+       boxel_env.py __init__:
+         - self.cell_merger = CellMerger() (line 112) — instance created
+           but self.merge_free_space() is never called
+
+Fix:   Remove or clearly mark as "utility / future-use".  Dead code in a
+       thesis codebase signals unfinished work to reviewers.
+
+================================================================================
+69. MAGIC NUMBERS WITHOUT JUSTIFICATION
+================================================================================
+Where: Multiple files (see table below)
+
+What:  Hardcoded values with no comments explaining their origin, rationale,
+       or link to tuning decisions / citations.
+
+       File                  Line   Value         Context
+       ────────────────────  ─────  ────────────  ─────────────────────────────
+       streams.py            144    100           ik_max_iterations
+       streams.py            145    1e-4          ik_residual_threshold
+       streams.py            217    0.4, -0.4...  _IK_SEED_OFFSETS (7 vectors)
+       streams.py            417    0.05/0.10/15  _GRASP_Z_OFFSETS
+       streams.py            473    2000          RRT_MAX_ITERATIONS
+       streams.py            474    0.2           RRT_STEP_SIZE (rad)
+       streams.py            475    0.05          RRT_GOAL_BIAS
+       streams.py            476    8             RRT_EDGE_CHECKS
+       streams.py            477    50            RRT_CONNECT_ATTEMPTS
+       streams.py            478    75            SMOOTH_ATTEMPTS
+       free_space.py         24     0.035         min_resolution (m)
+       test_full_pipeline.py 115    50            settling steps
+       test_full_pipeline.py 460    0.04          sensing z offset
+       test_full_pipeline.py 462    0.33, 0.67    sensing z fractions
+       test_full_pipeline.py 466    7             sensing ray grid density (n)
+       robot_utils.py        289    240           arm motor force
+       robot_utils.py        301    50            gripper motor force
+       boxel_env.py          177    0.15          occluder size (m)
+       boxel_env.py          203    0.08          target size (m)
+
+       For a thesis, every non-trivial constant should have a comment
+       explaining: (a) where the value came from, (b) sensitivity, and
+       (c) whether it was tuned empirically or taken from a reference.
+
+       The RRT parameters are reasonable defaults from the literature but
+       should cite Kuffner & LaValle 2000 and note any modifications.
+       The IK seed offsets appear hand-tuned and should document the
+       tuning process.
+
+================================================================================
+70. boxel_facts.pddl — ORPHANED FILE AT PROJECT ROOT
+================================================================================
+Where: boxel_facts.pddl (project root)
+
+What:  This file exists but is never generated or referenced by any active
+       code path.  It may be a leftover from manual testing.  Its presence
+       in the root could confuse someone inspecting the project.
+
+Fix:   Move to archive/ or delete.
+
+================================================================================
 55. HARDCODED SCENE — NO SCENARIO VARIATION
 ================================================================================
 Where: boxel_env.py _create_occluders(), _create_targets()
@@ -442,6 +712,77 @@ PA-4. Sensing requires no robot positioning (proposal Section 4.4.2)
       deliberate simplification (resolved audit #36) but contradicts the
       proposal's design.
 
+PA-5. No conditional sensing outcomes (proposal Section 4.4.2)
+      The proposal defines conditional effects for sense: (when found ...)
+      and (when not_found ...) using a stream_get_sensing_outcome stream.
+      The implementation uses optimistic single-outcome sensing with
+      reactive replanning on failure.  This prevents the planner from
+      generating multi-step search strategies.  See #61 for full details.
+
+PA-6. Only top-down grasps — no grasp diversity
+      sample_grasp() generates only top-down grasps (Z-axis offsets at
+      0.05/0.10/0.15 m, fixed orientation pointing down).  No lateral
+      or angled grasps are considered.  While the proposal doesn't
+      explicitly specify grasp diversity, the framework's ability to
+      handle complex scenes (objects at walls, stacked objects, narrow
+      gaps) is limited without it.  This restricts the evaluation
+      scenarios to simple tabletop layouts where top-down access is
+      always possible.
+
+================================================================================
+PDDL ACTION / PYTHON FUNCTION ALIGNMENT
+================================================================================
+Cross-reference of every PDDL action against its Python execution code.
+See proposal Section 4.4 for the intended mapping.
+
+PF-1. sense — PDDL vs Python MISMATCH
+      PDDL (domain lines 120-133): Two params (?o ?region).  Precondition:
+        view_clear. Effect: unconditionally adds obj_at_boxel, obj_pose_known.
+      Python (test_full_pipeline.py lines 303-337): Calls
+        sense_shadow_raycasting() which returns one of three outcomes
+        (found_target, clear_but_empty, still_blocked).  Only "found_target"
+        updates belief as success.  The other two break to replan.
+      Mismatch: PDDL has no stream for observation outcome and no
+        conditional effects.  It cannot represent "not found" or "still
+        blocked" — those are only handled by the reactive replan loop.
+        See #61.
+
+PF-2. pick — PDDL vs Python MISMATCH (scope)
+      PDDL (domain lines 161-179): Single config ?q.  Instantaneous.
+        Does not update at_config.
+      Python (execute_pick, lines 492-560): 4-step sequence (open gripper,
+        approach, contact, close, attach constraint, lift).  Re-derives
+        contact IK from actual obj_pos at execution time.  Leaves robot
+        at lift config, not pick config.
+      Mismatch: Python does MORE than PDDL describes (re-solve IK, create
+        constraint, multi-waypoint motion).  PDDL model does not capture
+        the post-pick config drift.  See #62.
+
+PF-3. place — PDDL vs Python MISMATCH (scope)
+      Same pattern as PF-2.  PDDL models single-config instantaneous action.
+      Python executes approach → contact → release → settle → retreat.
+      Post-place config differs from PDDL's ?q.  See #62.
+
+PF-4. move — CONSISTENT
+      PDDL (domain lines 138-155): Moves from ?q1 to ?q2 along trajectory ?t.
+        Updates at_config.
+      Python (test_full_pipeline.py lines 293-300): Iterates through
+        traj.waypoints[1:], calling move_robot_smooth() per waypoint.
+      Status: Consistent.  Trajectory is faithfully executed.
+
+PF-5. compute-kin stream — HIDDEN SIDE-CHANNEL
+      Stream PDDL (stream.pddl lines 35-40): Inputs (?o ?b ?g), outputs ?q.
+        Certifies Config, kin_solution, config_for_boxel.
+      Python (streams.py compute_kin_solution, lines 770-854): Yields
+        RobotConfig with ignored_body_ids (frozenset of body IDs to exclude
+        from collision checks).
+      Issue: ignored_body_ids is not visible in the PDDL declaration.
+        plan_motion() reads it from the Python RobotConfig object and uses
+        it to exclude the grasped object.  The symbolic planner has no
+        knowledge of this collision exclusion logic — it's a hidden Python
+        side-channel.  This is architecturally sound for PDDLStream (streams
+        share Python objects by design) but invisible to formal analysis.
+
 ================================================================================
 FOR LATER
 ================================================================================
@@ -454,16 +795,59 @@ FOR LATER
   commented out, not deleted — can be revived if needed.
 
 ================================================================================
-SUMMARY
+SUMMARY (updated 2026-03-13)
 ================================================================================
+
+CRITICAL ISSUES (must address before academic evaluation):
+  #61  Sense action has no conditional effects — fundamental proposal
+       deviation.  Planner cannot reason about "not found" outcome.
+  #62  pick/place don't update at_config — PDDL state drifts from
+       physical robot state within multi-action plans.
+  #63  Heuristic IK fallback produces garbage configs; no guard at
+       execution prevents them from being followed.
+  #64  Shadow raycast uses object corners as ray origins instead of
+       camera position — ray_starts variable computed but unused.
+  #65  solve_ik() swallows all exceptions silently (bare except).
+
+MODERATE ISSUES (should address):
+  #66  config.py is dead code; paths hardcoded in two files.
+  #67  _build_init() hardcodes assumption targets are only in shadows.
+  #68  10+ dead functions across active modules (see list).
+  #69  ~20 magic numbers with no justification.
+  #70  Orphaned boxel_facts.pddl at project root.
+
+STILL OPEN FROM PRIOR AUDITS:
+  #44  Stale shadow registry after occluder relocation (accepted).
+  #55  Hardcoded scene — no scenario variation (required by proposal).
+  #56  Dead computation: point cloud and compute_neighbors() (unfixed).
+  #59  Objects fly away on first grasp (uninvestigated).
+  #60  Simulation flickering during planning (unfixed).
+
+PDDL/PYTHON ALIGNMENT:
+  PF-1 sense: MISMATCH — no conditional effects, no observation stream.
+  PF-2 pick: MISMATCH — Python does multi-waypoint execution, re-derives
+       IK; PDDL models it as instantaneous single-config operation.
+  PF-3 place: MISMATCH — same as PF-2.
+  PF-4 move: CONSISTENT.
+  PF-5 compute-kin stream: hidden side-channel (ignored_body_ids).
+
+PROPOSAL ALIGNMENT:
+  PA-1 No evaluation framework (Section 5) — MISSING.
+  PA-2 No recursive object discovery (Section 4.2) — MISSING.
+  PA-3 K-literal design differs (Section 4.4.1) — documented deviation.
+  PA-4 Sensing has no robot positioning (Section 4.4.2) — accepted.
+  PA-5 No conditional sensing outcomes (Section 4.4.2) — MISSING (#61).
+  PA-6 Only top-down grasps — limits evaluation scenarios.
+
 The PLANNING ARCHITECTURE models spatial capabilities:
   - Occluder relocation via pick → move → place (#53 — done)
   - Push action commented out (superseded by pick-and-place)
   - Derived predicates for visibility (view_clear) still work — placing an
     occluder in free space removes blocks_view, just as push did
-  - Verification via sense (tri-state: found / clear_but_empty / still_blocked)
+  - Verification via sense: tri-state in execution (found / clear_but_empty
+    / still_blocked) but PDDL model is optimistic single-outcome (#61)
   - Sensing uses fixed camera correctly (#36 — done)
-  - KIF fluents for partial observability are sound
+  - KIF fluents are sound but use single-predicate simplification (PA-3)
 
 The EXECUTION follows the plan:
   - Move execution follows trajectory waypoints with collision-free
@@ -473,6 +857,8 @@ The EXECUTION follows the plan:
   - Place execution same pattern (#7, #57 — done)
   - Collision checks exclude grasped object via ignored_body_ids (#57 — done)
   - move_robot_to_pos() and compute_ik() removed — solve_ik() replaces them
+  - Post-pick/place config tracked by execution loop; PDDL model does
+    not update at_config for these actions (#62)
 
 Environment note: the default shell is PowerShell (not bash). Heredocs,
   `&&` chaining, and `cd /d` do not work. See .cursor/rules/powershell-shell.mdc.
@@ -488,11 +874,27 @@ Verification logging workflow (#58 — done):
       Tee-Object -FilePath .\logs\manual_run.log
 
 Priority order for remaining fixes:
-  1. Remove dead computation (#56)
-  2. Parameterized scene generation (#55) ignore
-  3. Fix stale registry after occluder relocation (#44) — ignore, low priority:
-     with pick-and-place the occluder is removed, so stale shadow AABBs
-     cause rays through empty space; target detection by body ID still works
+  CRITICAL (blocks academic evaluation):
+    1. Conditional sensing (#61) — align with proposal or document deviation
+    2. at_config drift (#62) — fix PDDL model or document simplification
+    3. Heuristic IK guard (#63) — add assertion, quick fix
+    4. Shadow raycast fix (#64) — use ray_starts or document approximation
+    5. Exception logging in solve_ik (#65) — one-line fix
 
-Proposal alignment work (PA-1 through PA-4) is tracked separately above
-and must be addressed before thesis submission.
+  MODERATE:
+    6. Remove dead computation (#56)
+    7. Remove dead code (#68) — clean up before submission
+    8. Document magic numbers (#69)
+    9. Clean up dead config.py / hardcoded paths (#66)
+   10. Remove orphaned boxel_facts.pddl (#70)
+
+  LOW PRIORITY (accepted simplifications):
+   11. Stale registry after occluder relocation (#44) — accepted
+   12. Parameterized scene generation (#55) — needed for evaluation (PA-1)
+   13. Fix objects flying away (#59)
+   14. Fix simulation flickering (#60)
+
+Proposal alignment work (PA-1 through PA-6) and PDDL/Python alignment
+(PF-1 through PF-5) are tracked in their respective sections above and
+must be addressed or explicitly documented as accepted deviations before
+thesis submission.
