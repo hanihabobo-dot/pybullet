@@ -220,9 +220,10 @@ def main(gui=True):
     boxel_centers = {b.id: b.center for b in registry.boxels.values()}
     
     plan_count = 0
-    # Budget: each shadow needs one pick-place-sense cycle; allow extra for
-    # sensing failures (view still blocked after relocation). +1 for final pick.
-    max_replans = 2 * len(shadows) + 1
+    # Budget: each shadow may need multiple push attempts before the view
+    # clears
+    # Allow up to 4 attempts per shadow + 1 for the final pick.
+    max_replans = 4 * len(shadows) + 1
     grasp_constraint_id = None
     exit_reason = None
     current_config = planner.home_config
