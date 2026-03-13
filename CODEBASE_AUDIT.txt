@@ -299,6 +299,81 @@ Fixed: Created run_logger.py with RunLogger service:
          python3 test_full_pipeline.py --log-level verbose --no-gui
 
 ================================================================================
+59. OBJECTS FLY AWAY ON FIRST GRASP — CONSTRAINT IMPULSE / COLLISION DURING PICK
+================================================================================
+Where: test_full_pipeline.py execute_pick(), robot_utils.py close_gripper()
+
+What:  On the first pick action, surrounding objects visibly fly away from
+       the grasped object. The grasp itself also looks "supernatural" — the
+       object snaps to the gripper rather than being smoothly acquired.
+
+       Likely causes (need logging to confirm):
+       (a) p.createConstraint() offset mismatch: the constraint uses
+           grasp.position as parentFramePosition, but if the EE isn't
+           at exactly obj_pos + grasp.position when the constraint is
+           created, PyBullet applies a large corrective impulse in the
+           next stepSimulation() to satisfy the constraint.  This impulse
+           can propagate to adjacent objects via contact forces.
+       (b) close_gripper() physically closes the fingers (30 simulation
+           steps with force=50). If the fingers contact the object or
+           adjacent objects before the constraint is created, the contact
+           forces push them.  The gripper closes BEFORE createConstraint,
+           so the object isn't welded yet and can be pushed.
+       (c) The approach/contact motion (move_robot_smooth) may collide
+           with neighboring objects in the cluttered scene.  Planning
+           checks collisions with gripper tolerance enabled, but the
+           actual motion applies physics forces that push things.
+       (d) No simulation settling after createConstraint — the next call
+           is move_robot_smooth(lift_joints) immediately, while the
+           constraint solver is still producing corrective forces.
+
+Debug: Add logging around execute_pick():
+       - Log EE position vs expected contact_ee at constraint creation time
+       - Log all object positions before and after each phase:
+         before approach, after approach, after close_gripper,
+         after createConstraint, after lift
+       - Compute and log displacement of each nearby object to identify
+         which phase causes the scatter
+       - Log the constraint error (actual vs desired relative transform)
+
+================================================================================
+60. SIMULATION-WIDE FLICKERING DURING PLANNING — RENDERING TOGGLE ARTIFACTS
+================================================================================
+Where: robot_utils.py is_config_collision_free(), is_path_collision_free(),
+       solve_ik(); streams.py _pybullet_ik()
+
+What:  After the arm-flickering fix (wrapping resetJointState with
+       configureDebugVisualizer COV_ENABLE_RENDERING 0/1), the arm no
+       longer flickers, but the entire simulation now exhibits periodic
+       visual glitches — the scene briefly looks "weird" every couple of
+       seconds.
+
+       Root cause: the rendering toggle is called thousands of times per
+       planning cycle (once per is_path_collision_free call, once per
+       solve_ik/IK call).  Each enable→disable→enable cycle may force
+       an OpenGL buffer swap or partial frame render, producing a brief
+       flash.  The fix addressed per-call arm teleportation but introduced
+       a high-frequency global rendering toggle that has its own visual
+       side effects.
+
+Fix:   Instead of toggling rendering per-function-call, disable rendering
+       ONCE at the start of the entire planning phase (before
+       planner.plan()) and re-enable ONCE after planning completes.
+       During planning the robot should appear frozen in its current pose.
+       This eliminates thousands of toggle cycles per plan and prevents
+       any rendering artifacts.  The per-function toggles in
+       is_config_collision_free, solve_ik, _pybullet_ik can then be
+       removed (or kept as fallback for standalone calls outside planning).
+
+       Alternatively, use a reference-counted rendering lock: first
+       disable increments a counter, enable decrements; rendering is
+       only actually toggled when the counter transitions 0→1 or 1→0.
+
+Debug: Log the number of COV_ENABLE_RENDERING toggle calls per planning
+       cycle to quantify the overhead.  Compare visual behavior with
+       rendering disabled for the full planning phase vs per-call toggle.
+
+================================================================================
 55. HARDCODED SCENE — NO SCENARIO VARIATION
 ================================================================================
 Where: boxel_env.py _create_occluders(), _create_targets()
