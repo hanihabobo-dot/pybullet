@@ -66,9 +66,9 @@ class OctreeNode:
 @dataclass
 class CameraObservation:
     """Data structure for camera observations."""
-    rgb_image: np.ndarray  # RGB image (H, W, 3)
-    depth_image: np.ndarray  # Depth image (H, W) in meters
-    point_cloud: np.ndarray  # Point cloud (N, 3) in world coordinates
     visible_objects: List[str]  # List of object names that are visible
     object_poses: Dict[str, Tuple[np.ndarray, np.ndarray]]  # Dict mapping object names to (position, orientation)
     boxels: Optional[List[Boxel]] = None  # List of Semantic Boxels generated from the observation
+    rgb_image: Optional[np.ndarray] = None  # RGB image (H, W, 3) — None when not computed
+    depth_image: Optional[np.ndarray] = None  # Depth image (H, W) in meters — None when not computed
+    point_cloud: Optional[np.ndarray] = None  # Point cloud (N, 3) in world coords — None when not computed
