@@ -54,7 +54,8 @@ def is_config_collision_free(robot_id: int, joint_positions,
                               physics_client: int = 0,
                               ignored_bodies=None,
                               allow_gripper_collisions: bool = False,
-                              log_collisions: bool = True) -> bool:
+                              log_collisions: bool = True,
+                              _rendering_managed: bool = False) -> bool:
     """
     Check whether a 7-DOF arm configuration is collision-free.
 
@@ -81,6 +82,8 @@ def is_config_collision_free(robot_id: int, joint_positions,
                                   environment collision reporting.
         log_collisions:           If True, log the first collision found
                                   at DEBUG level.
+        _rendering_managed:       If True, caller already disabled rendering;
+                                  skip the enable/disable toggle here.
 
     Returns:
         True if the configuration has no disallowed contacts.
@@ -90,6 +93,9 @@ def is_config_collision_free(robot_id: int, joint_positions,
 
     saved = [p.getJointState(robot_id, i, physicsClientId=physics_client)[0]
              for i in ARM_JOINT_INDICES]
+    if not _rendering_managed:
+        p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0,
+                                   physicsClientId=physics_client)
     try:
         for i, angle in zip(ARM_JOINT_INDICES, joint_positions):
             p.resetJointState(robot_id, i, angle,
@@ -133,6 +139,9 @@ def is_config_collision_free(robot_id: int, joint_positions,
         for i, angle in zip(ARM_JOINT_INDICES, saved):
             p.resetJointState(robot_id, i, angle,
                               physicsClientId=physics_client)
+        if not _rendering_managed:
+            p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1,
+                                       physicsClientId=physics_client)
 
 
 def is_path_collision_free(robot_id: int, q_start, q_end,
@@ -161,14 +170,21 @@ def is_path_collision_free(robot_id: int, q_start, q_end,
     """
     q_s = np.asarray(q_start, dtype=float)
     q_e = np.asarray(q_end, dtype=float)
-    for t in np.linspace(0.0, 1.0, n_checks):
-        q = (1.0 - t) * q_s + t * q_e
-        if not is_config_collision_free(robot_id, q, physics_client,
-                                        ignored_bodies,
-                                        allow_gripper_collisions=allow_gripper_collisions,
-                                        log_collisions=False):
-            return False
-    return True
+    p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0,
+                               physicsClientId=physics_client)
+    try:
+        for t in np.linspace(0.0, 1.0, n_checks):
+            q = (1.0 - t) * q_s + t * q_e
+            if not is_config_collision_free(robot_id, q, physics_client,
+                                            ignored_bodies,
+                                            allow_gripper_collisions=allow_gripper_collisions,
+                                            log_collisions=False,
+                                            _rendering_managed=True):
+                return False
+        return True
+    finally:
+        p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1,
+                                   physicsClientId=physics_client)
 
 
 # =============================================================================
@@ -210,6 +226,8 @@ def solve_ik(robot_id: int, target_pos: np.ndarray,
     saved = [p.getJointState(robot_id, i,
                              physicsClientId=physics_client)[0]
              for i in ARM_JOINT_INDICES]
+    p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0,
+                               physicsClientId=physics_client)
     try:
         for i, angle in zip(ARM_JOINT_INDICES, REST_POSES):
             p.resetJointState(robot_id, i, angle,
@@ -244,6 +262,8 @@ def solve_ik(robot_id: int, target_pos: np.ndarray,
         for i, angle in zip(ARM_JOINT_INDICES, saved):
             p.resetJointState(robot_id, i, angle,
                               physicsClientId=physics_client)
+        p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1,
+                                   physicsClientId=physics_client)
 
 
 def move_robot_smooth(robot_id: int, target_joints, gui: bool = True,

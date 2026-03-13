@@ -247,16 +247,19 @@ class BoxelStreams:
         if seed is None:
             seed = REST_POSES
         saved_joints = None
+        pc = self.physics_client
+        p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0,
+                                   physicsClientId=pc)
         try:
             saved_joints = [
                 p.getJointState(self.robot_id, i,
-                                physicsClientId=self.physics_client)[0]
+                                physicsClientId=pc)[0]
                 for i in ARM_JOINT_INDICES
             ]
 
             for i, angle in zip(ARM_JOINT_INDICES, seed):
                 p.resetJointState(self.robot_id, i, angle,
-                                  physicsClientId=self.physics_client)
+                                  physicsClientId=pc)
 
             joint_positions = p.calculateInverseKinematics(
                 bodyUniqueId=self.robot_id,
@@ -269,7 +272,7 @@ class BoxelStreams:
                 restPoses=list(seed),
                 maxNumIterations=self.ik_max_iterations,
                 residualThreshold=self.ik_residual_threshold,
-                physicsClientId=self.physics_client
+                physicsClientId=pc
             )
 
             if joint_positions is None or len(joint_positions) < 7:
@@ -293,7 +296,9 @@ class BoxelStreams:
             if saved_joints is not None:
                 for i, angle in zip(ARM_JOINT_INDICES, saved_joints):
                     p.resetJointState(self.robot_id, i, angle,
-                                      physicsClientId=self.physics_client)
+                                      physicsClientId=pc)
+            p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1,
+                                       physicsClientId=pc)
 
     def _ik_seeds(self):
         """Yield IK seed configurations: REST_POSES first, then perturbations."""

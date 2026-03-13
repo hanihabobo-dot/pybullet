@@ -351,9 +351,9 @@ def main(gui=True, run_logger=None):
                     print(f"    ERROR: Cannot resolve PyBullet object for '{obj_str}'")
                     break
 
-                grasp_constraint_id = execute_pick(robot_id, env, pick_obj_name, pick_pos,
-                                                   grasp, config, gui)
-                current_config = config
+                grasp_constraint_id, current_config = execute_pick(
+                    robot_id, env, pick_obj_name, pick_pos,
+                    grasp, config, gui)
                 print(f"    *** {pick_obj_name} PICKED UP! ***")
 
             elif action_name == 'place':
@@ -370,8 +370,9 @@ def main(gui=True, run_logger=None):
                     print(f"    ERROR: Cannot resolve position for boxel '{boxel_id_str}'")
                     break
 
-                execute_place(robot_id, env, obj_str, place_pos, grasp, config,
-                              grasp_constraint_id, gui)
+                current_config = execute_place(
+                    robot_id, env, obj_str, place_pos, grasp, config,
+                    grasp_constraint_id, gui)
                 grasp_constraint_id = None
 
                 env.update_object_positions()
@@ -386,8 +387,6 @@ def main(gui=True, run_logger=None):
                     print(f"    *** {placed_obj_name} PLACED at {boxel_id_str}! ***")
                 else:
                     print(f"    *** {obj_str} PLACED at {boxel_id_str}! ***")
-
-                current_config = config
     
     # =========================================================
     # PHASE 6: Results
@@ -514,9 +513,9 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui):
         gui: Whether GUI is active (for step_simulation timing)
 
     Returns:
-        int: PyBullet constraint ID for the grasp attachment. Callers must
-        store this and call p.removeConstraint() when placing the object
-        or resetting the environment.
+        Tuple[int, RobotConfig]: PyBullet constraint ID for the grasp
+        attachment, and a RobotConfig representing the robot's actual
+        final joint configuration (lift position).
     """
     approach_height = 0.10
     lift_height = 0.25
@@ -556,7 +555,9 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui):
 
     move_robot_smooth(robot_id, lift_joints, gui)
 
-    return grasp_constraint_id
+    final_config = RobotConfig(joint_positions=np.asarray(lift_joints),
+                               name="post_pick_lift")
+    return grasp_constraint_id, final_config
 
 
 def execute_place(robot_id, env, obj_name, place_pos, grasp, config,
@@ -580,7 +581,8 @@ def execute_place(robot_id, env, obj_name, place_pos, grasp, config,
         gui: Whether GUI is active (for step_simulation timing)
 
     Returns:
-        None (constraint is released inside this function)
+        RobotConfig: The robot's actual final joint configuration
+        (retreat position above the placement).
     """
     approach_height = 0.10
     retreat_height = 0.25
@@ -619,6 +621,9 @@ def execute_place(robot_id, env, obj_name, place_pos, grasp, config,
         p.stepSimulation()
 
     move_robot_smooth(robot_id, retreat_joints, gui)
+
+    return RobotConfig(joint_positions=np.asarray(retreat_joints),
+                       name="post_place_retreat")
 
 
 # compute_push_displacement() removed (#53): push superseded by pick-and-place.
