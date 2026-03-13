@@ -80,10 +80,6 @@ class BeliefState:
         """
         self.occluders_moved[occluder_id] = destination
 
-    def unmark_occluder_moved(self, occluder_id: str):
-        """Remove moved mark when sensing shows the view is still blocked."""
-        self.occluders_moved.pop(occluder_id, None)
-    
     def get_unknown_shadows(self):
         """Get list of shadows we haven't checked yet."""
         return [s for s, status in self.shadow_status.items() if status == 'unknown']
@@ -282,6 +278,16 @@ def main(gui=True, run_logger=None):
         for i, action in enumerate(plan):
             print(f"  {i+1}. {action[0]}")
         
+        # Reject plans containing heuristic (kinematically invalid) configs
+        for action in plan:
+            for param in action[1:]:
+                if isinstance(param, RobotConfig) and param.is_heuristic:
+                    raise RuntimeError(
+                        f"Plan contains heuristic config '{param.name}' — "
+                        f"cannot execute kinematically invalid configurations. "
+                        f"Ensure BoxelStreams has a valid robot_id."
+                    )
+
         # Execute plan actions one by one
         for i, action in enumerate(plan):
             action_name = action[0]
