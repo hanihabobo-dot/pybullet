@@ -1057,3 +1057,34 @@ Resolved: Accepted as a modeling simplification and documented:
        (c) Plans rarely chain pick → move without an intervening replan.
        Adding post-action configs to PDDL would require additional
        streams and complicate the model without practical benefit.
+
+================================================================================
+66. config.py EXISTS BUT IS NEVER IMPORTED — DEAD MODULE  [DONE]
+================================================================================
+Where: config.py (project root)
+
+What:  config.py defined setup_pddlstream() but was never imported by any
+       active code. Both consumers hardcode the WSL path directly.
+
+Fixed: Moved to archive/config.py. The hardcoded PDDLSTREAM_PATH is the
+       intentional mechanism for a single-developer WSL project.
+
+================================================================================
+68. DEAD CODE — FUNCTIONS DEFINED BUT NEVER CALLED  [DONE]
+================================================================================
+Where: boxel_env.py, boxel_data.py, visualization.py, test_full_pipeline.py,
+       streams.py, boxel_types.py, config.py
+
+What:  15+ dead functions across active modules.
+
+Fixed: All dead functions removed:
+       - boxel_env.py: get_object_point_cloud, handle_keyboard_camera,
+         set_debug_camera, merge_free_space, draw_boxels,
+         clear_all_debug_items, _quaternion_to_rotation_matrix,
+         self.cell_merger instance, CellMerger import
+       - boxel_data.py: generate_pddl_facts, save_pddl_facts
+       - visualization.py: save_point_cloud_to_ply
+       - test_full_pipeline.py: BeliefState.unmark_occluder_moved
+       - streams.py: _compute_sensing_ik
+       - boxel_types.py: OctreeNode.intersect, OctreeNode.contains
+       - config.py: entire module moved to archive/ (#66)

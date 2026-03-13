@@ -140,25 +140,6 @@ Impact: The planner cannot produce a plan like "sense shadow_A; if empty,
        "not found" branch.  Every plan assumes the first sense succeeds.
 
 ================================================================================
-66. config.py EXISTS BUT IS NEVER IMPORTED — DEAD MODULE
-================================================================================
-Where: config.py (entire file), test_full_pipeline.py line 32,
-       pddlstream_planner.py line 21
-
-What:  config.py defines setup_pddlstream() to automatically resolve and
-       add PDDLStream to sys.path using relative paths from the project
-       root.  Neither test_full_pipeline.py nor pddlstream_planner.py
-       imports it.  Both hardcode the absolute WSL path instead:
-
-         PDDLSTREAM_PATH = '/mnt/c/Users/HaniAlassiriAlhabbou/git/pddlstream_lib'
-
-       The config module is dead code.  The hardcoded paths make the
-       codebase non-portable.
-
-Fix:   Have both files import and use config.setup_pddlstream(), or
-       delete config.py and document the hardcoded path as intentional.
-
-================================================================================
 67. _build_init() HARDCODES ASSUMPTION THAT TARGETS ARE ONLY IN SHADOWS
 ================================================================================
 Where: pddlstream_planner.py _build_init(), lines 269-286
@@ -179,58 +160,6 @@ What:  For every OBJECT boxel (line 280-281) and every FREE_SPACE boxel
 Impact: Low for the current hidden-object scenario (targets are always
        behind occluders by construction).  But this prevents extending
        the system to more general search tasks without reworking _build_init.
-
-================================================================================
-68. DEAD CODE — FUNCTIONS DEFINED BUT NEVER CALLED IN ACTIVE PIPELINE
-================================================================================
-Where: Multiple files
-
-What:  The following functions/methods exist in active (non-archive) code
-       but are never called by any active code path:
-
-       boxel_env.py:
-         - get_object_point_cloud() (line 424) — never called
-         - handle_keyboard_camera() (line 454) — debug utility, never called
-         - set_debug_camera() (line 545) — never called
-         - merge_free_space() (line 283) — wrapper for CellMerger; pipeline
-           uses cell_merger.merge_free_space_cells() directly instead
-         - draw_boxels() (line 299) — call is commented out in pipeline
-         - clear_all_debug_items() (line 304) — never called
-
-       boxel_data.py:
-         - generate_pddl_facts() (line 262) — never called; planner builds
-           init programmatically in _build_init()
-         - save_pddl_facts() (line 295) — never called
-
-       visualization.py:
-         - save_point_cloud_to_ply() (line 147) — never called
-
-       test_full_pipeline.py:
-         - BeliefState.unmark_occluder_moved() (line 84) — method defined
-           but never invoked; the still_blocked branch doesn't call it
-
-       boxel_env.py __init__:
-         - self.cell_merger = CellMerger() (line 112) — instance created
-           but self.merge_free_space() is never called
-
-       streams.py:
-         - _compute_sensing_ik() (line 185) — only caller was the
-           commented-out sample_push_config; dead since #53
-
-       boxel_types.py:
-         - OctreeNode.intersect() (line 65) — FreeSpaceGenerator uses
-           inline AABB comparisons instead
-         - OctreeNode.contains() (line 69) — same
-
-       boxel_env.py:
-         - _quaternion_to_rotation_matrix() (line 445) — only used by
-           get_object_point_cloud(), which is itself dead code
-
-       config.py:
-         - entire module (see #66) — never imported
-
-Fix:   Remove or clearly mark as "utility / future-use".  Dead code in a
-       thesis codebase signals unfinished work to reviewers.
 
 ================================================================================
 69. MAGIC NUMBERS WITHOUT JUSTIFICATION
@@ -495,9 +424,7 @@ CRITICAL ISSUES (must address before academic evaluation):
        section without metrics, baselines, or scene variation.
 
 MODERATE ISSUES (should address):
-  #66  config.py is dead code; paths hardcoded in two files.
   #67  _build_init() hardcodes assumption targets are only in shadows.
-  #68  15+ dead functions across active modules (see expanded list).
   #69  ~30 magic numbers with no justification (see expanded table).
 
 STILL OPEN FROM PRIOR AUDITS:
@@ -572,18 +499,16 @@ Priority order for remaining fixes:
     2. Evaluation framework (#76/PA-1) — metrics, baselines, scene variation
 
   MODERATE:
-    3. Remove dead code (#68) — clean up 15+ functions before submission
-    4. Document magic numbers (#69) — ~30 constants need justification
-    5. Remove dead computation (#56) — point cloud / compute_neighbors
-    6. Clean up dead config.py / hardcoded paths (#66)
-    7. _build_init targets-only-in-shadows assumption (#67) — low impact
+    3. Document magic numbers (#69) — ~30 constants need justification
+    4. Remove dead computation (#56) — point cloud / compute_neighbors
+    5. _build_init targets-only-in-shadows assumption (#67) — low impact
 
   LOW PRIORITY (accepted simplifications):
-    8. Stale registry after occluder relocation (#44) — accepted
-    9. Stale shadow_occluder_map on replan (#73) — low impact
-   10. Parameterized scene generation (#55) — needed for evaluation (#76)
-   11. Fix objects flying away (#59)
-   12. Fix simulation flickering (#60)
+    6. Stale registry after occluder relocation (#44) — accepted
+    7. Stale shadow_occluder_map on replan (#73) — low impact
+    8. Parameterized scene generation (#55) — needed for evaluation (#76)
+    9. Fix objects flying away (#59)
+   10. Fix simulation flickering (#60)
 
 Proposal alignment work (PA-1 through PA-6) and PDDL/Python alignment
 (PF-1 through PF-5) are tracked in their respective sections above and
