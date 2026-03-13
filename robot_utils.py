@@ -256,7 +256,8 @@ def solve_ik(robot_id: int, target_pos: np.ndarray,
 
         return np.clip(arm_joints, JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH)
 
-    except Exception:
+    except Exception as e:
+        logger.warning("solve_ik failed for pos=%s: %s", target_pos.tolist(), e)
         return None
     finally:
         for i, angle in zip(ARM_JOINT_INDICES, saved):
