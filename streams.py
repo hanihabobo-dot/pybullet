@@ -807,10 +807,7 @@ class BoxelStreams:
             return
 
         target_pos = boxel.center + grasp.position
-
-        direction = boxel.center - target_pos
-        direction = direction / (np.linalg.norm(direction) + 1e-8)
-        ee_orn = self._direction_to_quat(-direction)
+        ee_orn = grasp.orientation
 
         body_id = self._resolve_body_id(obj_id)
         ignored = frozenset({body_id}) if body_id is not None else frozenset()
