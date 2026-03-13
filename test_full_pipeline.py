@@ -531,11 +531,12 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui):
 
     if approach_joints is None or lift_joints is None:
         print(f"    WARNING: IK failed for pick waypoints of {obj_name}, "
-              f"falling back to plan config only")
-        approach_joints = approach_joints if approach_joints is not None \
-            else config.joint_positions
-        lift_joints = lift_joints if lift_joints is not None \
-            else config.joint_positions
+              f"falling back to nearest valid waypoint")
+        if lift_joints is None:
+            lift_joints = approach_joints if approach_joints is not None \
+                else config.joint_positions
+        if approach_joints is None:
+            approach_joints = config.joint_positions
 
     contact_joints = solve_ik(robot_id, contact_ee, grasp.orientation, pc)
     if contact_joints is None:
@@ -598,11 +599,12 @@ def execute_place(robot_id, env, obj_name, place_pos, grasp, config,
 
     if approach_joints is None or retreat_joints is None:
         print(f"    WARNING: IK failed for place waypoints of {obj_name}, "
-              f"falling back to plan config only")
-        approach_joints = approach_joints if approach_joints is not None \
-            else config.joint_positions
-        retreat_joints = retreat_joints if retreat_joints is not None \
-            else config.joint_positions
+              f"falling back to nearest valid waypoint")
+        if retreat_joints is None:
+            retreat_joints = approach_joints if approach_joints is not None \
+                else config.joint_positions
+        if approach_joints is None:
+            approach_joints = config.joint_positions
 
     contact_joints = solve_ik(robot_id, contact_ee, grasp.orientation, pc)
     if contact_joints is None:
