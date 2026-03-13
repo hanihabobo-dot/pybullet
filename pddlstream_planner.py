@@ -54,7 +54,8 @@ class PDDLStreamPlanner:
                  shadow_occluder_map: Dict[str, str] = None,
                  physics_client: int = None,
                  object_body_ids: Dict[str, int] = None,
-                 support_body_ids: frozenset = None):
+                 support_body_ids: frozenset = None,
+                 allow_heuristic: bool = False):
         """
         Initialize the planner.
 
@@ -70,6 +71,8 @@ class PDDLStreamPlanner:
                 from collision checks.
             support_body_ids: Body IDs of support surfaces (table, ground
                 plane) ignored during pick/place endpoint checks.
+            allow_heuristic: If True, permit heuristic IK when robot_id
+                is None.  Only for symbolic-only testing (test_planner).
         """
         self.registry = registry
         self.robot_id = robot_id
@@ -78,7 +81,8 @@ class PDDLStreamPlanner:
         self.streams = BoxelStreams(
             registry, robot_id=robot_id, physics_client=physics_client,
             object_body_ids=object_body_ids,
-            support_body_ids=support_body_ids
+            support_body_ids=support_body_ids,
+            allow_heuristic=allow_heuristic
         )
         self.home_config = self.streams.home_config
         
@@ -391,7 +395,8 @@ def test_planner():
     print(f"Shadow-Occluder mapping: {shadow_occluder_map}")
     
     # Create planner (no robot_id: BoxelStreams will use heuristic IK)
-    planner = PDDLStreamPlanner(registry, shadow_occluder_map=shadow_occluder_map)
+    planner = PDDLStreamPlanner(registry, shadow_occluder_map=shadow_occluder_map,
+                                allow_heuristic=True)
     
     # Plan (uses planner.home_config as default current_config)
     print("\nPlanning to find and hold target_1...")

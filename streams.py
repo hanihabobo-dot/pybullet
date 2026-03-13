@@ -97,7 +97,8 @@ class BoxelStreams:
     
     def __init__(self, registry: BoxelRegistry, robot_id: int = None,
                  physics_client: int = None, object_body_ids: dict = None,
-                 support_body_ids: frozenset = None):
+                 support_body_ids: frozenset = None,
+                 allow_heuristic: bool = False):
         """
         Initialize streams with environment context.
 
@@ -115,6 +116,9 @@ class BoxelStreams:
                 because the Panda is mounted on the table and its lower arm
                 links overlap the table's collision geometry in PyBullet.
                 Not ignored for pure transit motions with no grasped object.
+            allow_heuristic: If True, permit heuristic IK when robot_id is
+                None (for symbolic-only testing).  Default False — production
+                code must always provide a robot_id.
         """
         self.registry = registry
         self.robot_id = robot_id
@@ -122,6 +126,11 @@ class BoxelStreams:
         self.object_body_ids = object_body_ids or {}
         self.support_body_ids = support_body_ids or frozenset()
         
+        if self.robot_id is None and not allow_heuristic:
+            raise ValueError(
+                "BoxelStreams requires robot_id for kinematically valid IK. "
+                "Pass allow_heuristic=True only for symbolic-only testing."
+            )
         if self.robot_id is None:
             logger.warning(
                 "BoxelStreams created without robot_id — all IK will use "
