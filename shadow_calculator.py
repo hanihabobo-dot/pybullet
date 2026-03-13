@@ -88,8 +88,8 @@ class ShadowCalculator:
             
         corners = back_corners
         
-        # Construct rays from camera through back corners
-        ray_starts = [cam_pos] * len(corners)
+        # Cast rays from back corners outward along camera-through-corner direction.
+        # (Corner-outward avoids self-intersection with the occluder body.)
         max_dist = 5.0  # meters
         ray_ends = []
         for corner in corners:
