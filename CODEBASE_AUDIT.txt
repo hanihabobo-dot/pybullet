@@ -232,23 +232,6 @@ Fix:   Either use ray_starts (camera-through-corner projection) or
        remove the unused ray_starts variable.
 
 ================================================================================
-65. solve_ik() SWALLOWS ALL EXCEPTIONS SILENTLY
-================================================================================
-Where: robot_utils.py, lines 259-260
-
-What:  solve_ik() has a bare "except Exception:" that catches ALL errors
-       and returns None without logging.  This silently swallows bugs,
-       assertion errors, or PyBullet crashes.  Compare with _pybullet_ik()
-       in streams.py line 291 which at least logs the error.
-
-       During execution (execute_pick, execute_place), solve_ik() failures
-       trigger a fallback to config.joint_positions with a printed WARNING.
-       But if the failure was caused by a real bug (not just IK divergence),
-       the root cause is hidden.
-
-Fix:   Log the exception at WARNING or ERROR level before returning None.
-
-================================================================================
 66. config.py EXISTS BUT IS NEVER IMPORTED — DEAD MODULE
 ================================================================================
 Where: config.py (entire file), test_full_pipeline.py line 32,

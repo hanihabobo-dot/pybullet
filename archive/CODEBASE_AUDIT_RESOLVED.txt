@@ -933,3 +933,25 @@ Fixed: Created run_logger.py with RunLogger service:
        Usage:
          python3 test_full_pipeline.py --log-level verbose
          python3 test_full_pipeline.py --log-level verbose --no-gui
+
+================================================================================
+65. solve_ik() SWALLOWS ALL EXCEPTIONS SILENTLY  [DONE]
+================================================================================
+Where: robot_utils.py solve_ik()
+
+What:  Two problems:
+       (a) The except clause caught all exceptions and returned None
+           without any logging — silently hiding bugs, assertion errors,
+           or PyBullet crashes.
+       (b) The `saved` variable (joint states for restore) was assigned
+           outside the try block.  If p.getJointState() raised during the
+           list comprehension, `saved` was never defined, and the finally
+           block raised NameError trying to iterate over it — masking the
+           original exception and preventing cleanup.
+
+Fixed: (a) Added logger.warning() in the except clause (matches the
+           pattern in streams.py _pybullet_ik).
+       (b) Initialized saved = None before the try block, moved the
+           getJointState comprehension inside try, and added
+           "if saved is not None:" guard in finally — matching the
+           safe pattern already used in _pybullet_ik (streams.py line 248).

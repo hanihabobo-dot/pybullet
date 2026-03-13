@@ -223,12 +223,14 @@ def solve_ik(robot_id: int, target_pos: np.ndarray,
     orn_list = (target_orn.tolist() if isinstance(target_orn, np.ndarray)
                 else list(target_orn))
 
-    saved = [p.getJointState(robot_id, i,
-                             physicsClientId=physics_client)[0]
-             for i in ARM_JOINT_INDICES]
+    saved = None
     p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0,
                                physicsClientId=physics_client)
     try:
+        saved = [p.getJointState(robot_id, i,
+                                 physicsClientId=physics_client)[0]
+                 for i in ARM_JOINT_INDICES]
+
         for i, angle in zip(ARM_JOINT_INDICES, REST_POSES):
             p.resetJointState(robot_id, i, angle,
                               physicsClientId=physics_client)
@@ -260,9 +262,10 @@ def solve_ik(robot_id: int, target_pos: np.ndarray,
         logger.warning("solve_ik failed for pos=%s: %s", target_pos.tolist(), e)
         return None
     finally:
-        for i, angle in zip(ARM_JOINT_INDICES, saved):
-            p.resetJointState(robot_id, i, angle,
-                              physicsClientId=physics_client)
+        if saved is not None:
+            for i, angle in zip(ARM_JOINT_INDICES, saved):
+                p.resetJointState(robot_id, i, angle,
+                                  physicsClientId=physics_client)
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1,
                                    physicsClientId=physics_client)
 
