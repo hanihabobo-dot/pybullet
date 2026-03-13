@@ -5,8 +5,11 @@ All joint limits, rest poses, and link indices for the Panda arm are defined
 here once. Every module that needs robot parameters imports from this file.
 """
 
+import logging
 import numpy as np
 import pybullet as p
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -44,9 +47,14 @@ _PANDA_IGNORED_SELF_PAIRS = frozenset({
 })
 
 
+_PANDA_GRIPPER_LINKS = frozenset({6, 7, 8, 9, 10, 11})
+
+
 def is_config_collision_free(robot_id: int, joint_positions,
                               physics_client: int = 0,
-                              ignored_bodies=None) -> bool:
+                              ignored_bodies=None,
+                              allow_gripper_collisions: bool = False,
+                              log_collisions: bool = True) -> bool:
     """
     Check whether a 7-DOF arm configuration is collision-free.
 
@@ -59,12 +67,20 @@ def is_config_collision_free(robot_id: int, joint_positions,
     * The base link (-1) is excluded — it is fixed and rests on the
       mounting surface.
     * Bodies listed in *ignored_bodies* (e.g. a held object) are skipped.
+    * When *allow_gripper_collisions* is True, collisions between the
+      gripper links (7-11: wrist flange, hand, fingers, grasptarget)
+      and non-robot bodies are also ignored.  Use this for pick/place
+      endpoint checks where the gripper must enter cluttered space.
 
     Args:
-        robot_id:        PyBullet body ID of the robot.
-        joint_positions: Sequence of 7 target joint angles.
-        physics_client:  PyBullet physics client ID.
-        ignored_bodies:  Optional set/frozenset of body IDs to skip.
+        robot_id:                 PyBullet body ID of the robot.
+        joint_positions:          Sequence of 7 target joint angles.
+        physics_client:           PyBullet physics client ID.
+        ignored_bodies:           Optional set/frozenset of body IDs to skip.
+        allow_gripper_collisions: If True, exempt gripper links from
+                                  environment collision reporting.
+        log_collisions:           If True, log the first collision found
+                                  at DEBUG level.
 
     Returns:
         True if the configuration has no disallowed contacts.
@@ -89,6 +105,9 @@ def is_config_collision_free(robot_id: int, joint_positions,
             if body_a == robot_id and body_b == robot_id:
                 pair = (min(link_a, link_b), max(link_a, link_b))
                 if pair not in _PANDA_IGNORED_SELF_PAIRS:
+                    if log_collisions:
+                        logger.debug("collision: self-contact links (%d, %d)",
+                                     link_a, link_b)
                     return False
                 continue
 
@@ -99,7 +118,14 @@ def is_config_collision_free(robot_id: int, joint_positions,
                 continue
             if robot_link == -1:
                 continue
+            if allow_gripper_collisions and robot_link in _PANDA_GRIPPER_LINKS:
+                continue
 
+            if log_collisions:
+                logger.debug("collision: robot link %d <-> body %d (link %d)",
+                             robot_link,
+                             other,
+                             link_b if body_a == robot_id else link_a)
             return False
 
         return True
@@ -111,7 +137,8 @@ def is_config_collision_free(robot_id: int, joint_positions,
 
 def is_path_collision_free(robot_id: int, q_start, q_end,
                             physics_client: int = 0, n_checks: int = 8,
-                            ignored_bodies=None) -> bool:
+                            ignored_bodies=None,
+                            allow_gripper_collisions: bool = False) -> bool:
     """
     Check a straight-line joint-space path for collisions.
 
@@ -125,6 +152,9 @@ def is_path_collision_free(robot_id: int, q_start, q_end,
         physics_client:  PyBullet physics client ID.
         n_checks:        Number of intermediate configurations to test.
         ignored_bodies:  Optional set/frozenset of body IDs to skip.
+        allow_gripper_collisions: If True, exempt gripper/wrist links
+            from environment collision reporting (same as in
+            is_config_collision_free).
 
     Returns:
         True if every sampled configuration is collision-free.
@@ -134,7 +164,9 @@ def is_path_collision_free(robot_id: int, q_start, q_end,
     for t in np.linspace(0.0, 1.0, n_checks):
         q = (1.0 - t) * q_s + t * q_e
         if not is_config_collision_free(robot_id, q, physics_client,
-                                        ignored_bodies):
+                                        ignored_bodies,
+                                        allow_gripper_collisions=allow_gripper_collisions,
+                                        log_collisions=False):
             return False
     return True
 

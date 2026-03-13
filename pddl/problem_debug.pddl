@@ -5,6 +5,10 @@
   (:domain boxel-tamp)
 
   (:objects
+    free_006
+    free_007
+    free_008
+    free_009
     free_010
     free_011
     free_012
@@ -49,24 +53,21 @@
     free_051
     free_052
     free_053
-    free_054
-    free_055
-    free_056
-    obj_006
-    obj_007
-    obj_008
-    obj_009
+    obj_003
+    obj_004
+    obj_005
     q_home
     shadow_000
     shadow_001
     shadow_002
-    shadow_003
-    shadow_004
-    shadow_005
     target_3
   )
 
   (:init
+    (Boxel free_006)
+    (Boxel free_007)
+    (Boxel free_008)
+    (Boxel free_009)
     (Boxel free_010)
     (Boxel free_011)
     (Boxel free_012)
@@ -111,33 +112,26 @@
     (Boxel free_051)
     (Boxel free_052)
     (Boxel free_053)
-    (Boxel free_054)
-    (Boxel free_055)
-    (Boxel free_056)
-    (Boxel obj_006)
-    (Boxel obj_007)
-    (Boxel obj_008)
-    (Boxel obj_009)
+    (Boxel obj_003)
+    (Boxel obj_004)
+    (Boxel obj_005)
     (Boxel shadow_000)
     (Boxel shadow_001)
     (Boxel shadow_002)
-    (Boxel shadow_003)
-    (Boxel shadow_004)
-    (Boxel shadow_005)
     (Config q_home)
-    (Obj obj_006)
-    (Obj obj_007)
-    (Obj obj_008)
-    (Obj obj_009)
+    (Obj obj_003)
+    (Obj obj_004)
+    (Obj obj_005)
     (Obj target_3)
     (at_config q_home)
-    (blocks_view_at obj_006 obj_006 shadow_000)
-    (blocks_view_at obj_007 obj_007 shadow_001)
-    (blocks_view_at obj_007 obj_007 shadow_002)
-    (blocks_view_at obj_008 obj_008 shadow_003)
-    (blocks_view_at obj_008 obj_008 shadow_004)
-    (blocks_view_at obj_009 obj_009 shadow_005)
+    (blocks_view_at obj_003 obj_003 shadow_000)
+    (blocks_view_at obj_004 obj_004 shadow_001)
+    (blocks_view_at obj_005 obj_005 shadow_002)
     (handempty)
+    (is_free_space free_006)
+    (is_free_space free_007)
+    (is_free_space free_008)
+    (is_free_space free_009)
     (is_free_space free_010)
     (is_free_space free_011)
     (is_free_space free_012)
@@ -182,27 +176,22 @@
     (is_free_space free_051)
     (is_free_space free_052)
     (is_free_space free_053)
-    (is_free_space free_054)
-    (is_free_space free_055)
-    (is_free_space free_056)
-    (is_object obj_006)
-    (is_object obj_007)
-    (is_object obj_008)
-    (is_object obj_009)
+    (is_object obj_003)
+    (is_object obj_004)
+    (is_object obj_005)
     (is_shadow shadow_000)
     (is_shadow shadow_001)
     (is_shadow shadow_002)
-    (is_shadow shadow_003)
-    (is_shadow shadow_004)
-    (is_shadow shadow_005)
-    (obj_at_boxel obj_006 obj_006)
-    (obj_at_boxel obj_007 obj_007)
-    (obj_at_boxel obj_008 obj_008)
-    (obj_at_boxel obj_009 obj_009)
-    (obj_at_boxel_KIF obj_006 obj_006)
-    (obj_at_boxel_KIF obj_007 obj_007)
-    (obj_at_boxel_KIF obj_008 obj_008)
-    (obj_at_boxel_KIF obj_009 obj_009)
+    (obj_at_boxel obj_003 obj_003)
+    (obj_at_boxel obj_004 obj_004)
+    (obj_at_boxel obj_005 obj_005)
+    (obj_at_boxel_KIF obj_003 obj_003)
+    (obj_at_boxel_KIF obj_004 obj_004)
+    (obj_at_boxel_KIF obj_005 obj_005)
+    (obj_at_boxel_KIF target_3 free_006)
+    (obj_at_boxel_KIF target_3 free_007)
+    (obj_at_boxel_KIF target_3 free_008)
+    (obj_at_boxel_KIF target_3 free_009)
     (obj_at_boxel_KIF target_3 free_010)
     (obj_at_boxel_KIF target_3 free_011)
     (obj_at_boxel_KIF target_3 free_012)
@@ -247,13 +236,9 @@
     (obj_at_boxel_KIF target_3 free_051)
     (obj_at_boxel_KIF target_3 free_052)
     (obj_at_boxel_KIF target_3 free_053)
-    (obj_at_boxel_KIF target_3 free_054)
-    (obj_at_boxel_KIF target_3 free_055)
-    (obj_at_boxel_KIF target_3 free_056)
-    (obj_at_boxel_KIF target_3 obj_006)
-    (obj_at_boxel_KIF target_3 obj_007)
-    (obj_at_boxel_KIF target_3 obj_008)
-    (obj_at_boxel_KIF target_3 obj_009)
+    (obj_at_boxel_KIF target_3 obj_003)
+    (obj_at_boxel_KIF target_3 obj_004)
+    (obj_at_boxel_KIF target_3 obj_005)
   )
 
   (:goal (holding target_3))

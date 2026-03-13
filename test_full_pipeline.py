@@ -44,6 +44,7 @@ from pddlstream_planner import PDDLStreamPlanner
 from streams import RobotConfig
 from robot_utils import (END_EFFECTOR_LINK, solve_ik,
                          move_robot_smooth, open_gripper, close_gripper)
+from run_logger import RunLogger
 
 
 class BeliefState:
@@ -97,7 +98,7 @@ class BeliefState:
         return self.target_found_in is not None
 
 
-def main(gui=True):
+def main(gui=True, run_logger=None):
     print("=" * 60)
     print("FULL PIPELINE: PDDLStream + Replanning")
     print("=" * 60)
@@ -132,6 +133,8 @@ def main(gui=True):
     print("\n--- Phase 3: Creating BoxelRegistry ---")
     registry = create_boxel_registry_from_boxels(all_boxels, env.table_surface_height)
     registry.save_to_json("boxel_data.json")
+    if run_logger:
+        run_logger.save_artefact("boxel_data.json")
     
     shadows = [b.id for b in registry.boxels.values() if b.boxel_type == BoxelType.SHADOW]
     occluders = [b.id for b in registry.boxels.values() if b.boxel_type == BoxelType.OBJECT]
@@ -205,16 +208,35 @@ def main(gui=True):
     # =========================================================
     print("\n--- Phase 5: Planning with Replanning ---")
     
+    # Build bidirectional name→body-ID mapping so streams can exclude the
+    # grasped object from collision checks during compute_kin / plan_motion.
+    object_body_ids = {}
+    for name, obj_info in env.objects.items():
+        if name not in ("plane", "table", "robot"):
+            object_body_ids[name] = obj_info.object_id
+    for boxel in registry.boxels.values():
+        if boxel.object_name and boxel.object_name in object_body_ids:
+            object_body_ids[boxel.id] = object_body_ids[boxel.object_name]
+
+    support_body_ids = frozenset({
+        env.objects["plane"].object_id,
+        env.objects["table"].object_id,
+    })
+
     belief = BeliefState(shadows, target_name)
-    planner = PDDLStreamPlanner(registry, robot_id=robot_id, 
+    planner = PDDLStreamPlanner(registry, robot_id=robot_id,
                                  shadow_occluder_map=shadow_occluder_map,
-                                 physics_client=env.client_id)
+                                 physics_client=env.client_id,
+                                 object_body_ids=object_body_ids,
+                                 support_body_ids=support_body_ids)
     
     problem_path = planner.export_problem_pddl(
         target_objects=[target_name],
         goal=('holding', target_name)
     )
     print(f"  Exported initial problem to {problem_path}")
+    if run_logger:
+        run_logger.save_artefact(problem_path, "problem_initial.pddl")
     
     # Get boxel centers for robot motion targets
     boxel_centers = {b.id: b.center for b in registry.boxels.values()}
@@ -248,7 +270,7 @@ def main(gui=True):
             current_config=current_config,
             known_empty_shadows=known_empty,
             moved_occluders=dict(belief.occluders_moved),
-            max_time=60.0,
+            max_time=120.0,
             verbose=False  # Quiet for replanning
         )
         
@@ -470,12 +492,14 @@ def sense_shadow_raycasting(camera_pos, shadow_boxel, target_pybullet_id, occlud
 
 def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui):
     """
-    Execute pick action using the plan's grasp pose and IK-solved config.
+    Execute pick action using the plan's grasp pose.
 
-    Waypoints are derived from the grasp relative to the object's actual
-    position — not hardcoded offsets.  The contact waypoint uses the
-    plan's IK config directly; approach and lift compute IK from the
-    grasp-derived end-effector positions.
+    All waypoints are derived from the grasp relative to the object's
+    actual current position (obj_pos), not hardcoded offsets.  The
+    contact waypoint re-derives IK from ``obj_pos + grasp.position``
+    at execution time; if IK fails it falls back to the plan config.
+    This handles any drift between the boxel center used during
+    planning and the object's actual position.
 
     The constraint-based attachment (p.createConstraint) is an accepted
     simulation simplification — see audit #7 part B.
@@ -486,7 +510,7 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui):
         obj_name: Name key in env.objects (e.g. "target_1", "occluder_2")
         obj_pos: Current object position [x, y, z] (from PyBullet)
         grasp: Grasp object from the plan (position, orientation)
-        config: RobotConfig from the plan's compute_kin_solution (contact)
+        config: RobotConfig from the plan's compute_kin_solution (fallback)
         gui: Whether GUI is active (for step_simulation timing)
 
     Returns:
@@ -502,8 +526,9 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui):
     approach_ee = contact_ee + approach_dir * approach_height
     lift_ee = contact_ee + approach_dir * lift_height
 
-    approach_joints = solve_ik(robot_id, approach_ee, grasp.orientation)
-    lift_joints = solve_ik(robot_id, lift_ee, grasp.orientation)
+    pc = env.client_id
+    approach_joints = solve_ik(robot_id, approach_ee, grasp.orientation, pc)
+    lift_joints = solve_ik(robot_id, lift_ee, grasp.orientation, pc)
 
     if approach_joints is None or lift_joints is None:
         print(f"    WARNING: IK failed for pick waypoints of {obj_name}, "
@@ -513,10 +538,14 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui):
         lift_joints = lift_joints if lift_joints is not None \
             else config.joint_positions
 
+    contact_joints = solve_ik(robot_id, contact_ee, grasp.orientation, pc)
+    if contact_joints is None:
+        contact_joints = config.joint_positions
+
     move_robot_smooth(robot_id, approach_joints, gui)
     open_gripper(robot_id, gui)
 
-    move_robot_smooth(robot_id, config.joint_positions, gui)
+    move_robot_smooth(robot_id, contact_joints, gui)
     close_gripper(robot_id, gui)
 
     obj_id = env.objects[obj_name].object_id
@@ -533,11 +562,12 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui):
 def execute_place(robot_id, env, obj_name, place_pos, grasp, config,
                    grasp_constraint_id, gui):
     """
-    Execute place action using the plan's grasp pose and IK-solved config.
+    Execute place action using the plan's grasp pose.
 
     Mirrors execute_pick() in reverse: approach above destination, lower
-    to contact (plan config), release, retreat.  Waypoints are derived
-    from the grasp relative to the destination boxel center.
+    to contact, release, retreat.  The contact waypoint re-derives IK
+    from ``place_pos + grasp.position`` at execution time; falls back
+    to the plan config if IK fails.
 
     Args:
         robot_id: PyBullet body ID of the robot
@@ -545,7 +575,7 @@ def execute_place(robot_id, env, obj_name, place_pos, grasp, config,
         obj_name: Name of the object being placed (for logging)
         place_pos: Destination position [x, y, z] (boxel center)
         grasp: Grasp object from the plan (position, orientation)
-        config: RobotConfig from the plan's compute_kin_solution (contact)
+        config: RobotConfig from the plan's compute_kin_solution (fallback)
         grasp_constraint_id: PyBullet constraint ID from execute_pick()
         gui: Whether GUI is active (for step_simulation timing)
 
@@ -560,8 +590,9 @@ def execute_place(robot_id, env, obj_name, place_pos, grasp, config,
     approach_ee = contact_ee + approach_dir * approach_height
     retreat_ee = contact_ee + approach_dir * retreat_height
 
-    approach_joints = solve_ik(robot_id, approach_ee, grasp.orientation)
-    retreat_joints = solve_ik(robot_id, retreat_ee, grasp.orientation)
+    pc = env.client_id
+    approach_joints = solve_ik(robot_id, approach_ee, grasp.orientation, pc)
+    retreat_joints = solve_ik(robot_id, retreat_ee, grasp.orientation, pc)
 
     if approach_joints is None or retreat_joints is None:
         print(f"    WARNING: IK failed for place waypoints of {obj_name}, "
@@ -571,9 +602,13 @@ def execute_place(robot_id, env, obj_name, place_pos, grasp, config,
         retreat_joints = retreat_joints if retreat_joints is not None \
             else config.joint_positions
 
+    contact_joints = solve_ik(robot_id, contact_ee, grasp.orientation, pc)
+    if contact_joints is None:
+        contact_joints = config.joint_positions
+
     move_robot_smooth(robot_id, approach_joints, gui)
 
-    move_robot_smooth(robot_id, config.joint_positions, gui)
+    move_robot_smooth(robot_id, contact_joints, gui)
 
     open_gripper(robot_id, gui)
 
@@ -594,7 +629,14 @@ def execute_place(robot_id, env, obj_name, place_pos, grasp, config,
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Full PDDLStream Pipeline with Replanning')
     parser.add_argument('--no-gui', action='store_true', help='Run without GUI')
+    parser.add_argument('--log-level', choices=['quiet', 'normal', 'verbose'],
+                        default='normal',
+                        help='Console verbosity (log file always captures everything)')
     args = parser.parse_args()
-    
-    success = main(gui=not args.no_gui)
+
+    logger = RunLogger(verbosity=args.log_level)
+    try:
+        success = main(gui=not args.no_gui, run_logger=logger)
+    finally:
+        logger.close()
     sys.exit(0 if success else 1)

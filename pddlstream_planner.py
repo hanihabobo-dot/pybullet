@@ -53,23 +53,33 @@ class PDDLStreamPlanner:
     
     def __init__(self, registry: BoxelRegistry, robot_id: int = None,
                  shadow_occluder_map: Dict[str, str] = None,
-                 physics_client: int = None):
+                 physics_client: int = None,
+                 object_body_ids: Dict[str, int] = None,
+                 support_body_ids: frozenset = None):
         """
         Initialize the planner.
-        
+
         Args:
             registry: BoxelRegistry with scene boxels
             robot_id: PyBullet robot body ID (required for real IK;
                 without it, BoxelStreams falls back to heuristic IK)
             shadow_occluder_map: Dict mapping shadow_id -> occluder_id
             physics_client: PyBullet physics client ID (0 if default)
+            object_body_ids: Mapping from object/boxel identifiers to
+                PyBullet body IDs.  Passed to BoxelStreams so that
+                compute_kin and plan_motion can exclude grasped objects
+                from collision checks.
+            support_body_ids: Body IDs of support surfaces (table, ground
+                plane) ignored during pick/place endpoint checks.
         """
         self.registry = registry
         self.robot_id = robot_id
         self.shadow_occluder_map = shadow_occluder_map or {}
-        
+
         self.streams = BoxelStreams(
-            registry, robot_id=robot_id, physics_client=physics_client
+            registry, robot_id=robot_id, physics_client=physics_client,
+            object_body_ids=object_body_ids,
+            support_body_ids=support_body_ids
         )
         self.home_config = self.streams.home_config
         

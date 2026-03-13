@@ -20,7 +20,7 @@ import random
 import numpy as np
 import pybullet as p
 from typing import List, Tuple, Optional, Generator, Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,7 @@ class RobotConfig:
     joint_positions: np.ndarray  # 7 DOF
     name: str = ""
     is_heuristic: bool = False
+    ignored_body_ids: frozenset = field(default_factory=frozenset)
     
     def __hash__(self):
         return hash(self.name)
@@ -96,18 +97,31 @@ class BoxelStreams:
     """
     
     def __init__(self, registry: BoxelRegistry, robot_id: int = None,
-                 physics_client: int = None):
+                 physics_client: int = None, object_body_ids: dict = None,
+                 support_body_ids: frozenset = None):
         """
         Initialize streams with environment context.
-        
+
         Args:
             registry: BoxelRegistry containing all boxels
             robot_id: PyBullet body ID of the robot (required for real IK)
             physics_client: PyBullet physics client ID (0 if using default)
+            object_body_ids: Mapping from object/boxel identifiers to PyBullet
+                body IDs. Used to exclude the grasped object from collision
+                checks in compute_kin and plan_motion. Keys should include
+                both object names ("occluder_1") and boxel IDs ("obj_003").
+            support_body_ids: Body IDs of support surfaces (table, ground
+                plane).  Ignored during all collision checks for pick/place
+                motions (both endpoint validation and RRT path planning)
+                because the Panda is mounted on the table and its lower arm
+                links overlap the table's collision geometry in PyBullet.
+                Not ignored for pure transit motions with no grasped object.
         """
         self.registry = registry
         self.robot_id = robot_id
         self.physics_client = physics_client if physics_client is not None else 0
+        self.object_body_ids = object_body_ids or {}
+        self.support_body_ids = support_body_ids or frozenset()
         
         if self.robot_id is None:
             logger.warning(
@@ -196,24 +210,42 @@ class BoxelStreams:
         
         return self._heuristic_ik(ee_pos, look_at)
     
-    def _pybullet_ik(self, ee_pos: np.ndarray, 
-                     ee_orn: np.ndarray) -> Optional[RobotConfig]:
+    IK_NUM_SEEDS = 8
+
+    _IK_SEED_OFFSETS = [
+        [0, 0, 0, 0, 0, 0, 0],
+        [0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
+        [-0.4, -0.4, -0.4, -0.4, -0.4, -0.4, -0.4],
+        [0.8, -0.3, 0.5, -0.6, 0.3, 0.7, -0.2],
+        [-0.6, 0.5, -0.3, 0.8, -0.5, -0.2, 0.6],
+        [0.2, -0.7, 0.6, 0.3, -0.8, 0.4, -0.5],
+        [-0.3, 0.6, -0.8, -0.2, 0.7, -0.5, 0.3],
+        [0.5, 0.2, -0.5, 0.7, 0.2, -0.6, 0.4],
+    ]
+
+    def _pybullet_ik(self, ee_pos: np.ndarray,
+                     ee_orn: np.ndarray,
+                     seed: list = None) -> Optional[RobotConfig]:
         """
         Compute IK using PyBullet's null-space calculateInverseKinematics.
-        
-        Saves the robot's current joint state, resets to REST_POSES (giving
-        the iterative solver a consistent seed), runs IK with null-space
-        parameters, then restores the original state.  This makes IK results
-        independent of where execution left the robot — critical for
-        replanning after Plan #1 moves the arm.
-        
+
+        Saves the robot's current joint state, resets joints to *seed*
+        (defaulting to REST_POSES), runs IK with null-space parameters,
+        then restores the original state.  Different seeds steer the
+        iterative solver into different local minima, producing arm
+        configurations that may avoid obstacles the default solution hits.
+
         Args:
-            ee_pos: Desired end-effector position
-            ee_orn: Desired end-effector orientation (quaternion)
-            
+            ee_pos: Desired end-effector position.
+            ee_orn: Desired end-effector orientation (quaternion).
+            seed:   7-element list of joint angles used as the IK starting
+                    point.  ``None`` → REST_POSES.
+
         Returns:
-            RobotConfig if valid solution found, None otherwise
+            RobotConfig if valid solution found, None otherwise.
         """
+        if seed is None:
+            seed = REST_POSES
         saved_joints = None
         try:
             saved_joints = [
@@ -222,7 +254,7 @@ class BoxelStreams:
                 for i in ARM_JOINT_INDICES
             ]
 
-            for i, angle in zip(ARM_JOINT_INDICES, REST_POSES):
+            for i, angle in zip(ARM_JOINT_INDICES, seed):
                 p.resetJointState(self.robot_id, i, angle,
                                   physicsClientId=self.physics_client)
 
@@ -234,25 +266,25 @@ class BoxelStreams:
                 lowerLimits=JOINT_LIMITS_LOW.tolist(),
                 upperLimits=JOINT_LIMITS_HIGH.tolist(),
                 jointRanges=JOINT_RANGES.tolist(),
-                restPoses=REST_POSES,
+                restPoses=list(seed),
                 maxNumIterations=self.ik_max_iterations,
                 residualThreshold=self.ik_residual_threshold,
                 physicsClientId=self.physics_client
             )
-            
+
             if joint_positions is None or len(joint_positions) < 7:
                 return None
-            
+
             arm_joints = np.array(joint_positions[:7])
-            
+
             if np.any(arm_joints < JOINT_LIMITS_LOW - 0.1) or \
                np.any(arm_joints > JOINT_LIMITS_HIGH + 0.1):
                 return None
-            
+
             arm_joints = np.clip(arm_joints, JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH)
-            
+
             return RobotConfig(joint_positions=arm_joints)
-            
+
         except Exception as e:
             logger.error("IK failed for pos=%s: %s", ee_pos.tolist(), e)
             return None
@@ -262,6 +294,14 @@ class BoxelStreams:
                 for i, angle in zip(ARM_JOINT_INDICES, saved_joints):
                     p.resetJointState(self.robot_id, i, angle,
                                       physicsClientId=self.physics_client)
+
+    def _ik_seeds(self):
+        """Yield IK seed configurations: REST_POSES first, then perturbations."""
+        rest = np.array(REST_POSES)
+        for offset in self._IK_SEED_OFFSETS[:self.IK_NUM_SEEDS]:
+            seed = rest + np.array(offset)
+            seed = np.clip(seed, JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH)
+            yield seed.tolist()
     
     def _heuristic_ik(self, ee_pos: np.ndarray, 
                       look_at: np.ndarray) -> Optional[RobotConfig]:
@@ -351,17 +391,36 @@ class BoxelStreams:
         
         return np.array([x, y, z, w])
     
+    def _resolve_body_id(self, obj_id) -> Optional[int]:
+        """
+        Look up the PyBullet body ID for an object or boxel identifier.
+
+        Handles both direct object names (e.g. "target_2") and boxel IDs
+        (e.g. "obj_003") by falling back to the boxel's object_name.
+        """
+        key = str(obj_id)
+        if key in self.object_body_ids:
+            return self.object_body_ids[key]
+        boxel = self.registry.get_boxel(key)
+        if boxel and boxel.object_name and boxel.object_name in self.object_body_ids:
+            return self.object_body_ids[boxel.object_name]
+        return None
+
     # =========================================================================
     # STREAM: Sample Grasp
     # =========================================================================
+    _GRASP_Z_OFFSETS = [0.05, 0.10, 0.15]
+
     def sample_grasp(self, obj_id: str) -> Iterator[Tuple[Grasp]]:
         """
-        Generate a grasp pose for an object.
+        Generate grasp poses for an object with varying clearance.
 
-        Currently yields a single top-down grasp. Execution uses
-        p.createConstraint (magic weld) so grasp geometry is not used —
-        this stream exists only to satisfy the planner's type constraints.
-        Expand to multiple orientations when execution uses real grasps.
+        Yields multiple top-down grasps at different heights above the
+        object center.  The lowest (0.05 m) places the EE close to the
+        object for a tight grasp; higher offsets (0.10, 0.15 m) give the
+        arm more room to avoid collisions with the table or adjacent
+        objects at the cost of a less secure grip (acceptable because
+        execution uses a constraint-based weld, not contact physics).
 
         PDDLStream declaration (see pddl/stream.pddl):
             (:stream sample-grasp
@@ -374,15 +433,19 @@ class BoxelStreams:
             obj_id: ID of the object to grasp
 
         Yields:
-            Tuples of (grasp,) for the object
+            Tuples of (grasp,) for the object — one per Z offset.
         """
-        self._grasp_counter += 1
-        grasp = Grasp(
-            position=np.array([0, 0, 0.05]),
-            orientation=self._euler_to_quat(0, np.pi, 0),
-            name=f"grasp_{obj_id}_{self._grasp_counter}"
-        )
-        yield (grasp,)
+        orn = self._euler_to_quat(0, np.pi, 0)
+        for z in self._GRASP_Z_OFFSETS:
+            self._grasp_counter += 1
+            grasp = Grasp(
+                position=np.array([0, 0, z]),
+                orientation=orn,
+                name=f"grasp_{obj_id}_{self._grasp_counter}"
+            )
+            logger.debug("sample_grasp: %s -> %s (z=%.2f)", obj_id,
+                         grasp.name, z)
+            yield (grasp,)
     
     def _euler_to_quat(self, roll: float, pitch: float, yaw: float) -> np.ndarray:
         """Convert Euler angles to quaternion [x, y, z, w]."""
@@ -412,6 +475,11 @@ class BoxelStreams:
     def plan_motion(self, q1: RobotConfig, q2: RobotConfig) -> Iterator[Tuple[Trajectory]]:
         """
         Plan collision-free motion between two configurations.
+
+        Collision checks respect ``ignored_body_ids`` carried by each
+        config (set by ``compute_kin_solution`` for pick/place poses).
+        This prevents the grasped object from blocking its own pick
+        motion.
 
         Strategy:
           1. If no robot is loaded (heuristic mode), fall back to linear
@@ -443,30 +511,60 @@ class BoxelStreams:
             return
 
         pc = self.physics_client
+        base_ignored = q1.ignored_body_ids | q2.ignored_body_ids
+        is_pick_place = bool(q1.ignored_body_ids or q2.ignored_body_ids)
 
-        if not is_config_collision_free(self.robot_id, q1.joint_positions, pc):
-            logger.warning("plan_motion: start config %s in collision", q1)
+        endpoint_ignored = base_ignored | self.support_body_ids if is_pick_place else base_ignored
+
+        # The Panda is mounted ON the table.  Its lower arm links overlap the
+        # table's collision geometry in PyBullet at rest, producing false
+        # positives on nearly every intermediate config.  For pick/place
+        # motions (where the arm necessarily operates at table level) we must
+        # include support surfaces in the path-planning ignored set as well.
+        # For pure transit motions with no grasped object this is not needed.
+        path_ignored = base_ignored | self.support_body_ids if is_pick_place else base_ignored
+
+        logger.debug("plan_motion: %s -> %s  endpoint_ignored=%s "
+                      "path_ignored=%s gripper_relax=%s",
+                      q1, q2,
+                      sorted(endpoint_ignored) if endpoint_ignored else '{}',
+                      sorted(path_ignored) if path_ignored != endpoint_ignored else '=',
+                      is_pick_place)
+
+        if not is_config_collision_free(self.robot_id, q1.joint_positions,
+                                        pc, endpoint_ignored,
+                                        allow_gripper_collisions=is_pick_place):
+            logger.warning("plan_motion: start config %s in collision "
+                           "(ignored=%s)", q1, sorted(endpoint_ignored))
             return
-        if not is_config_collision_free(self.robot_id, q2.joint_positions, pc):
-            logger.warning("plan_motion: goal config %s in collision", q2)
+        if not is_config_collision_free(self.robot_id, q2.joint_positions,
+                                        pc, endpoint_ignored,
+                                        allow_gripper_collisions=is_pick_place):
+            logger.warning("plan_motion: goal config %s in collision "
+                           "(ignored=%s)", q2, sorted(endpoint_ignored))
             return
 
         if is_path_collision_free(self.robot_id, q1.joint_positions,
                                   q2.joint_positions, pc,
-                                  n_checks=self.RRT_EDGE_CHECKS):
+                                  n_checks=self.RRT_EDGE_CHECKS,
+                                  ignored_bodies=path_ignored,
+                                  allow_gripper_collisions=is_pick_place):
             logger.info("plan_motion: direct path clear — linear trajectory")
             yield (self._linear_trajectory(q1, q2),)
             return
 
         logger.info("plan_motion: direct path blocked — running RRT-Connect")
-        path = self._rrt_connect(q1.joint_positions, q2.joint_positions)
+        path = self._rrt_connect(q1.joint_positions, q2.joint_positions,
+                                 path_ignored,
+                                 allow_gripper_collisions=is_pick_place)
 
         if path is None:
             logger.warning("plan_motion: RRT-Connect failed (%d iters)",
                            self.RRT_MAX_ITERATIONS)
             return
 
-        smoothed = self._smooth_path(path)
+        smoothed = self._smooth_path(path, path_ignored,
+                                     allow_gripper_collisions=is_pick_place)
         logger.info("plan_motion: RRT path %d wps -> smoothed %d wps",
                      len(path), len(smoothed))
 
@@ -527,7 +625,9 @@ class BoxelStreams:
 
     def _try_connect(self, nodes: List[np.ndarray],
                      parents: List[int],
-                     q_target: np.ndarray) -> Optional[int]:
+                     q_target: np.ndarray,
+                     ignored_bodies: frozenset = frozenset(),
+                     allow_gripper_collisions: bool = False) -> Optional[int]:
         """
         Greedily extend a tree toward *q_target* until it either reaches
         the target or hits a collision.  Returns the connecting node index,
@@ -539,7 +639,9 @@ class BoxelStreams:
             q_cur = nodes[cur_idx]
             q_new = self._steer(q_cur, q_target, self.RRT_STEP_SIZE)
             if not is_path_collision_free(self.robot_id, q_cur, q_new, pc,
-                                          self.RRT_EDGE_CHECKS):
+                                          self.RRT_EDGE_CHECKS,
+                                          ignored_bodies=ignored_bodies,
+                                          allow_gripper_collisions=allow_gripper_collisions):
                 return None
             new_idx = len(nodes)
             nodes.append(q_new)
@@ -560,7 +662,10 @@ class BoxelStreams:
         return path
 
     def _rrt_connect(self, q_start: np.ndarray,
-                     q_goal: np.ndarray) -> Optional[List[np.ndarray]]:
+                     q_goal: np.ndarray,
+                     ignored_bodies: frozenset = frozenset(),
+                     allow_gripper_collisions: bool = False
+                     ) -> Optional[List[np.ndarray]]:
         """
         Bidirectional RRT-Connect (Kuffner & LaValle, 2000).
 
@@ -581,6 +686,10 @@ class BoxelStreams:
         pc = self.physics_client
 
         for iteration in range(self.RRT_MAX_ITERATIONS):
+            if iteration > 0 and iteration % 500 == 0:
+                logger.debug("RRT-Connect: iter %d/%d  tree_a=%d  tree_b=%d",
+                             iteration, self.RRT_MAX_ITERATIONS,
+                             len(nodes_a), len(nodes_b))
             if random.random() < self.RRT_GOAL_BIAS:
                 q_rand = nodes_b[0].copy()
             else:
@@ -591,7 +700,9 @@ class BoxelStreams:
 
             if not is_path_collision_free(self.robot_id,
                                           nodes_a[near_idx], q_new, pc,
-                                          self.RRT_EDGE_CHECKS):
+                                          self.RRT_EDGE_CHECKS,
+                                          ignored_bodies=ignored_bodies,
+                                          allow_gripper_collisions=allow_gripper_collisions):
                 nodes_a, nodes_b = nodes_b, nodes_a
                 parents_a, parents_b = parents_b, parents_a
                 swapped = not swapped
@@ -601,7 +712,9 @@ class BoxelStreams:
             nodes_a.append(q_new)
             parents_a.append(near_idx)
 
-            connect_idx = self._try_connect(nodes_b, parents_b, q_new)
+            connect_idx = self._try_connect(nodes_b, parents_b, q_new,
+                                            ignored_bodies,
+                                            allow_gripper_collisions)
             if connect_idx is not None:
                 path_a = self._trace_path(nodes_a, parents_a, new_idx_a)
                 path_b = self._trace_path(nodes_b, parents_b, connect_idx)
@@ -621,7 +734,10 @@ class BoxelStreams:
 
     # ----- Shortcut smoothing ------------------------------------------------
 
-    def _smooth_path(self, path: List[np.ndarray]) -> List[np.ndarray]:
+    def _smooth_path(self, path: List[np.ndarray],
+                     ignored_bodies: frozenset = frozenset(),
+                     allow_gripper_collisions: bool = False
+                     ) -> List[np.ndarray]:
         """
         Random shortcut smoothing: pick two non-adjacent waypoints and
         replace the segment between them with a direct edge if that edge
@@ -637,18 +753,35 @@ class BoxelStreams:
             i = random.randint(0, len(smoothed) - 3)
             j = random.randint(i + 2, len(smoothed) - 1)
             if is_path_collision_free(self.robot_id, smoothed[i], smoothed[j],
-                                      pc, self.RRT_EDGE_CHECKS):
+                                      pc, self.RRT_EDGE_CHECKS,
+                                      ignored_bodies=ignored_bodies,
+                                      allow_gripper_collisions=allow_gripper_collisions):
                 smoothed = smoothed[:i + 1] + smoothed[j:]
         return smoothed
     
     # =========================================================================
     # STREAM: Compute IK for Pick/Place
     # =========================================================================
-    def compute_kin_solution(self, obj_id: str, boxel_id: str, 
+    def compute_kin_solution(self, obj_id: str, boxel_id: str,
                              grasp: Grasp) -> Iterator[Tuple[RobotConfig]]:
         """
-        Compute IK solution for picking object from boxel with grasp.
-        
+        Compute IK solutions for picking object from boxel with grasp.
+
+        Tries multiple IK seeds to produce diverse arm configurations.
+        Each successful config carries ``ignored_body_ids`` containing the
+        PyBullet body ID of the grasped object.  ``plan_motion()`` uses this
+        to exclude the grasped body from collision checks — necessary because
+        the gripper must be in contact with the object at the pick pose.
+
+        Collision validation is deliberately NOT done here.  In a TAMP plan,
+        earlier actions may relocate objects that currently block the target
+        boxel.  Checking collisions against the static planning-time world
+        would reject configs that are valid at execution time (e.g. picking
+        a target from a shadow after the occluder has been moved).
+        ``plan_motion()`` handles collision checking with the union of
+        ignored bodies from both endpoints, which naturally covers objects
+        moved earlier in the plan.
+
         PDDLStream declaration (see pddl/stream.pddl):
             (:stream compute-kin
               :inputs (?o ?b ?g)
@@ -656,27 +789,61 @@ class BoxelStreams:
               :outputs (?q)
               :certified (and (Config ?q) (kin_solution ?o ?b ?g ?q)
                               (config_for_boxel ?q ?b)))
-        
+
         Args:
             obj_id: Object to grasp
             boxel_id: Boxel containing object
             grasp: Grasp to use
-            
+
         Yields:
-            Tuples of (config,) for grasping
+            Tuples of (config,) for grasping — one per successful IK seed.
         """
         boxel = self.registry.get_boxel(boxel_id)
         if boxel is None:
             return
-        
-        # Target end-effector position: boxel center + grasp offset
+
         target_pos = boxel.center + grasp.position
-        
-        # Compute IK
-        config = self._compute_sensing_ik(target_pos, boxel.center)
-        
-        if config is not None:
+
+        direction = boxel.center - target_pos
+        direction = direction / (np.linalg.norm(direction) + 1e-8)
+        ee_orn = self._direction_to_quat(-direction)
+
+        body_id = self._resolve_body_id(obj_id)
+        ignored = frozenset({body_id}) if body_id is not None else frozenset()
+
+        if self.robot_id is None:
+            config = self._heuristic_ik(target_pos, boxel.center)
+            if config is not None:
+                config.ignored_body_ids = ignored
+                self._config_counter += 1
+                config.name = f"q_pick_{obj_id}_{self._config_counter}"
+                yield (config,)
+            return
+
+        seen = set()
+        yielded = 0
+        for seed_idx, seed in enumerate(self._ik_seeds()):
+            config = self._pybullet_ik(target_pos, ee_orn, seed=seed)
+            if config is None:
+                continue
+
+            sig = tuple(np.round(config.joint_positions, 3))
+            if sig in seen:
+                continue
+            seen.add(sig)
+
+            config.ignored_body_ids = ignored
             self._config_counter += 1
             config.name = f"q_pick_{obj_id}_{self._config_counter}"
+            logger.debug("compute_kin: %s at %s -> %s  "
+                         "ee_target=%s ignored_body=%s seed=%d",
+                         obj_id, boxel_id, config.name,
+                         target_pos.tolist(), body_id, seed_idx)
             yield (config,)
+            yielded += 1
+
+        if yielded == 0:
+            logger.debug("compute_kin: all %d IK seeds failed for %s at %s "
+                         "(target_pos=%s)", self.IK_NUM_SEEDS, obj_id,
+                         boxel_id, target_pos.tolist())
     
