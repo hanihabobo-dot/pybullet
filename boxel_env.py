@@ -371,6 +371,14 @@ class BoxelTestEnv:
     def oracle_detect_objects(self, check_occlusion: bool = True) -> Tuple[List[str], Dict[str, Tuple[np.ndarray, np.ndarray]]]:
         """
         Oracle function to detect visible objects and their poses.
+
+        Visibility is determined by casting rays from the camera to the
+        8 corners of each object's AABB.  An object is visible if ANY ray
+        reaches it (hit body == object body).  This catches partial
+        visibility where an object edge sticks out from behind an occluder.
+
+        Only used for initial scene observation — the sensing action uses
+        ``sense_shadow_raycasting()`` with its own ray grid.
         
         Returns:
             Tuple of (visible object names, dict of all object poses)
@@ -391,11 +399,20 @@ class BoxelTestEnv:
             
             is_visible = True
             if check_occlusion:
-                ray_result = p.rayTest(self.camera_position, position)
-                if len(ray_result) > 0:
-                    hit_id, _, hit_fraction = ray_result[0][0], ray_result[0][1], ray_result[0][2]
-                    if hit_id != obj_info.object_id and hit_fraction < 0.95:
-                        is_visible = False
+                aabb_min, aabb_max = p.getAABB(obj_info.object_id)
+                ray_targets = []
+                for x in (aabb_min[0], aabb_max[0]):
+                    for y in (aabb_min[1], aabb_max[1]):
+                        for z in (aabb_min[2], aabb_max[2]):
+                            ray_targets.append([x, y, z])
+
+                cam = self.camera_position.tolist()
+                results = p.rayTestBatch(
+                    [cam] * len(ray_targets), ray_targets
+                )
+                is_visible = any(
+                    r[0] == obj_info.object_id for r in results
+                )
             
             obj_info.is_visible = is_visible
             if is_visible:
