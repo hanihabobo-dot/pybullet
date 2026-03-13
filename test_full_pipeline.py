@@ -41,7 +41,7 @@ from boxel_data import BoxelRegistry, BoxelType, create_boxel_registry_from_boxe
 from cell_merger import merge_free_space_cells
 from pddlstream_planner import PDDLStreamPlanner
 from streams import RobotConfig
-from robot_utils import (END_EFFECTOR_LINK, solve_ik,
+from robot_utils import (END_EFFECTOR_LINK, RenderingLock, solve_ik,
                          move_robot_smooth, open_gripper, close_gripper)
 from run_logger import RunLogger
 
@@ -263,16 +263,19 @@ def main(gui=True, run_logger=None):
             print("ERROR: Searched all shadows but target not found!")
             break
         
-        # Call PDDLStream to plan with current belief state
-        plan = planner.plan(
-            target_objects=[target_name],
-            goal=('holding', target_name),
-            current_config=current_config,
-            known_empty_shadows=known_empty,
-            moved_occluders=dict(belief.occluders_moved),
-            max_time=120.0,
-            verbose=False  # Quiet for replanning
-        )
+        # Disable rendering for the entire planning phase (audit #60).
+        # All IK and collision-check calls inside planner.plan() nest
+        # harmlessly via RenderingLock's reference count.
+        with RenderingLock(env.client_id):
+            plan = planner.plan(
+                target_objects=[target_name],
+                goal=('holding', target_name),
+                current_config=current_config,
+                known_empty_shadows=known_empty,
+                moved_occluders=dict(belief.occluders_moved),
+                max_time=120.0,
+                verbose=False
+            )
         
         if plan is None:
             exit_reason = "planner_failed"

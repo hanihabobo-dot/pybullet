@@ -26,8 +26,8 @@ logger = logging.getLogger(__name__)
 from boxel_data import BoxelRegistry, BoxelData, BoxelType
 from robot_utils import (ARM_JOINT_INDICES, END_EFFECTOR_LINK, FINGER_JOINTS,
                          JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH, JOINT_RANGES,
-                         REST_POSES, is_config_collision_free,
-                         is_path_collision_free)
+                         REST_POSES, RenderingLock,
+                         is_config_collision_free, is_path_collision_free)
 
 
 @dataclass
@@ -238,57 +238,54 @@ class BoxelStreams:
             seed = REST_POSES
         saved_joints = None
         pc = self.physics_client
-        p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0,
-                                   physicsClientId=pc)
-        try:
-            saved_joints = [
-                p.getJointState(self.robot_id, i,
-                                physicsClientId=pc)[0]
-                for i in ARM_JOINT_INDICES
-            ]
+        with RenderingLock(pc):
+            try:
+                saved_joints = [
+                    p.getJointState(self.robot_id, i,
+                                    physicsClientId=pc)[0]
+                    for i in ARM_JOINT_INDICES
+                ]
 
-            for i, angle in zip(ARM_JOINT_INDICES, seed):
-                p.resetJointState(self.robot_id, i, angle,
-                                  physicsClientId=pc)
-
-            joint_positions = p.calculateInverseKinematics(
-                bodyUniqueId=self.robot_id,
-                endEffectorLinkIndex=END_EFFECTOR_LINK,
-                targetPosition=ee_pos.tolist(),
-                targetOrientation=ee_orn.tolist(),
-                lowerLimits=JOINT_LIMITS_LOW.tolist(),
-                upperLimits=JOINT_LIMITS_HIGH.tolist(),
-                jointRanges=JOINT_RANGES.tolist(),
-                restPoses=list(seed),
-                maxNumIterations=self.ik_max_iterations,
-                residualThreshold=self.ik_residual_threshold,
-                physicsClientId=pc
-            )
-
-            if joint_positions is None or len(joint_positions) < 7:
-                return None
-
-            arm_joints = np.array(joint_positions[:7])
-
-            if np.any(arm_joints < JOINT_LIMITS_LOW - 0.1) or \
-               np.any(arm_joints > JOINT_LIMITS_HIGH + 0.1):
-                return None
-
-            arm_joints = np.clip(arm_joints, JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH)
-
-            return RobotConfig(joint_positions=arm_joints)
-
-        except Exception as e:
-            logger.error("IK failed for pos=%s: %s", ee_pos.tolist(), e)
-            return None
-
-        finally:
-            if saved_joints is not None:
-                for i, angle in zip(ARM_JOINT_INDICES, saved_joints):
+                for i, angle in zip(ARM_JOINT_INDICES, seed):
                     p.resetJointState(self.robot_id, i, angle,
                                       physicsClientId=pc)
-            p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1,
-                                       physicsClientId=pc)
+
+                joint_positions = p.calculateInverseKinematics(
+                    bodyUniqueId=self.robot_id,
+                    endEffectorLinkIndex=END_EFFECTOR_LINK,
+                    targetPosition=ee_pos.tolist(),
+                    targetOrientation=ee_orn.tolist(),
+                    lowerLimits=JOINT_LIMITS_LOW.tolist(),
+                    upperLimits=JOINT_LIMITS_HIGH.tolist(),
+                    jointRanges=JOINT_RANGES.tolist(),
+                    restPoses=list(seed),
+                    maxNumIterations=self.ik_max_iterations,
+                    residualThreshold=self.ik_residual_threshold,
+                    physicsClientId=pc
+                )
+
+                if joint_positions is None or len(joint_positions) < 7:
+                    return None
+
+                arm_joints = np.array(joint_positions[:7])
+
+                if np.any(arm_joints < JOINT_LIMITS_LOW - 0.1) or \
+                   np.any(arm_joints > JOINT_LIMITS_HIGH + 0.1):
+                    return None
+
+                arm_joints = np.clip(arm_joints, JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH)
+
+                return RobotConfig(joint_positions=arm_joints)
+
+            except Exception as e:
+                logger.error("IK failed for pos=%s: %s", ee_pos.tolist(), e)
+                return None
+
+            finally:
+                if saved_joints is not None:
+                    for i, angle in zip(ARM_JOINT_INDICES, saved_joints):
+                        p.resetJointState(self.robot_id, i, angle,
+                                          physicsClientId=pc)
 
     def _ik_seeds(self):
         """Yield IK seed configurations: REST_POSES first, then perturbations."""
