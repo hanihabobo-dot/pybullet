@@ -144,7 +144,7 @@ def is_path_collision_free(robot_id: int, q_start, q_end,
 # =============================================================================
 
 def solve_ik(robot_id: int, target_pos: np.ndarray,
-             target_orn=None, physics_client: int = 0) -> np.ndarray:
+             target_orn=None, physics_client: int = 0):
     """
     Null-space IK with rest-pose seed for consistent results.
 
@@ -154,9 +154,9 @@ def solve_ik(robot_id: int, target_pos: np.ndarray,
     independent of where execution left the arm — critical for
     replanning after the robot has moved.
 
-    Uses the same null-space parameters and seed-reset strategy as
-    BoxelStreams._pybullet_ik() in streams.py, so execution IK
-    matches planning IK.
+    Applies the same validation as ``BoxelStreams._pybullet_ik()`` in
+    streams.py: null-check, joint-limit check (0.1 rad tolerance), and
+    clipping.  Returns ``None`` on failure so callers can handle it.
 
     Args:
         robot_id: PyBullet body ID of the robot.
@@ -167,7 +167,7 @@ def solve_ik(robot_id: int, target_pos: np.ndarray,
         physics_client: PyBullet physics client ID.
 
     Returns:
-        Array of 7 joint angles.
+        Array of 7 joint angles, or ``None`` if IK failed.
     """
     if target_orn is None:
         target_orn = p.getQuaternionFromEuler([0, np.pi, 0])
@@ -183,7 +183,7 @@ def solve_ik(robot_id: int, target_pos: np.ndarray,
             p.resetJointState(robot_id, i, angle,
                               physicsClientId=physics_client)
 
-        joints = p.calculateInverseKinematics(
+        joint_positions = p.calculateInverseKinematics(
             robot_id, END_EFFECTOR_LINK,
             target_pos.tolist(), orn_list,
             lowerLimits=JOINT_LIMITS_LOW.tolist(),
@@ -193,8 +193,21 @@ def solve_ik(robot_id: int, target_pos: np.ndarray,
             maxNumIterations=100,
             residualThreshold=1e-4,
             physicsClientId=physics_client,
-        )[:7]
-        return np.array(joints)
+        )
+
+        if joint_positions is None or len(joint_positions) < 7:
+            return None
+
+        arm_joints = np.array(joint_positions[:7])
+
+        if np.any(arm_joints < JOINT_LIMITS_LOW - 0.1) or \
+           np.any(arm_joints > JOINT_LIMITS_HIGH + 0.1):
+            return None
+
+        return np.clip(arm_joints, JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH)
+
+    except Exception:
+        return None
     finally:
         for i, angle in zip(ARM_JOINT_INDICES, saved):
             p.resetJointState(robot_id, i, angle,

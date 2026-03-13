@@ -505,6 +505,14 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui):
     approach_joints = solve_ik(robot_id, approach_ee, grasp.orientation)
     lift_joints = solve_ik(robot_id, lift_ee, grasp.orientation)
 
+    if approach_joints is None or lift_joints is None:
+        print(f"    WARNING: IK failed for pick waypoints of {obj_name}, "
+              f"falling back to plan config only")
+        approach_joints = approach_joints if approach_joints is not None \
+            else config.joint_positions
+        lift_joints = lift_joints if lift_joints is not None \
+            else config.joint_positions
+
     move_robot_smooth(robot_id, approach_joints, gui)
     open_gripper(robot_id, gui)
 
@@ -554,6 +562,14 @@ def execute_place(robot_id, env, obj_name, place_pos, grasp, config,
 
     approach_joints = solve_ik(robot_id, approach_ee, grasp.orientation)
     retreat_joints = solve_ik(robot_id, retreat_ee, grasp.orientation)
+
+    if approach_joints is None or retreat_joints is None:
+        print(f"    WARNING: IK failed for place waypoints of {obj_name}, "
+              f"falling back to plan config only")
+        approach_joints = approach_joints if approach_joints is not None \
+            else config.joint_positions
+        retreat_joints = retreat_joints if retreat_joints is not None \
+            else config.joint_positions
 
     move_robot_smooth(robot_id, approach_joints, gui)
 

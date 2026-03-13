@@ -605,10 +605,13 @@ class BoxelStreams:
             if connect_idx is not None:
                 path_a = self._trace_path(nodes_a, parents_a, new_idx_a)
                 path_b = self._trace_path(nodes_b, parents_b, connect_idx)
-                path_b.reverse()
                 if swapped:
+                    # tree_a is the goal tree, tree_b is the start tree
+                    path_a.reverse()
                     full = path_b + path_a
                 else:
+                    # tree_a is the start tree, tree_b is the goal tree
+                    path_b.reverse()
                     full = path_a + path_b
                 return full
 
