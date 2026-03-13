@@ -42,7 +42,7 @@ from boxel_data import BoxelRegistry, BoxelType, create_boxel_registry_from_boxe
 from cell_merger import merge_free_space_cells
 from pddlstream_planner import PDDLStreamPlanner
 from streams import RobotConfig
-from robot_utils import (END_EFFECTOR_LINK, move_robot_to_pos,
+from robot_utils import (END_EFFECTOR_LINK, solve_ik,
                          move_robot_smooth, open_gripper, close_gripper)
 
 
@@ -327,7 +327,8 @@ def main(gui=True):
                     print(f"    ERROR: Cannot resolve PyBullet object for '{obj_str}'")
                     break
 
-                grasp_constraint_id = execute_pick(robot_id, env, pick_obj_name, pick_pos, gui)
+                grasp_constraint_id = execute_pick(robot_id, env, pick_obj_name, pick_pos,
+                                                   grasp, config, gui)
                 current_config = config
                 print(f"    *** {pick_obj_name} PICKED UP! ***")
 
@@ -345,7 +346,8 @@ def main(gui=True):
                     print(f"    ERROR: Cannot resolve position for boxel '{boxel_id_str}'")
                     break
 
-                execute_place(robot_id, env, obj_str, place_pos, grasp_constraint_id, gui)
+                execute_place(robot_id, env, obj_str, place_pos, grasp, config,
+                              grasp_constraint_id, gui)
                 grasp_constraint_id = None
 
                 env.update_object_positions()
@@ -464,17 +466,25 @@ def sense_shadow_raycasting(camera_pos, shadow_boxel, target_pybullet_id, occlud
     return "clear_but_empty", 0.0
 
 
-def execute_pick(robot_id, env, obj_name, obj_pos, gui):
+def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui):
     """
-    Execute pick action: approach, grasp, and lift an object.
+    Execute pick action using the plan's grasp pose and IK-solved config.
 
-    Works for any object in env.objects (targets, occluders, etc.).
+    Waypoints are derived from the grasp relative to the object's actual
+    position — not hardcoded offsets.  The contact waypoint uses the
+    plan's IK config directly; approach and lift compute IK from the
+    grasp-derived end-effector positions.
+
+    The constraint-based attachment (p.createConstraint) is an accepted
+    simulation simplification — see audit #7 part B.
 
     Args:
         robot_id: PyBullet body ID of the robot
         env: BoxelTestEnv instance
         obj_name: Name key in env.objects (e.g. "target_1", "occluder_2")
-        obj_pos: Current object position [x, y, z]
+        obj_pos: Current object position [x, y, z] (from PyBullet)
+        grasp: Grasp object from the plan (position, orientation)
+        config: RobotConfig from the plan's compute_kin_solution (contact)
         gui: Whether GUI is active (for step_simulation timing)
 
     Returns:
@@ -482,46 +492,70 @@ def execute_pick(robot_id, env, obj_name, obj_pos, gui):
         store this and call p.removeConstraint() when placing the object
         or resetting the environment.
     """
-    move_robot_to_pos(robot_id, obj_pos + np.array([0, 0, 0.15]), gui)
+    approach_height = 0.10
+    lift_height = 0.25
+    approach_dir = np.array([0.0, 0.0, 1.0])
 
+    contact_ee = obj_pos + grasp.position
+    approach_ee = contact_ee + approach_dir * approach_height
+    lift_ee = contact_ee + approach_dir * lift_height
+
+    approach_joints = solve_ik(robot_id, approach_ee, grasp.orientation)
+    lift_joints = solve_ik(robot_id, lift_ee, grasp.orientation)
+
+    move_robot_smooth(robot_id, approach_joints, gui)
     open_gripper(robot_id, gui)
 
-    move_robot_to_pos(robot_id, obj_pos + np.array([0, 0, 0.05]), gui)
-
+    move_robot_smooth(robot_id, config.joint_positions, gui)
     close_gripper(robot_id, gui)
 
     obj_id = env.objects[obj_name].object_id
     grasp_constraint_id = p.createConstraint(
         robot_id, END_EFFECTOR_LINK, obj_id, -1,
-        p.JOINT_FIXED, [0,0,0], [0,0,0.05], [0,0,0]
+        p.JOINT_FIXED, [0, 0, 0], grasp.position.tolist(), [0, 0, 0]
     )
 
-    move_robot_to_pos(robot_id, obj_pos + np.array([0, 0, 0.3]), gui)
+    move_robot_smooth(robot_id, lift_joints, gui)
 
     return grasp_constraint_id
 
 
-def execute_place(robot_id, env, obj_name, place_pos, grasp_constraint_id, gui):
+def execute_place(robot_id, env, obj_name, place_pos, grasp, config,
+                   grasp_constraint_id, gui):
     """
-    Execute place action: lower held object to placement position and release.
+    Execute place action using the plan's grasp pose and IK-solved config.
 
-    Mirrors execute_pick() in reverse: move above destination, lower to
-    placement height, open gripper, remove constraint, lift arm clear.
+    Mirrors execute_pick() in reverse: approach above destination, lower
+    to contact (plan config), release, retreat.  Waypoints are derived
+    from the grasp relative to the destination boxel center.
 
     Args:
         robot_id: PyBullet body ID of the robot
         env: BoxelTestEnv instance
         obj_name: Name of the object being placed (for logging)
         place_pos: Destination position [x, y, z] (boxel center)
+        grasp: Grasp object from the plan (position, orientation)
+        config: RobotConfig from the plan's compute_kin_solution (contact)
         grasp_constraint_id: PyBullet constraint ID from execute_pick()
         gui: Whether GUI is active (for step_simulation timing)
 
     Returns:
         None (constraint is released inside this function)
     """
-    move_robot_to_pos(robot_id, place_pos + np.array([0, 0, 0.15]), gui)
+    approach_height = 0.10
+    retreat_height = 0.25
+    approach_dir = np.array([0.0, 0.0, 1.0])
 
-    move_robot_to_pos(robot_id, place_pos + np.array([0, 0, 0.05]), gui)
+    contact_ee = place_pos + grasp.position
+    approach_ee = contact_ee + approach_dir * approach_height
+    retreat_ee = contact_ee + approach_dir * retreat_height
+
+    approach_joints = solve_ik(robot_id, approach_ee, grasp.orientation)
+    retreat_joints = solve_ik(robot_id, retreat_ee, grasp.orientation)
+
+    move_robot_smooth(robot_id, approach_joints, gui)
+
+    move_robot_smooth(robot_id, config.joint_positions, gui)
 
     open_gripper(robot_id, gui)
 
@@ -531,7 +565,7 @@ def execute_place(robot_id, env, obj_name, place_pos, grasp_constraint_id, gui):
     for _ in range(30):
         p.stepSimulation()
 
-    move_robot_to_pos(robot_id, place_pos + np.array([0, 0, 0.3]), gui)
+    move_robot_smooth(robot_id, retreat_joints, gui)
 
 
 # compute_push_displacement() removed (#53): push superseded by pick-and-place.

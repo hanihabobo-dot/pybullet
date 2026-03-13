@@ -61,45 +61,38 @@ Fixed: Move execution now calls move_robot_smooth(robot_id, q2.joint_positions, 
        because execute_pick() and execute_place() still use them (#7).
 
 ================================================================================
-7. PICK/PLACE — HARDCODED OFFSETS, IGNORES PLAN GRASP, MAGIC ATTACHMENT
+7. PICK/PLACE — HARDCODED OFFSETS, IGNORES PLAN GRASP, MAGIC ATTACHMENT  [DONE]
 ================================================================================
 Where: test_full_pipeline.py execute_pick(), execute_place()
-What:  Two problems:
 
-       (A) Hardcoded offsets, plan data ignored (same pattern as #52):
-       execute_pick() uses hardcoded Z offsets from the object position:
-         +0.15 Z (move above), +0.05 Z (lower to grasp), +0.3 Z (lift)
-       execute_place() uses the same offsets for the destination boxel.
-       The grasp and kin_solution parameters from the plan are completely
-       ignored. IK is recomputed from scratch via move_robot_to_pos().
-       The plan carries real geometric data (grasp pose from sample_grasp,
-       IK-solved config from compute_kin_solution) but execution throws
-       it all away.
+Fixed: Part A resolved — plan's grasp + config now drive execution:
 
-       This is CRITICAL because pick/place are used for both targets AND
-       occluders (after #53). Every occluder relocation and every target
-       pickup goes through these functions.
+       execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui):
+         Three grasp-derived waypoints replace hardcoded offsets:
+           - contact_ee = obj_pos + grasp.position (plan's IK config)
+           - approach_ee = contact_ee + [0,0,0.10] (IK via solve_ik)
+           - lift_ee = contact_ee + [0,0,0.25] (IK via solve_ik)
+         Contact uses move_robot_smooth(config.joint_positions) — the
+         plan's IK-solved config, not re-derived IK. Approach and lift
+         use solve_ik() with the grasp's orientation, so all waypoints
+         adapt when sample_grasp is expanded to non-top-down grasps.
+         p.createConstraint now uses grasp.position for the parent-frame
+         offset (was hardcoded [0,0,0.05]).
 
-       (B) Grasping is a magic weld, not real contact:
-       execute_pick() attaches the object to the gripper via
-       p.createConstraint() — a rigid fixed joint that welds the object
-       to the end-effector. The gripper open/close calls are cosmetic;
-       the object sticks regardless of finger position or contact forces.
-       execute_place() releases the weld via p.removeConstraint().
-       There is no friction, no contact detection, no force closure.
-       Objects cannot slip or be dropped.
+       execute_place(robot_id, env, obj_name, place_pos, grasp, config,
+                     grasp_constraint_id, gui):
+         Same pattern: approach, contact (plan config), retreat — all
+         derived from grasp + place_pos.
 
-Fix:   (1) Move robot to the plan's kin_solution config using
-       move_robot_smooth() — not hardcoded Cartesian offsets.
-       (2) Use the grasp pose from the plan to compute approach,
-       contact, and lift waypoints relative to the object's actual
-       position.
-       (3) The constraint-based attachment (p.createConstraint) is
-       acceptable as a simulation simplification for now. Physics-based
-       grasping with friction and contact forces is a separate
-       improvement (not blocking other work).
-       (4) Once this is done, compute_ik() and move_robot_to_pos() in
-       robot_utils.py become fully dead code (see #31 note in archive).
+       robot_utils.py cleanup:
+         - compute_ik() removed (was simpler IK without seed reset)
+         - move_robot_to_pos() removed (was compute_ik + move_robot_smooth)
+         - solve_ik() added: null-space IK with rest-pose seed reset,
+           matching BoxelStreams._pybullet_ik() in streams.py. Used for
+           approach/lift/retreat waypoints only — contact uses plan config.
+
+       Part B (constraint-based grasping) accepted as simulation
+       simplification — unchanged.
 
 ================================================================================
 44. SHADOWS NOT RECOMPUTED AFTER OCCLUDER RELOCATION — STALE REGISTRY
@@ -250,11 +243,11 @@ The PLANNING ARCHITECTURE models spatial capabilities:
   - Sensing uses fixed camera correctly (#36 — done)
   - KIF fluents for partial observability are sound
 
-The EXECUTION partially follows the plan:
+The EXECUTION follows the plan:
   - Move execution uses the plan's IK-solved config (#52 — done)
-  - Pick execution ignores plan grasp + kin_solution (#7)
-  - Place execution exists (#53 — done) but uses same re-derived IK (#7)
-  - move_robot_to_pos() still used in pick/place — becomes dead code after #7
+  - Pick execution uses plan grasp + kin_solution (#7 — done)
+  - Place execution uses plan grasp + kin_solution (#7 — done)
+  - move_robot_to_pos() and compute_ik() removed — solve_ik() replaces them
 
 Environment note: the default shell is PowerShell (not bash). Heredocs,
   `&&` chaining, and `cd /d` do not work. See .cursor/rules/powershell-shell.mdc.
@@ -265,12 +258,11 @@ Verification logging workflow (for non-truncated planner/execution traces):
   - Batch runs can be captured under logs/phase3_batch/run_*.log.
 
 Priority order for remaining fixes:
-  1. Pick/place execution uses plan grasp + kin_solution (#7)
-  2. Fix stale registry after occluder relocation (#44)
-  3. Add collision-free motion planning (#5)
-  4. Multi-ray visibility oracle (#54)
-  5. Parameterized scene generation (#55)
-  6. Remove dead computation (#56)
+  1. Fix stale registry after occluder relocation (#44)
+  2. Add collision-free motion planning (#5)
+  3. Multi-ray visibility oracle (#54)
+  4. Parameterized scene generation (#55)
+  5. Remove dead computation (#56)
 
 Proposal alignment work (PA-1 through PA-4) is tracked separately above
 and must be addressed before thesis submission.

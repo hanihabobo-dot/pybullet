@@ -7,7 +7,6 @@ here once. Every module that needs robot parameters imports from this file.
 
 import numpy as np
 import pybullet as p
-from typing import Optional
 
 
 # =============================================================================
@@ -33,34 +32,56 @@ REST_POSES = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]
 # Low-level control utilities
 # =============================================================================
 
-def compute_ik(robot_id: int, target_pos: np.ndarray,
-               target_orn=None) -> tuple:
+def solve_ik(robot_id: int, target_pos: np.ndarray,
+             target_orn=None) -> np.ndarray:
     """
-    Compute inverse kinematics for a target end-effector pose.
+    Null-space IK with rest-pose seed for consistent results.
 
-    Uses PyBullet's null-space IK with the Panda joint limits and rest
-    poses so solutions stay near the neutral configuration.
+    Saves the robot's current joint state, resets to REST_POSES to give
+    the iterative solver a deterministic seed, runs IK with null-space
+    bias, then restores the original state.  This makes results
+    independent of where execution left the arm — critical for
+    replanning after the robot has moved.
+
+    Uses the same null-space parameters and seed-reset strategy as
+    BoxelStreams._pybullet_ik() in streams.py, so execution IK
+    matches planning IK.
 
     Args:
         robot_id: PyBullet body ID of the robot.
         target_pos: Desired end-effector position [x, y, z].
-        target_orn: Desired orientation quaternion [x, y, z, w].
+        target_orn: Desired orientation as quaternion [x, y, z, w] or
+                    any sequence accepted by PyBullet.
                     Defaults to gripper pointing straight down.
 
     Returns:
-        Tuple of 7 joint angles.
+        Array of 7 joint angles.
     """
     if target_orn is None:
         target_orn = p.getQuaternionFromEuler([0, np.pi, 0])
 
-    joints = p.calculateInverseKinematics(
-        robot_id, END_EFFECTOR_LINK, target_pos.tolist(), target_orn,
-        lowerLimits=JOINT_LIMITS_LOW.tolist(),
-        upperLimits=JOINT_LIMITS_HIGH.tolist(),
-        jointRanges=JOINT_RANGES.tolist(),
-        restPoses=REST_POSES
-    )[:7]
-    return joints
+    orn_list = (target_orn.tolist() if isinstance(target_orn, np.ndarray)
+                else list(target_orn))
+
+    saved = [p.getJointState(robot_id, i)[0] for i in ARM_JOINT_INDICES]
+    try:
+        for i, angle in zip(ARM_JOINT_INDICES, REST_POSES):
+            p.resetJointState(robot_id, i, angle)
+
+        joints = p.calculateInverseKinematics(
+            robot_id, END_EFFECTOR_LINK,
+            target_pos.tolist(), orn_list,
+            lowerLimits=JOINT_LIMITS_LOW.tolist(),
+            upperLimits=JOINT_LIMITS_HIGH.tolist(),
+            jointRanges=JOINT_RANGES.tolist(),
+            restPoses=REST_POSES,
+            maxNumIterations=100,
+            residualThreshold=1e-4,
+        )[:7]
+        return np.array(joints)
+    finally:
+        for i, angle in zip(ARM_JOINT_INDICES, saved):
+            p.resetJointState(robot_id, i, angle)
 
 
 def move_robot_smooth(robot_id: int, target_joints, gui: bool = True,
@@ -87,20 +108,6 @@ def move_robot_smooth(robot_id: int, target_joints, gui: bool = True,
         p.stepSimulation()
         if gui:
             time.sleep(1 / 120)
-
-
-def move_robot_to_pos(robot_id: int, target_pos: np.ndarray,
-                      gui: bool = True):
-    """
-    Move the robot end-effector to *target_pos* (IK then smooth motion).
-
-    Args:
-        robot_id: PyBullet body ID of the robot.
-        target_pos: Desired end-effector position [x, y, z].
-        gui: If True, animate at ~120 Hz.
-    """
-    joints = compute_ik(robot_id, target_pos)
-    move_robot_smooth(robot_id, joints, gui)
 
 
 def open_gripper(robot_id: int, gui: bool = True):
