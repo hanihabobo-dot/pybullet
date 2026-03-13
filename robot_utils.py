@@ -91,12 +91,14 @@ def is_config_collision_free(robot_id: int, joint_positions,
     if ignored_bodies is None:
         ignored_bodies = frozenset()
 
-    saved = [p.getJointState(robot_id, i, physicsClientId=physics_client)[0]
-             for i in ARM_JOINT_INDICES]
+    saved = None
     if not _rendering_managed:
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0,
                                    physicsClientId=physics_client)
     try:
+        saved = [p.getJointState(robot_id, i, physicsClientId=physics_client)[0]
+                 for i in ARM_JOINT_INDICES]
+
         for i, angle in zip(ARM_JOINT_INDICES, joint_positions):
             p.resetJointState(robot_id, i, angle,
                               physicsClientId=physics_client)
@@ -136,9 +138,10 @@ def is_config_collision_free(robot_id: int, joint_positions,
 
         return True
     finally:
-        for i, angle in zip(ARM_JOINT_INDICES, saved):
-            p.resetJointState(robot_id, i, angle,
-                              physicsClientId=physics_client)
+        if saved is not None:
+            for i, angle in zip(ARM_JOINT_INDICES, saved):
+                p.resetJointState(robot_id, i, angle,
+                                  physicsClientId=physics_client)
         if not _rendering_managed:
             p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1,
                                        physicsClientId=physics_client)
