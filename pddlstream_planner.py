@@ -10,8 +10,7 @@ Usage (from WSL):
     export PYTHONPATH=/mnt/c/Users/HaniAlassiriAlhabbou/git/pddlstream_lib
     python3 pddlstream_planner.py
 
-PDDLStream path is resolved automatically via config.py
-(PROJECT_ROOT/../pddlstream_lib). No manual PYTHONPATH export needed.
+PDDLStream path is added to sys.path via the hardcoded PDDLSTREAM_PATH constant below.
 """
 
 import sys

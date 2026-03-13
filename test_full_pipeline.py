@@ -19,8 +19,7 @@ Run from WSL:
 Or with no GUI (for testing):
     python3 test_full_pipeline.py --no-gui
 
-PDDLStream path is resolved automatically via config.py
-(PROJECT_ROOT/../pddlstream_lib). No manual PYTHONPATH export needed.
+PDDLStream path is added to sys.path via the hardcoded PDDLSTREAM_PATH constant below.
 """
 
 import sys
