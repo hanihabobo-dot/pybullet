@@ -29,14 +29,18 @@ class FreeSpaceGenerator:
         
         Args:
             table_surface_height: Z height of the table surface
-            min_resolution: Minimum boxel size in meters (default 3cm)
+            min_resolution: Minimum boxel size in meters.  0.035 m (3.5 cm) is
+                half the target object size (0.08 m) — fine enough to place
+                targets between objects, coarse enough to keep the octree small.
             table_x_range: (min, max) X bounds of the table surface
             table_y_range: (min, max) Y bounds of the table surface
         """
         self.table_surface_height = table_surface_height
         self.min_resolution = min_resolution
         
-        # Workspace bounds (volume above table)
+        # Workspace volume above table.  0.5 m height covers the tallest
+        # objects (occluders at 0.15 m) with ample margin for the arm to
+        # manoeuvre above them.
         self.ws_min = np.array([table_x_range[0], table_y_range[0], table_surface_height])
         self.ws_max = np.array([table_x_range[1], table_y_range[1], table_surface_height + 0.5])
         

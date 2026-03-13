@@ -62,14 +62,6 @@ class OctreeNode:
     def max_bound(self):
         return self.center + self.extent
 
-    def intersect(self, other_min: np.ndarray, other_max: np.ndarray) -> bool:
-        """Check AABB intersection."""
-        return np.all(self.min_bound <= other_max) and np.all(self.max_bound >= other_min)
-
-    def contains(self, other_min: np.ndarray, other_max: np.ndarray) -> bool:
-        """Check if this node fully contains the other AABB."""
-        return np.all(self.min_bound <= other_min) and np.all(self.max_bound >= other_max)
-
 
 @dataclass
 class CameraObservation:

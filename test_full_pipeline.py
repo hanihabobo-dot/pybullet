@@ -106,7 +106,8 @@ def main(gui=True, run_logger=None):
     robot_id = env.objects["robot"].object_id
     print(f"Robot ID: {robot_id}")
     
-    # Let settle (minimal)
+    # Let settle: 50 steps at 240 Hz ≈ 0.2 s.  Enough for the loaded
+    # Panda + cubes to reach static equilibrium after spawning.
     for _ in range(50):
         env.step_simulation()
     env.update_object_positions()
@@ -237,9 +238,13 @@ def main(gui=True, run_logger=None):
     boxel_centers = {b.id: b.center for b in registry.boxels.values()}
     
     plan_count = 0
-    # Budget: each shadow may need multiple push attempts before the view
-    # clears
-    # Allow up to 4 attempts per shadow + 1 for the final pick.
+    # Reactive replanning loop (see CODEBASE_AUDIT #61, PA-5):
+    # The PDDL sense action is optimistic — it assumes the target will be
+    # found.  When sensing reveals "not found" or "still blocked," the
+    # execution loop breaks out and replans with updated belief state
+    # (known_empty_shadows).  Each replan eliminates one shadow candidate,
+    # so worst-case N replans for N shadows.  Budget allows multiple
+    # occluder relocations per shadow (4 attempts * shadows + 1 final pick).
     max_replans = 4 * len(shadows) + 1
     grasp_constraint_id = None
     exit_reason = None
@@ -462,12 +467,19 @@ def sense_shadow_raycasting(camera_pos, shadow_boxel, target_pybullet_id, occlud
     min_c = shadow_boxel.min_corner
     max_c = shadow_boxel.max_corner
 
+    # Three Z slices through the shadow volume:
+    # - Bottom slice at +0.04 m above min (half the target height 0.08 m,
+    #   avoids hitting the table surface at min_z);
+    # - Two interior slices at 33% and 67% of the shadow height.
     z_levels = [
         min_c[2] + 0.04,
         min_c[2] + (max_c[2] - min_c[2]) * 0.33,
         min_c[2] + (max_c[2] - min_c[2]) * 0.67,
     ]
 
+    # 7×7 grid per Z slice = 147 total rays.  Empirically chosen:
+    # 5×5 missed small targets at shadow edges; 9×9 doubled ray count
+    # with negligible detection improvement.
     n = 7
     ray_froms = []
     ray_tos = []
@@ -624,6 +636,7 @@ def execute_place(robot_id, env, obj_name, place_pos, grasp, config,
     if grasp_constraint_id is not None:
         p.removeConstraint(grasp_constraint_id)
 
+    # 30 steps ≈ 0.125 s — let the placed object settle before retreating.
     for _ in range(30):
         p.stepSimulation()
 

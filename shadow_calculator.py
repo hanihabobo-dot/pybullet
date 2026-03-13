@@ -90,6 +90,8 @@ class ShadowCalculator:
         
         # Cast rays from back corners outward along camera-through-corner direction.
         # (Corner-outward avoids self-intersection with the occluder body.)
+        # 5 m is well beyond the 1 m reachable workspace — ensures rays
+        # always hit the table or ground plane before terminating.
         max_dist = 5.0  # meters
         ray_ends = []
         for corner in corners:
@@ -270,7 +272,8 @@ class ShadowCalculator:
         """Create a boxel from min/max bounds."""
         center = (min_pt + max_pt) / 2.0
         extent = (max_pt - min_pt) / 2.0
-        MIN_EXTENT = 0.001  # 1mm minimum size
+        # 1 mm minimum — reject degenerate slivers from clipping arithmetic.
+        MIN_EXTENT = 0.001
         if np.any(extent <= 0) or np.any(extent < MIN_EXTENT):
             return None
             
@@ -290,12 +293,12 @@ class ShadowCalculator:
         if sign > 0:
             f_min = frag.center[dom_axis] - frag.extent[dom_axis]
             o_max = obstacle.center[dom_axis] + obstacle.extent[dom_axis]
-            if f_min >= o_max - 1e-4:
+            if f_min >= o_max - 1e-4:  # 0.1 mm tolerance for floating-point rounding
                 return True
         else:
             f_max = frag.center[dom_axis] + frag.extent[dom_axis]
             o_min = obstacle.center[dom_axis] - obstacle.extent[dom_axis]
-            if f_max <= o_min + 1e-4:
+            if f_max <= o_min + 1e-4:  # same tolerance as above
                 return True
                 
         return False

@@ -14,7 +14,6 @@ from boxel_types import ObjectInfo, Boxel, CameraObservation
 from shadow_calculator import ShadowCalculator
 from free_space import FreeSpaceGenerator
 from visualization import BoxelVisualizer
-from cell_merger import CellMerger
 
 
 class BoxelTestEnv:
@@ -90,7 +89,7 @@ class BoxelTestEnv:
         
         # Reset simulation
         p.resetSimulation()
-        p.setGravity(0, 0, -9.8)
+        p.setGravity(0, 0, -9.81)  # standard gravitational acceleration
         p.setRealTimeSimulation(0)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         
@@ -109,7 +108,6 @@ class BoxelTestEnv:
             self.table_surface_height,
             table_x_range=self.table_x_range, table_y_range=self.table_y_range
         )
-        self.cell_merger = CellMerger()
         self.visualizer = BoxelVisualizer()
         
         # Initialize debug camera state for keyboard navigation
@@ -166,7 +164,9 @@ class BoxelTestEnv:
         # Create targets
         self._create_targets()
         
-        # Let objects settle
+        # Let objects settle under gravity after placement.
+        # 10 steps at 240 Hz ≈ 0.04 s — sufficient for cubes on a flat
+        # table to reach static equilibrium.
         for _ in range(10):
             p.stepSimulation()
         
@@ -174,6 +174,9 @@ class BoxelTestEnv:
     
     def _create_occluders(self):
         """Create occluder cubes on the table."""
+        # 0.15 m (15 cm) cubes — large enough to fully occlude a target
+        # (0.08 m) from the overhead camera, small enough for the Panda
+        # gripper to grasp (max opening 0.08 m allows top-down pinch).
         occluder_size = [0.15, 0.15, 0.15]
         occluder_z = self.table_surface_height + occluder_size[2] / 2
         
@@ -199,6 +202,8 @@ class BoxelTestEnv:
     
     def _create_targets(self):
         """Create target cubes on the table."""
+        # 0.08 m (8 cm) cubes — small enough to be fully hidden behind
+        # occluders (0.15 m), graspable by the Panda (0.08 m max opening).
         target_size = [0.08, 0.08, 0.08]
         target_z = self.table_surface_height + target_size[2] / 2
         
@@ -280,62 +285,20 @@ class BoxelTestEnv:
         """
         return self.free_space_generator.generate(known_boxels, visualize)
     
-    def merge_free_space(self, free_boxels: List[Boxel], max_iterations: int = 100) -> List[Boxel]:
-        """
-        Merge adjacent free space boxels into larger convex regions.
-        
-        This reduces the total number of free space boxels by combining
-        adjacent cells that share a common face and have compatible dimensions.
-        
-        Args:
-            free_boxels: List of free space boxels to merge
-            max_iterations: Maximum number of merge passes
-            
-        Returns:
-            List of merged free space boxels (fewer, larger boxes)
-        """
-        return self.cell_merger.merge_free_space(free_boxels, max_iterations)
-    
-    def draw_boxels(self, boxels: List[Boxel], duration: float = 0, clear_previous: bool = True,
-                    fill_opacity: float = 0.05):
-        """Draw boxels in the PyBullet GUI."""
-        self.visualizer.draw_boxels(boxels, duration, clear_previous, fill_opacity)
-    
-    def clear_all_debug_items(self):
-        """Clear all debug visualization items."""
-        self.visualizer.clear_all()
-        self.free_space_generator.clear_debug_items()
-    
     def get_camera_observation(self) -> CameraObservation:
-        """Capture an observation from the camera."""
-        view_matrix = p.computeViewMatrix(
-            cameraEyePosition=self.camera_position,
-            cameraTargetPosition=self.camera_target,
-            cameraUpVector=self.camera_up
-        )
-        
-        projection_matrix = p.computeProjectionMatrixFOV(
-            fov=self.fov,
-            aspect=self.image_width / self.image_height,
-            nearVal=self.near_plane,
-            farVal=self.far_plane
-        )
-        
-        _, _, rgb_array, depth_array, _ = p.getCameraImage(
-            width=self.image_width, height=self.image_height,
-            viewMatrix=view_matrix, projectionMatrix=projection_matrix,
-            renderer=p.ER_BULLET_HARDWARE_OPENGL
-        )
-        
-        rgb_image = np.array(rgb_array, dtype=np.uint8).reshape((self.image_height, self.image_width, 4))[:, :, :3]
-        depth_image = self._depth_buffer_to_meters(np.array(depth_array).reshape((self.image_height, self.image_width)))
-        point_cloud = self._depth_to_point_cloud(depth_image, view_matrix, projection_matrix)
-        
+        """
+        Capture an observation from the camera.
+
+        Only computes what downstream code actually consumes: visible objects,
+        object poses, and semantic boxels.  RGB, depth, and point-cloud fields
+        are left as empty arrays (no consumer exists; see audit #56).
+        """
         visible_objects, object_poses = self.oracle_detect_objects()
         boxels = self.generate_boxels(visible_objects)
-        
+
+        empty_img = np.empty((0,), dtype=np.uint8)
         return CameraObservation(
-            rgb_image=rgb_image, depth_image=depth_image, point_cloud=point_cloud,
+            rgb_image=empty_img, depth_image=empty_img, point_cloud=empty_img,
             visible_objects=visible_objects, object_poses=object_poses, boxels=boxels
         )
     
@@ -420,154 +383,6 @@ class BoxelTestEnv:
             object_poses[name] = (position.copy(), orientation.copy())
         
         return visible_objects, object_poses
-    
-    def get_object_point_cloud(self, object_name: str) -> Optional[np.ndarray]:
-        """Generate point cloud for a specific object."""
-        if object_name not in self.objects:
-            return None
-        
-        obj_info = self.objects[object_name]
-        pos, orn = p.getBasePositionAndOrientation(obj_info.object_id)
-        
-        half_extents = obj_info.size / 2.0
-        resolution = 0.02
-        
-        x = np.arange(-half_extents[0], half_extents[0] + resolution, resolution)
-        y = np.arange(-half_extents[1], half_extents[1] + resolution, resolution)
-        z = np.arange(-half_extents[2], half_extents[2] + resolution, resolution)
-        
-        xx, yy, zz = np.meshgrid(x, y, z)
-        points_local = np.stack([xx.flatten(), yy.flatten(), zz.flatten()], axis=1)
-        
-        rotation_matrix = self._quaternion_to_rotation_matrix(np.array(orn))
-        return (rotation_matrix @ points_local.T).T + np.array(pos)
-    
-    def _quaternion_to_rotation_matrix(self, quat: np.ndarray) -> np.ndarray:
-        """Convert quaternion [x, y, z, w] to rotation matrix."""
-        x, y, z, w = quat
-        return np.array([
-            [1 - 2*(y**2 + z**2), 2*(x*y - z*w), 2*(x*z + y*w)],
-            [2*(x*y + z*w), 1 - 2*(x**2 + z**2), 2*(y*z - x*w)],
-            [2*(x*z - y*w), 2*(y*z + x*w), 1 - 2*(x**2 + y**2)]
-        ])
-    
-    def handle_keyboard_camera(self, move_speed: float = 0.02, rotate_speed: float = 1.0, zoom_speed: float = 0.05):
-        """
-        Handle keyboard input for camera navigation.
-        
-        Controls:
-            W/Up Arrow: Move camera target forward
-            S/Down Arrow: Move camera target backward  
-            A/Left Arrow: Move camera target left
-            D/Right Arrow: Move camera target right
-            Q: Move camera target up
-            E: Move camera target down
-            R: Zoom in
-            F: Zoom out
-        
-        Args:
-            move_speed: Speed of camera target movement
-            rotate_speed: Speed of camera rotation (not used currently)
-            zoom_speed: Speed of zoom in/out
-            
-        Returns:
-            True if any key was pressed, False otherwise
-        """
-        keys = p.getKeyboardEvents()
-        
-        if not keys:
-            return False
-        
-        # Get current camera view direction for relative movement
-        # PyBullet camera: yaw=0 looks from +Y toward -Y, yaw=90 looks from -X toward +X
-        yaw_rad = np.radians(self.debug_camera_yaw)
-        
-        # Forward direction (into the screen, away from camera)
-        forward = np.array([-np.sin(yaw_rad), np.cos(yaw_rad), 0])
-        # Right direction (perpendicular to forward in XY plane)
-        right = np.array([np.cos(yaw_rad), np.sin(yaw_rad), 0])
-        # Up direction
-        up = np.array([0, 0, 1])
-        
-        moved = False
-        
-        # W or Up Arrow - move forward
-        if keys.get(ord('w')) == p.KEY_IS_DOWN or keys.get(p.B3G_UP_ARROW) == p.KEY_IS_DOWN:
-            self.debug_camera_target += forward * move_speed
-            moved = True
-        
-        # S or Down Arrow - move backward
-        if keys.get(ord('s')) == p.KEY_IS_DOWN or keys.get(p.B3G_DOWN_ARROW) == p.KEY_IS_DOWN:
-            self.debug_camera_target -= forward * move_speed
-            moved = True
-        
-        # A or Left Arrow - move left
-        if keys.get(ord('a')) == p.KEY_IS_DOWN or keys.get(p.B3G_LEFT_ARROW) == p.KEY_IS_DOWN:
-            self.debug_camera_target -= right * move_speed
-            moved = True
-        
-        # D or Right Arrow - move right
-        if keys.get(ord('d')) == p.KEY_IS_DOWN or keys.get(p.B3G_RIGHT_ARROW) == p.KEY_IS_DOWN:
-            self.debug_camera_target += right * move_speed
-            moved = True
-        
-        # Q - move up
-        if keys.get(ord('q')) == p.KEY_IS_DOWN:
-            self.debug_camera_target += up * move_speed
-            moved = True
-        
-        # E - move down
-        if keys.get(ord('e')) == p.KEY_IS_DOWN:
-            self.debug_camera_target -= up * move_speed
-            moved = True
-        
-        # R - zoom in
-        if keys.get(ord('r')) == p.KEY_IS_DOWN:
-            self.debug_camera_distance = max(0.3, self.debug_camera_distance - zoom_speed)
-            moved = True
-        
-        # F - zoom out
-        if keys.get(ord('f')) == p.KEY_IS_DOWN:
-            self.debug_camera_distance = min(5.0, self.debug_camera_distance + zoom_speed)
-            moved = True
-        
-        # Update camera if any key was pressed
-        if moved:
-            p.resetDebugVisualizerCamera(
-                cameraDistance=self.debug_camera_distance,
-                cameraYaw=self.debug_camera_yaw,
-                cameraPitch=self.debug_camera_pitch,
-                cameraTargetPosition=self.debug_camera_target
-            )
-        
-        return moved
-    
-    def set_debug_camera(self, distance: float = None, yaw: float = None, 
-                         pitch: float = None, target: np.ndarray = None):
-        """
-        Set the debug camera view.
-        
-        Args:
-            distance: Distance from target
-            yaw: Horizontal rotation in degrees
-            pitch: Vertical rotation in degrees
-            target: Target position [x, y, z]
-        """
-        if distance is not None:
-            self.debug_camera_distance = distance
-        if yaw is not None:
-            self.debug_camera_yaw = yaw
-        if pitch is not None:
-            self.debug_camera_pitch = pitch
-        if target is not None:
-            self.debug_camera_target = np.array(target)
-        
-        p.resetDebugVisualizerCamera(
-            cameraDistance=self.debug_camera_distance,
-            cameraYaw=self.debug_camera_yaw,
-            cameraPitch=self.debug_camera_pitch,
-            cameraTargetPosition=self.debug_camera_target
-        )
 
     def update_object_positions(self):
         """
@@ -592,7 +407,7 @@ class BoxelTestEnv:
     def reset(self):
         """Reset the environment to initial state."""
         p.resetSimulation()
-        p.setGravity(0, 0, -9.8)
+        p.setGravity(0, 0, -9.81)  # standard gravitational acceleration
         p.setRealTimeSimulation(0)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         self.objects.clear()

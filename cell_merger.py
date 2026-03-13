@@ -25,7 +25,9 @@ class CellMerger:
         Initialize the cell merger.
         
         Args:
-            tolerance: Floating point tolerance for dimension comparisons
+            tolerance: Floating point tolerance for face-alignment checks.
+                1e-4 m (0.1 mm) matches the shadow calculator's downstream
+                tolerance; tighter values cause missed merges due to FP noise.
         """
         self.tolerance = tolerance
     

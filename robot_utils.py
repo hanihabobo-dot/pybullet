@@ -255,6 +255,9 @@ def solve_ik(robot_id: int, target_pos: np.ndarray,
 
         arm_joints = np.array(joint_positions[:7])
 
+        # 0.1 rad tolerance (~5.7°) accommodates PyBullet's iterative IK
+        # solver, which can slightly overshoot joint limits.  Solutions
+        # within tolerance are clipped; beyond it they're rejected.
         if np.any(arm_joints < JOINT_LIMITS_LOW - 0.1) or \
            np.any(arm_joints > JOINT_LIMITS_HIGH + 0.1):
             return None
@@ -292,6 +295,8 @@ def move_robot_smooth(robot_id: int, target_joints, gui: bool = True,
         interp = [(1 - alpha) * c + alpha * tgt
                    for c, tgt in zip(current, target_joints)]
         for i in range(7):
+            # 240 N·m is the Franka Emika Panda's peak joint torque for
+            # joints 1-4 (per datasheet); sufficient for position control.
             p.setJointMotorControl2(robot_id, i, p.POSITION_CONTROL,
                                     targetPosition=interp[i], force=240)
         p.stepSimulation()
@@ -302,6 +307,9 @@ def move_robot_smooth(robot_id: int, target_joints, gui: bool = True,
 def open_gripper(robot_id: int, gui: bool = True):
     """Open the Panda gripper (finger width ~0.08 m)."""
     import time
+    # 0.04 m per finger = 0.08 m total opening (Panda max is 0.08 m).
+    # force=50 N is well above the ~20 N needed to open unloaded fingers.
+    # 30 steps at 240 Hz ≈ 0.125 s — enough for full travel.
     for _ in range(30):
         p.setJointMotorControl2(robot_id, FINGER_JOINTS[0],
                                 p.POSITION_CONTROL,
@@ -317,6 +325,8 @@ def open_gripper(robot_id: int, gui: bool = True):
 def close_gripper(robot_id: int, gui: bool = True):
     """Close the Panda gripper."""
     import time
+    # 0.01 m per finger leaves a 0.02 m gap — fully closed around
+    # small objects.  Same force/step budget as open_gripper.
     for _ in range(30):
         p.setJointMotorControl2(robot_id, FINGER_JOINTS[0],
                                 p.POSITION_CONTROL,

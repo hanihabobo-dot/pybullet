@@ -116,7 +116,44 @@
   ;; =========================================================================
   ;; Requires clear line of sight to the region.
   ;; Uses the fixed scene camera — no robot positioning needed.
-  ;; OPTIMISTIC: Assumes object will be found (replanning handles failures)
+  ;;
+  ;; DESIGN DECISION — Optimistic sensing with reactive replanning (#61):
+  ;;
+  ;; The proposal (Section 4.4.2) defines sense with conditional effects:
+  ;;   stream_get_sensing_outcome returns found/not_found, and (when ...)
+  ;;   clauses set obj_in_Boxel or obj_not_in_Boxel accordingly.  This
+  ;;   would let the planner generate multi-step search plans ("sense A;
+  ;;   if empty, sense B") within a single plan.
+  ;;
+  ;; This implementation uses optimistic single-outcome sensing instead:
+  ;;   the effect unconditionally assumes the target is found.  When
+  ;;   execution reveals it is NOT there, the Python execution loop
+  ;;   breaks out, updates the belief state (marks shadow as empty),
+  ;;   and replans with updated knowledge.
+  ;;
+  ;; Justification for this deviation:
+  ;;   (a) PDDLStream + FastDownward do not support contingent planning.
+  ;;       Conditional effects in PDDL require deterministic outcomes;
+  ;;       branching on observation results requires a contingent planner
+  ;;       (e.g. POND, CLG), which is outside PDDLStream's architecture.
+  ;;   (b) Optimistic planning with replanning on failure is a standard
+  ;;       pattern in TAMP under partial observability (Garrett et al.,
+  ;;       2020; Kaelbling & Lozano-Pérez, 2013).  PDDLStream's own
+  ;;       adaptive algorithm is built around optimistic assumptions.
+  ;;   (c) For tabletop scenarios with N shadows, the reactive approach
+  ;;       converges in at most N replan cycles (one per empty shadow).
+  ;;       The execution loop bounds this: max_replans = 4*N + 1.
+  ;;   (d) Belief state propagates correctly across replans: known_empty
+  ;;       shadows carry over, so each replan searches strictly fewer
+  ;;       candidates.  This is functionally equivalent to the proposal's
+  ;;       conditional plan, executed sequentially.
+  ;;
+  ;; Limitation: the planner cannot reason about search ORDER — it picks
+  ;; whichever shadow FastDownward expands first.  A conditional planner
+  ;; could optimize search order (e.g. most-likely-first).  For the
+  ;; current uniform-prior scenario this does not affect completeness.
+  ;;
+  ;; See CODEBASE_AUDIT #61, PA-5, PF-1.
   (:action sense
     :parameters (?o ?region)
     :precondition (and

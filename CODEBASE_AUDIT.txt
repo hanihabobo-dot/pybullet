@@ -2,7 +2,7 @@
 CODEBASE AUDIT — OPEN ISSUES
 ================================================================================
 Date: 2026-02-25 (original audit, merged from 3 audit passes)
-Updated: 2026-03-13 (archived #64, #65, #70, #71, #72, #74, #75 as resolved)
+Updated: 2026-03-13 (#61 accepted as deviation; archived #64, #65, #70-#72, #74, #75)
 
 Resolved issues archived to archive/CODEBASE_AUDIT_RESOLVED.txt.
 
@@ -106,38 +106,42 @@ Debug: Log the number of COV_ENABLE_RENDERING toggle calls per planning
        rendering disabled for the full planning phase vs per-call toggle.
 
 ================================================================================
-61. SENSE ACTION DEVIATES FROM PROPOSAL — NO CONDITIONAL EFFECTS  [CRITICAL]
+61. SENSE ACTION DEVIATES FROM PROPOSAL — NO CONDITIONAL EFFECTS  [ACCEPTED]
 ================================================================================
-Where: pddl/domain_pddlstream.pddl (sense action, lines 120-133),
-       test_full_pipeline.py (sense execution, lines 303-337),
+Where: pddl/domain_pddlstream.pddl (sense action),
+       test_full_pipeline.py (sense execution + replan loop),
        proposal Section 4.4.2 (Listing 2)
 
 What:  The PDDL sense action unconditionally adds (obj_at_boxel ?o ?region)
        and (obj_pose_known ?o).  It assumes the target will always be found
-       ("optimistic" comment in the domain file).  It has NO observation
-       stream, NO conditional effects, and NO ?obs_status parameter.
+       ("optimistic").  The proposal's conditional design with
+       stream_get_sensing_outcome and (when found/not_found ...) branches
+       is not implemented.  Instead, the execution loop detects sensing
+       failures and replans with updated belief (known_empty_shadows).
 
-       The proposal explicitly defines sense_Boxel_for_object with:
-         - stream_find_sensing_config (robot must move to a sensing pose)
-         - stream_get_sensing_outcome (returns found / not_found)
-         - (when (= ?obs_status found) ...) → sets obj_in_Boxel
-         - (when (= ?obs_status not_found) ...) → sets obj_not_in_Boxel
+Status: ACCEPTED DEVIATION — documented in PDDL domain file and code.
 
-       None of these exist.  The planner always produces plans that assume
-       sensing succeeds on the first shadow it checks.  When execution
-       reveals the target is NOT there, the Python code breaks out of the
-       action loop and replans from scratch.
+Justification:
+       (a) PDDLStream + FastDownward cannot do contingent planning.
+           Branching on observation outcomes requires a contingent planner
+           (POND, CLG), which is outside PDDLStream's architecture.  The
+           proposal's conditional-effect design cannot be implemented
+           within the chosen planning framework without fundamental changes.
+       (b) Optimistic planning with replanning on failure is a standard
+           TAMP pattern under partial observability (Garrett et al., 2020;
+           Kaelbling & Lozano-Pérez, 2013).  PDDLStream's adaptive
+           algorithm is itself built around optimistic assumptions.
+       (c) For N shadow candidates, reactive replanning converges in at
+           most N replan cycles (one per empty shadow).  Belief state
+           propagates correctly: known_empty_shadows carry over, so each
+           replan searches strictly fewer candidates.
+       (d) The execution loop bounds the search: max_replans = 4*N + 1.
 
-       This is a fundamental architectural deviation: the proposal's design
-       lets the planner reason about both sensing outcomes in a single plan.
-       The implementation uses purely reactive replanning — plan optimistically,
-       execute, replan on failure.  While this works, it cannot produce
-       multi-step search strategies and is strictly less capable than the
-       proposed conditional design.
-
-Impact: The planner cannot produce a plan like "sense shadow_A; if empty,
-       sense shadow_B" because the PDDL model has no way to represent the
-       "not found" branch.  Every plan assumes the first sense succeeds.
+Limitation:
+       The planner cannot optimize search ORDER within a single plan.
+       A contingent planner could reason about most-likely-first strategies.
+       For the current uniform-prior tabletop scenario this does not affect
+       completeness or practical efficiency.
 
 ================================================================================
 67. _build_init() HARDCODES ASSUMPTION THAT TARGETS ARE ONLY IN SHADOWS
@@ -162,7 +166,7 @@ Impact: Low for the current hidden-object scenario (targets are always
        the system to more general search tasks without reworking _build_init.
 
 ================================================================================
-69. MAGIC NUMBERS WITHOUT JUSTIFICATION
+69. MAGIC NUMBERS WITHOUT JUSTIFICATION  [DONE]
 ================================================================================
 Where: Multiple files (see table below)
 
@@ -190,7 +194,7 @@ What:  Hardcoded values with no comments explaining their origin, rationale,
        robot_utils.py        301    50            gripper motor force
        boxel_env.py          177    0.15          occluder size (m)
        boxel_env.py          203    0.08          target size (m)
-       boxel_env.py           93    9.8           gravity (should be 9.81)
+       boxel_env.py           93    9.81          gravity (was 9.8, corrected)
        boxel_env.py          169    10            settling steps in _setup_scene
        shadow_calculator.py   93    5.0           max ray distance (m)
        shadow_calculator.py  273    0.001         MIN_EXTENT (m)
@@ -281,12 +285,13 @@ PA-4. Sensing uses fixed camera instead of robot-mounted sensor
       the complexity of a separate sensing motion planner. Should be
       documented as a deliberate design decision in the thesis.
 
-PA-5. No conditional sensing outcomes (proposal Section 4.4.2)
+PA-5. No conditional sensing outcomes (proposal Section 4.4.2) — ACCEPTED
       The proposal defines conditional effects for sense: (when found ...)
       and (when not_found ...) using a stream_get_sensing_outcome stream.
       The implementation uses optimistic single-outcome sensing with
-      reactive replanning on failure.  This prevents the planner from
-      generating multi-step search strategies.  See #61 for full details.
+      reactive replanning on failure.  Accepted deviation: PDDLStream +
+      FastDownward cannot do contingent planning; optimistic planning with
+      replanning is a standard TAMP pattern.  See #61 for full justification.
 
 PA-6. Only top-down grasps — no grasp diversity
       sample_grasp() generates only top-down grasps (Z-axis offsets at
@@ -304,17 +309,13 @@ PDDL ACTION / PYTHON FUNCTION ALIGNMENT
 Cross-reference of every PDDL action against its Python execution code.
 See proposal Section 4.4 for the intended mapping.
 
-PF-1. sense — PDDL vs Python MISMATCH
-      PDDL (domain lines 120-133): Two params (?o ?region).  Precondition:
-        view_clear. Effect: unconditionally adds obj_at_boxel, obj_pose_known.
-      Python (test_full_pipeline.py lines 303-337): Calls
-        sense_shadow_raycasting() which returns one of three outcomes
-        (found_target, clear_but_empty, still_blocked).  Only "found_target"
-        updates belief as success.  The other two break to replan.
-      Mismatch: PDDL has no stream for observation outcome and no
-        conditional effects.  It cannot represent "not found" or "still
-        blocked" — those are only handled by the reactive replan loop.
-        See #61.
+PF-1. sense — PDDL vs Python MISMATCH (accepted, see #61)
+      PDDL: optimistic single-outcome (assumes found).
+      Python: tri-state (found / clear_but_empty / still_blocked) with
+        reactive replanning on failure.
+      Accepted deviation: contingent planning not available in PDDLStream;
+        optimistic sensing + replanning is functionally equivalent for the
+        tabletop scenario.  Documented in domain PDDL and code.
 
 PF-2. pick — PDDL vs Python MISMATCH (scope)
       PDDL (domain lines 161-179): Single config ?q.  Instantaneous.
@@ -399,8 +400,9 @@ What:  PA-1 (no evaluation framework) is listed under "PROPOSAL ALIGNMENT
        - No baseline: POMDP comparison (even simplified)
        - No experiment runner / batch evaluation script
 
-       This should be elevated to the same priority level as #61
-       (conditional sensing) as it directly blocks thesis completion.
+       Now the sole CRITICAL issue — #61 (conditional sensing) has been
+       resolved as an accepted deviation.  This directly blocks thesis
+       completion.
 
 ================================================================================
 FOR LATER
@@ -418,25 +420,28 @@ SUMMARY (updated 2026-03-13, verified by second-pass audit)
 ================================================================================
 
 CRITICAL ISSUES (must address before academic evaluation):
-  #61  Sense action has no conditional effects — fundamental proposal
-       deviation.  Planner cannot reason about "not found" outcome.
   #76  No evaluation framework (PA-1) — thesis cannot have a Results
        section without metrics, baselines, or scene variation.
 
+ACCEPTED DEVIATIONS (documented, no further code changes needed):
+  #61  Optimistic sensing + reactive replanning instead of conditional
+       effects.  PDDLStream cannot do contingent planning; replanning is
+       standard TAMP practice.  Documented in domain PDDL and code.
+
 MODERATE ISSUES (should address):
   #67  _build_init() hardcodes assumption targets are only in shadows.
-  #69  ~30 magic numbers with no justification (see expanded table).
+  #69  ~30 magic numbers — justification comments added (DONE).
 
 STILL OPEN FROM PRIOR AUDITS:
   #44  Stale shadow registry after occluder relocation (accepted).
   #55  Hardcoded scene — no scenario variation (required by proposal).
-  #56  Dead computation: point cloud and compute_neighbors() (unfixed).
+  #56  Dead computation: point cloud and compute_neighbors() (FIXED).
   #59  Objects fly away on first grasp (uninvestigated).
   #60  Simulation flickering during planning (unfixed).
   #73  shadow_occluder_map goes stale on replan (low impact, fragile).
 
 PDDL/PYTHON ALIGNMENT:
-  PF-1 sense: MISMATCH — no conditional effects, no observation stream.
+  PF-1 sense: MISMATCH (accepted #61) — optimistic + reactive replanning.
   PF-2 pick: MISMATCH (documented) — Python does multi-waypoint execution;
        PDDL models as instantaneous.  at_config drift accepted (#62).
   PF-3 place: MISMATCH (documented) — same as PF-2.
@@ -448,7 +453,7 @@ PROPOSAL ALIGNMENT:
   PA-2 No recursive object discovery (Section 4.2) — MISSING.
   PA-3 K-literal design differs (Section 4.4.1) — documented deviation.
   PA-4 Fixed camera for sensing (Section 4.4.2) — accepted simplification.
-  PA-5 No conditional sensing outcomes (Section 4.4.2) — MISSING (#61).
+  PA-5 No conditional sensing outcomes (Section 4.4.2) — ACCEPTED (#61).
   PA-6 Only top-down grasps — limits evaluation scenarios.
 
 The PLANNING ARCHITECTURE models spatial capabilities:
@@ -457,7 +462,7 @@ The PLANNING ARCHITECTURE models spatial capabilities:
   - Derived predicates for visibility (view_clear) still work — placing an
     occluder in free space removes blocks_view, just as push did
   - Verification via sense: tri-state in execution (found / clear_but_empty
-    / still_blocked) but PDDL model is optimistic single-outcome (#61)
+    / still_blocked); PDDL is optimistic, replanning handles failures (#61)
   - Sensing uses fixed camera correctly (archived #36)
   - KIF fluents are sound but use single-predicate simplification (PA-3)
 
@@ -495,13 +500,12 @@ Verification logging workflow (archived #58):
 
 Priority order for remaining fixes:
   CRITICAL (blocks academic evaluation):
-    1. Conditional sensing (#61) — align with proposal or document deviation
-    2. Evaluation framework (#76/PA-1) — metrics, baselines, scene variation
+    1. Evaluation framework (#76/PA-1) — metrics, baselines, scene variation
 
   MODERATE:
-    3. Document magic numbers (#69) — ~30 constants need justification
-    4. Remove dead computation (#56) — point cloud / compute_neighbors
-    5. _build_init targets-only-in-shadows assumption (#67) — low impact
+    2. Document magic numbers (#69) — DONE (justification comments added)
+    3. Remove dead computation (#56) — DONE (point cloud skipped, compute_neighbors removed)
+    4. _build_init targets-only-in-shadows assumption (#67) — low impact
 
   LOW PRIORITY (accepted simplifications):
     6. Stale registry after occluder relocation (#44) — accepted

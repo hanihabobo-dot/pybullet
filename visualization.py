@@ -142,28 +142,3 @@ class BoxelVisualizer:
         for item_id in self.debug_items:
             p.removeUserDebugItem(item_id)
         self.debug_items = []
-
-
-def save_point_cloud_to_ply(points: np.ndarray, filename: str):
-    """
-    Save point cloud to a PLY file.
-    
-    Args:
-        points: Numpy array of shape (N, 3) containing point coordinates
-        filename: Output filename (should end with .ply)
-    """
-    print(f"Saving point cloud with {len(points)} points to {filename}...")
-    
-    header = f"""ply
-format ascii 1.0
-element vertex {len(points)}
-property float x
-property float y
-property float z
-end_header
-"""
-    with open(filename, 'w') as f:
-        f.write(header)
-        for pt in points:
-            f.write(f"{pt[0]} {pt[1]} {pt[2]}\n")
-    print("Save complete.")
