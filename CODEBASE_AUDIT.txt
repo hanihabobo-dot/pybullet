@@ -31,42 +31,48 @@ Fix:   After relocating, either:
            ID compensates). Document this as a known simplification.
 
 ================================================================================
-59. OBJECTS FLY AWAY ON FIRST GRASP — CONSTRAINT IMPULSE / COLLISION DURING PICK
+59. OBJECTS FLY AWAY ON FIRST GRASP — CONSTRAINT-BASED GRASPING IS THE PROBLEM
 ================================================================================
-Where: test_full_pipeline.py execute_pick(), robot_utils.py close_gripper()
+Where: test_full_pipeline.py execute_pick() / execute_place(),
+       robot_utils.py close_gripper()
 
 What:  On the first pick action, surrounding objects visibly fly away from
        the grasped object. The grasp itself also looks "supernatural" — the
        object snaps to the gripper rather than being smoothly acquired.
 
-       Likely causes (need logging to confirm):
-       (a) p.createConstraint() offset mismatch: the constraint uses
-           grasp.position as parentFramePosition, but if the EE isn't
-           at exactly obj_pos + grasp.position when the constraint is
-           created, PyBullet applies a large corrective impulse in the
-           next stepSimulation() to satisfy the constraint.  This impulse
-           can propagate to adjacent objects via contact forces.
-       (b) close_gripper() physically closes the fingers (30 simulation
-           steps with force=50). If the fingers contact the object or
-           adjacent objects before the constraint is created, the contact
-           forces push them.  The gripper closes BEFORE createConstraint,
-           so the object isn't welded yet and can be pushed.
-       (c) The approach/contact motion (move_robot_smooth) may collide
-           with neighboring objects in the cluttered scene.  Planning
-           checks collisions with gripper tolerance enabled, but the
-           actual motion applies physics forces that push things.
-       (d) No simulation settling after createConstraint — the next call
-           is move_robot_smooth(lift_joints) immediately, while the
-           constraint solver is still producing corrective forces.
+       ROOT CAUSE: execute_pick() uses p.createConstraint(JOINT_FIXED) to
+       "weld" the object to the end-effector.  This is not grasping — it is
+       a telekinetic attachment that bypasses contact physics entirely.  The
+       constraint solver fights the rigid-body simulator every stepSimulation
+       to maintain the weld, producing large corrective impulses that
+       propagate to adjacent objects via contact forces.
 
-Debug: Add logging around execute_pick():
-       - Log EE position vs expected contact_ee at constraint creation time
-       - Log all object positions before and after each phase:
-         before approach, after approach, after close_gripper,
-         after createConstraint, after lift
-       - Compute and log displacement of each nearby object to identify
-         which phase causes the scatter
-       - Log the constraint error (actual vs desired relative transform)
+       This is not a tuning problem (wrong offsets, missing orientations,
+       missing maxForce).  Even a perfectly parameterised JOINT_FIXED
+       constraint is still a magic weld: it can hold objects that don't fit
+       in the gripper, it ignores friction, it ignores gravity on the
+       grasped body, and it allows the gripper to remain open while the
+       object stays attached.  The snap-to-gripper visual artefact and the
+       neighbour-scattering impulse are inherent to this approach.
+
+Fix:   Replace constraint-based grasping with FRICTION-BASED grasping:
+       1. Remove p.createConstraint / p.removeConstraint from execute_pick
+          and execute_place.
+       2. Rely on close_gripper() finger contact + friction to hold the
+          object.  The gripper motors already apply 50 N per finger; with
+          a friction coefficient ≥ 0.5 the resulting friction force far
+          exceeds the weight of any scene object.
+       3. open_gripper() releases the object (no constraint to remove).
+       4. Adjust grasp Z offsets in sample_grasp() so the EE descends to
+          the object's center height (not above it).  The current offsets
+          (0.05–0.15 m above object center) place the fingers in the air
+          above the object — fine for a magic weld, useless for friction.
+       5. Set lateralFriction on object and gripper collision shapes to
+          ensure reliable grip.
+
+       Depends on #77 (object graspability): current object dimensions
+       exceed or match the Panda's 0.08 m max finger opening, so friction-
+       based grasping cannot work without resizing.  See #77.
 
 ================================================================================
 60. SIMULATION-WIDE FLICKERING DURING PLANNING — RENDERING TOGGLE ARTIFACTS  [DONE]
@@ -400,6 +406,47 @@ What:  PA-1 (no evaluation framework) is listed under "PROPOSAL ALIGNMENT
        completion.
 
 ================================================================================
+77. OBJECT DIMENSIONS EXCEED GRIPPER CAPACITY — FRICTION GRASPING BLOCKED
+================================================================================
+Where: boxel_env.py _create_occluders(), _create_targets()
+
+What:  The Franka Panda parallel-jaw gripper has a maximum finger opening
+       of 0.08 m (0.04 m per finger).  For friction-based grasping the
+       object's graspable width must be strictly LESS than the max opening,
+       so the fingers can close around the object and apply normal force.
+
+       Current scene objects:
+         Occluders  0.15 m cubes  — 1.9× the max opening.  Physically
+                                    ungraspable by the Panda gripper.
+                                    The comment on boxel_env.py line 178
+                                    ("small enough for the Panda gripper
+                                    to grasp") is INCORRECT.
+         Targets    0.08 m cubes  — exactly AT the max opening.  Fingers
+                                    can barely touch the sides but have
+                                    zero squeeze margin; unreliable grip.
+
+       With the current constraint-based "grasping" (#59) this didn't
+       matter — the constraint can hold any object regardless of size.
+       Switching to friction-based grasping (the #59 fix) requires objects
+       that physically fit in the gripper.
+
+Fix:   Resize objects so their graspable width is < 0.08 m:
+       (a) Targets: reduce to ~0.05 m cubes.  Still hidden behind
+           occluders, easier to grasp with 0.03 m of finger margin.
+       (b) Occluders: change from cubes to tall narrow blocks
+           (e.g. 0.06 × 0.06 × 0.15 m).  The 0.06 m width fits in the
+           gripper; the 0.15 m height still occludes targets from the
+           overhead camera.  Alternatively, occluders could be cylinders
+           (diameter < 0.08 m) for even easier top-down grasping.
+       (c) Set lateralFriction on object and gripper collision shapes
+           (PyBullet default for createCollisionShape is 0.5; verify
+           it is sufficient, increase to ~1.0 if needed).
+
+Impact: LOW for the architecture — only object spawn parameters change.
+       HIGH for #59 — friction-based grasping cannot work until this
+       is addressed.
+
+================================================================================
 FOR LATER
 ================================================================================
 - Incremental boxel recomputation after occluder relocation (without redoing
@@ -431,9 +478,14 @@ STILL OPEN FROM PRIOR AUDITS:
   #44  Stale shadow registry after occluder relocation (accepted).
   #55  Hardcoded scene — no scenario variation (required by proposal).
   #56  Dead computation: point cloud and compute_neighbors() (FIXED).
-  #59  Objects fly away on first grasp (uninvestigated).
+  #59  Objects fly away on first grasp — root cause is constraint-based
+       grasping (JOINT_FIXED weld), not parameter tuning.  Fix: replace
+       with friction-based grasping.  Depends on #77.
   #60  Simulation flickering during planning (DONE — RenderingLock).
   #73  shadow_occluder_map goes stale on replan (low impact, fragile).
+  #77  Object dimensions exceed Panda gripper capacity (0.08 m opening).
+       Occluders 0.15 m (ungraspable), targets 0.08 m (at limit).
+       Must resize before friction-based grasping (#59 fix) can work.
 
 PDDL/PYTHON ALIGNMENT:
   PF-1 sense: MISMATCH (accepted #61) — optimistic + reactive replanning.
@@ -502,11 +554,15 @@ Priority order for remaining fixes:
     3. Remove dead computation (#56) — DONE (point cloud skipped, compute_neighbors removed)
     4. _build_init targets-only-in-shadows assumption (#67) — low impact
 
+  EXECUTION (blocks reliable pick-and-place):
+    5. Friction-based grasping (#59) — remove constraint, use finger friction
+    6. Object graspability (#77) — resize objects to fit Panda gripper
+       (#59 depends on #77 — must fix together)
+
   LOW PRIORITY (accepted simplifications):
-    6. Stale registry after occluder relocation (#44) — accepted
-    7. Stale shadow_occluder_map on replan (#73) — low impact
-    8. Parameterized scene generation (#55) — needed for evaluation (#76)
-    9. Fix objects flying away (#59)
+    7. Stale registry after occluder relocation (#44) — accepted
+    8. Stale shadow_occluder_map on replan (#73) — low impact
+    9. Parameterized scene generation (#55) — needed for evaluation (#76)
    10. Fix simulation flickering (#60) — DONE (RenderingLock)
 
 Proposal alignment work (PA-1 through PA-6) and PDDL/Python alignment

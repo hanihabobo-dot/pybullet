@@ -175,8 +175,8 @@ class BoxelTestEnv:
     def _create_occluders(self):
         """Create occluder cubes on the table."""
         # 0.15 m (15 cm) cubes — large enough to fully occlude a target
-        # (0.08 m) from the overhead camera, small enough for the Panda
-        # gripper to grasp (max opening 0.08 m allows top-down pinch).
+        # (0.08 m) from the overhead camera.  NOTE: these do NOT fit in
+        # the Panda gripper (max opening 0.08 m).  See audit #77.
         occluder_size = [0.15, 0.15, 0.15]
         occluder_z = self.table_surface_height + occluder_size[2] / 2
         
