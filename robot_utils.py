@@ -144,7 +144,7 @@ def is_path_collision_free(robot_id: int, q_start, q_end,
 # =============================================================================
 
 def solve_ik(robot_id: int, target_pos: np.ndarray,
-             target_orn=None) -> np.ndarray:
+             target_orn=None, physics_client: int = 0) -> np.ndarray:
     """
     Null-space IK with rest-pose seed for consistent results.
 
@@ -164,6 +164,7 @@ def solve_ik(robot_id: int, target_pos: np.ndarray,
         target_orn: Desired orientation as quaternion [x, y, z, w] or
                     any sequence accepted by PyBullet.
                     Defaults to gripper pointing straight down.
+        physics_client: PyBullet physics client ID.
 
     Returns:
         Array of 7 joint angles.
@@ -174,10 +175,13 @@ def solve_ik(robot_id: int, target_pos: np.ndarray,
     orn_list = (target_orn.tolist() if isinstance(target_orn, np.ndarray)
                 else list(target_orn))
 
-    saved = [p.getJointState(robot_id, i)[0] for i in ARM_JOINT_INDICES]
+    saved = [p.getJointState(robot_id, i,
+                             physicsClientId=physics_client)[0]
+             for i in ARM_JOINT_INDICES]
     try:
         for i, angle in zip(ARM_JOINT_INDICES, REST_POSES):
-            p.resetJointState(robot_id, i, angle)
+            p.resetJointState(robot_id, i, angle,
+                              physicsClientId=physics_client)
 
         joints = p.calculateInverseKinematics(
             robot_id, END_EFFECTOR_LINK,
@@ -188,11 +192,13 @@ def solve_ik(robot_id: int, target_pos: np.ndarray,
             restPoses=REST_POSES,
             maxNumIterations=100,
             residualThreshold=1e-4,
+            physicsClientId=physics_client,
         )[:7]
         return np.array(joints)
     finally:
         for i, angle in zip(ARM_JOINT_INDICES, saved):
-            p.resetJointState(robot_id, i, angle)
+            p.resetJointState(robot_id, i, angle,
+                              physicsClientId=physics_client)
 
 
 def move_robot_smooth(robot_id: int, target_joints, gui: bool = True,

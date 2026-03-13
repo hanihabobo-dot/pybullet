@@ -633,7 +633,7 @@ class BoxelStreams:
         for _ in range(self.SMOOTH_ATTEMPTS):
             if len(smoothed) <= 2:
                 break
-            i = random.randint(0, len(smoothed) - 2)
+            i = random.randint(0, len(smoothed) - 3)
             j = random.randint(i + 2, len(smoothed) - 1)
             if is_path_collision_free(self.robot_id, smoothed[i], smoothed[j],
                                       pc, self.RRT_EDGE_CHECKS):
