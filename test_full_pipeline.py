@@ -270,9 +270,11 @@ def main(gui=True):
             
             if action_name == 'move':
                 q1, q2, dest_boxel_id, traj = params
-                print(f"    Moving to {dest_boxel_id} (config: {q2})...")
+                print(f"    Moving to {dest_boxel_id} ({len(traj.waypoints)} waypoints)...")
 
-                move_robot_smooth(robot_id, q2.joint_positions, gui)
+                for wp in traj.waypoints[1:]:
+                    move_robot_smooth(robot_id, wp.joint_positions, gui,
+                                      steps=30)
                 current_config = q2
                 print(f"    -> Arrived at {dest_boxel_id}")
                     

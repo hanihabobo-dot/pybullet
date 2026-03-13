@@ -16,6 +16,7 @@ Streams:
 """
 
 import logging
+import random
 import numpy as np
 import pybullet as p
 from typing import List, Tuple, Optional, Generator, Iterator
@@ -26,7 +27,8 @@ logger = logging.getLogger(__name__)
 from boxel_data import BoxelRegistry, BoxelData, BoxelType
 from robot_utils import (ARM_JOINT_INDICES, END_EFFECTOR_LINK, FINGER_JOINTS,
                          JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH, JOINT_RANGES,
-                         REST_POSES)
+                         REST_POSES, is_config_collision_free,
+                         is_path_collision_free)
 
 
 @dataclass
@@ -396,46 +398,247 @@ class BoxelStreams:
         ])
     
     # =========================================================================
-    # STREAM: Plan Motion
+    # STREAM: Plan Motion (RRT-Connect with shortcut smoothing)
     # =========================================================================
+
+    # RRT-Connect parameters
+    RRT_MAX_ITERATIONS = 2000
+    RRT_STEP_SIZE = 0.2          # max joint displacement per extend (rad)
+    RRT_GOAL_BIAS = 0.05         # probability of sampling the goal
+    RRT_EDGE_CHECKS = 8          # collision samples per edge
+    RRT_CONNECT_ATTEMPTS = 50    # max extends for the connect phase
+    SMOOTH_ATTEMPTS = 75         # shortcut smoothing iterations
+
     def plan_motion(self, q1: RobotConfig, q2: RobotConfig) -> Iterator[Tuple[Trajectory]]:
         """
-        Plan collision-free motion between configurations.
-        
-        PDDLStream declaration (see pddl/stream.pddl):
+        Plan collision-free motion between two configurations.
+
+        Strategy:
+          1. If no robot is loaded (heuristic mode), fall back to linear
+             interpolation — there is no physics to check against.
+          2. Verify both endpoints are collision-free.
+          3. Try the direct linear path (fast path — most moves are simple
+             reaches that don't collide with anything).
+          4. If the direct path collides, run bidirectional RRT-Connect.
+          5. Smooth the RRT path with random shortcutting.
+
+        PDDLStream declaration (see pddl/stream.pddl)::
+
             (:stream plan-motion
               :inputs (?q1 ?q2)
               :domain (and (Config ?q1) (Config ?q2))
               :outputs (?t)
               :certified (and (Trajectory ?t) (motion ?q1 ?q2 ?t)))
-        
+
         Args:
-            q1: Start configuration
-            q2: Goal configuration
-            
+            q1: Start configuration.
+            q2: Goal configuration.
+
         Yields:
-            Tuples of (trajectory,) connecting q1 to q2
+            Tuples of ``(trajectory,)`` connecting *q1* to *q2*.
+            Yields nothing if no collision-free path is found.
         """
-        # TODO: Implement actual motion planning (RRT, PRM, etc.)
-        # For now, simple linear interpolation (no collision checking)
-        
-        n_waypoints = 10
+        if self.robot_id is None:
+            yield (self._linear_trajectory(q1, q2),)
+            return
+
+        pc = self.physics_client
+
+        if not is_config_collision_free(self.robot_id, q1.joint_positions, pc):
+            logger.warning("plan_motion: start config %s in collision", q1)
+            return
+        if not is_config_collision_free(self.robot_id, q2.joint_positions, pc):
+            logger.warning("plan_motion: goal config %s in collision", q2)
+            return
+
+        if is_path_collision_free(self.robot_id, q1.joint_positions,
+                                  q2.joint_positions, pc,
+                                  n_checks=self.RRT_EDGE_CHECKS):
+            logger.info("plan_motion: direct path clear — linear trajectory")
+            yield (self._linear_trajectory(q1, q2),)
+            return
+
+        logger.info("plan_motion: direct path blocked — running RRT-Connect")
+        path = self._rrt_connect(q1.joint_positions, q2.joint_positions)
+
+        if path is None:
+            logger.warning("plan_motion: RRT-Connect failed (%d iters)",
+                           self.RRT_MAX_ITERATIONS)
+            return
+
+        smoothed = self._smooth_path(path)
+        logger.info("plan_motion: RRT path %d wps -> smoothed %d wps",
+                     len(path), len(smoothed))
+
         waypoints = []
-        
-        for t in np.linspace(0, 1, n_waypoints):
-            interp_joints = (1-t) * q1.joint_positions + t * q2.joint_positions
+        for i, joints in enumerate(smoothed):
             waypoints.append(RobotConfig(
-                joint_positions=interp_joints,
-                name=f"{q1.name}_to_{q2.name}_wp{int(t*10)}"
+                joint_positions=joints,
+                name=f"{q1.name}_to_{q2.name}_rrt{i}"
             ))
-        
+
         self._traj_counter += 1
-        traj = Trajectory(
-            waypoints=waypoints,
-            name=f"traj_{self._traj_counter}"
-        )
-        
+        traj = Trajectory(waypoints=waypoints,
+                          name=f"traj_{self._traj_counter}")
         yield (traj,)
+
+    # ----- helpers -----------------------------------------------------------
+
+    def _linear_trajectory(self, q1: RobotConfig, q2: RobotConfig,
+                           n_waypoints: int = 10) -> Trajectory:
+        """Build a linearly-interpolated trajectory (no collision check)."""
+        waypoints = []
+        for t in np.linspace(0, 1, n_waypoints):
+            waypoints.append(RobotConfig(
+                joint_positions=(1 - t) * q1.joint_positions
+                                + t * q2.joint_positions,
+                name=f"{q1.name}_to_{q2.name}_wp{int(t * 10)}"
+            ))
+        self._traj_counter += 1
+        return Trajectory(waypoints=waypoints,
+                          name=f"traj_{self._traj_counter}")
+
+    # ----- RRT-Connect -------------------------------------------------------
+
+    def _random_config(self) -> np.ndarray:
+        """Sample a uniform random configuration within joint limits."""
+        return np.random.uniform(JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH)
+
+    def _nearest(self, nodes: List[np.ndarray], q: np.ndarray) -> int:
+        """Return the index of the node closest to *q* (L2 in joint space)."""
+        best_idx, best_dist = 0, np.inf
+        for i, n in enumerate(nodes):
+            d = np.linalg.norm(n - q)
+            if d < best_dist:
+                best_idx, best_dist = i, d
+        return best_idx
+
+    def _steer(self, q_near: np.ndarray, q_target: np.ndarray,
+               max_step: float) -> np.ndarray:
+        """
+        Move from *q_near* toward *q_target*, limiting the maximum
+        per-joint displacement to *max_step* radians.
+        """
+        diff = q_target - q_near
+        max_diff = np.max(np.abs(diff))
+        if max_diff <= max_step:
+            return q_target.copy()
+        return q_near + diff * (max_step / max_diff)
+
+    def _try_connect(self, nodes: List[np.ndarray],
+                     parents: List[int],
+                     q_target: np.ndarray) -> Optional[int]:
+        """
+        Greedily extend a tree toward *q_target* until it either reaches
+        the target or hits a collision.  Returns the connecting node index,
+        or ``None`` on failure.
+        """
+        cur_idx = self._nearest(nodes, q_target)
+        pc = self.physics_client
+        for _ in range(self.RRT_CONNECT_ATTEMPTS):
+            q_cur = nodes[cur_idx]
+            q_new = self._steer(q_cur, q_target, self.RRT_STEP_SIZE)
+            if not is_path_collision_free(self.robot_id, q_cur, q_new, pc,
+                                          self.RRT_EDGE_CHECKS):
+                return None
+            new_idx = len(nodes)
+            nodes.append(q_new)
+            parents.append(cur_idx)
+            cur_idx = new_idx
+            if np.allclose(q_new, q_target, atol=1e-3):
+                return new_idx
+        return None
+
+    def _trace_path(self, nodes: List[np.ndarray],
+                    parents: List[int], idx: int) -> List[np.ndarray]:
+        """Walk parent pointers back to the root and return the path."""
+        path = []
+        while idx != -1:
+            path.append(nodes[idx])
+            idx = parents[idx]
+        path.reverse()
+        return path
+
+    def _rrt_connect(self, q_start: np.ndarray,
+                     q_goal: np.ndarray) -> Optional[List[np.ndarray]]:
+        """
+        Bidirectional RRT-Connect (Kuffner & LaValle, 2000).
+
+        Grows two trees — one from *q_start*, one from *q_goal* — and
+        alternately extends them toward random samples.  When one tree
+        successfully connects to a new node of the other tree, the two
+        half-paths are spliced into a complete trajectory.
+
+        Returns:
+            List of joint-space waypoints from start to goal, or ``None``.
+        """
+        nodes_a: List[np.ndarray] = [q_start.copy()]
+        parents_a: List[int] = [-1]
+        nodes_b: List[np.ndarray] = [q_goal.copy()]
+        parents_b: List[int] = [-1]
+
+        swapped = False
+        pc = self.physics_client
+
+        for iteration in range(self.RRT_MAX_ITERATIONS):
+            if random.random() < self.RRT_GOAL_BIAS:
+                q_rand = nodes_b[0].copy()
+            else:
+                q_rand = self._random_config()
+
+            near_idx = self._nearest(nodes_a, q_rand)
+            q_new = self._steer(nodes_a[near_idx], q_rand, self.RRT_STEP_SIZE)
+
+            if not is_path_collision_free(self.robot_id,
+                                          nodes_a[near_idx], q_new, pc,
+                                          self.RRT_EDGE_CHECKS):
+                nodes_a, nodes_b = nodes_b, nodes_a
+                parents_a, parents_b = parents_b, parents_a
+                swapped = not swapped
+                continue
+
+            new_idx_a = len(nodes_a)
+            nodes_a.append(q_new)
+            parents_a.append(near_idx)
+
+            connect_idx = self._try_connect(nodes_b, parents_b, q_new)
+            if connect_idx is not None:
+                path_a = self._trace_path(nodes_a, parents_a, new_idx_a)
+                path_b = self._trace_path(nodes_b, parents_b, connect_idx)
+                path_b.reverse()
+                if swapped:
+                    full = path_b + path_a
+                else:
+                    full = path_a + path_b
+                return full
+
+            nodes_a, nodes_b = nodes_b, nodes_a
+            parents_a, parents_b = parents_b, parents_a
+            swapped = not swapped
+
+        return None
+
+    # ----- Shortcut smoothing ------------------------------------------------
+
+    def _smooth_path(self, path: List[np.ndarray]) -> List[np.ndarray]:
+        """
+        Random shortcut smoothing: pick two non-adjacent waypoints and
+        replace the segment between them with a direct edge if that edge
+        is collision-free.
+        """
+        if len(path) <= 2:
+            return list(path)
+        smoothed = list(path)
+        pc = self.physics_client
+        for _ in range(self.SMOOTH_ATTEMPTS):
+            if len(smoothed) <= 2:
+                break
+            i = random.randint(0, len(smoothed) - 2)
+            j = random.randint(i + 2, len(smoothed) - 1)
+            if is_path_collision_free(self.robot_id, smoothed[i], smoothed[j],
+                                      pc, self.RRT_EDGE_CHECKS):
+                smoothed = smoothed[:i + 1] + smoothed[j:]
+        return smoothed
     
     # =========================================================================
     # STREAM: Compute IK for Pick/Place

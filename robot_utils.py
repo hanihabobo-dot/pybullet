@@ -32,6 +32,117 @@ REST_POSES = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]
 # Low-level control utilities
 # =============================================================================
 
+# =============================================================================
+# Collision checking for motion planning
+# =============================================================================
+
+# Self-collision pairs to ignore: adjacent links in the Panda kinematic chain
+# plus finger/hand pairs that naturally overlap.
+_PANDA_IGNORED_SELF_PAIRS = frozenset({
+    (-1, 0), (0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6),
+    (6, 7), (7, 8), (8, 9), (8, 10), (9, 10), (9, 11), (10, 11),
+})
+
+
+def is_config_collision_free(robot_id: int, joint_positions,
+                              physics_client: int = 0,
+                              ignored_bodies=None) -> bool:
+    """
+    Check whether a 7-DOF arm configuration is collision-free.
+
+    Saves the robot's current joint state, sets the query configuration,
+    runs broadphase + narrowphase collision detection, then restores the
+    original state.  Contacts are filtered:
+
+    * Self-contacts between adjacent / structurally overlapping links
+      (defined in ``_PANDA_IGNORED_SELF_PAIRS``) are ignored.
+    * The base link (-1) is excluded — it is fixed and rests on the
+      mounting surface.
+    * Bodies listed in *ignored_bodies* (e.g. a held object) are skipped.
+
+    Args:
+        robot_id:        PyBullet body ID of the robot.
+        joint_positions: Sequence of 7 target joint angles.
+        physics_client:  PyBullet physics client ID.
+        ignored_bodies:  Optional set/frozenset of body IDs to skip.
+
+    Returns:
+        True if the configuration has no disallowed contacts.
+    """
+    if ignored_bodies is None:
+        ignored_bodies = frozenset()
+
+    saved = [p.getJointState(robot_id, i, physicsClientId=physics_client)[0]
+             for i in ARM_JOINT_INDICES]
+    try:
+        for i, angle in zip(ARM_JOINT_INDICES, joint_positions):
+            p.resetJointState(robot_id, i, angle,
+                              physicsClientId=physics_client)
+
+        p.performCollisionDetection(physicsClientId=physics_client)
+        contacts = p.getContactPoints(bodyA=robot_id,
+                                      physicsClientId=physics_client)
+
+        for c in contacts:
+            body_a, body_b, link_a, link_b = c[1], c[2], c[3], c[4]
+
+            if body_a == robot_id and body_b == robot_id:
+                pair = (min(link_a, link_b), max(link_a, link_b))
+                if pair not in _PANDA_IGNORED_SELF_PAIRS:
+                    return False
+                continue
+
+            other = body_b if body_a == robot_id else body_a
+            robot_link = link_a if body_a == robot_id else link_b
+
+            if other in ignored_bodies:
+                continue
+            if robot_link == -1:
+                continue
+
+            return False
+
+        return True
+    finally:
+        for i, angle in zip(ARM_JOINT_INDICES, saved):
+            p.resetJointState(robot_id, i, angle,
+                              physicsClientId=physics_client)
+
+
+def is_path_collision_free(robot_id: int, q_start, q_end,
+                            physics_client: int = 0, n_checks: int = 8,
+                            ignored_bodies=None) -> bool:
+    """
+    Check a straight-line joint-space path for collisions.
+
+    Evaluates *n_checks* evenly-spaced configurations (including the
+    endpoints) along the linear interpolation from *q_start* to *q_end*.
+
+    Args:
+        robot_id:        PyBullet body ID of the robot.
+        q_start:         Start joint positions (array-like, length 7).
+        q_end:           End joint positions (array-like, length 7).
+        physics_client:  PyBullet physics client ID.
+        n_checks:        Number of intermediate configurations to test.
+        ignored_bodies:  Optional set/frozenset of body IDs to skip.
+
+    Returns:
+        True if every sampled configuration is collision-free.
+    """
+    q_s = np.asarray(q_start, dtype=float)
+    q_e = np.asarray(q_end, dtype=float)
+    for t in np.linspace(0.0, 1.0, n_checks):
+        q = (1.0 - t) * q_s + t * q_e
+        if not is_config_collision_free(robot_id, q, physics_client,
+                                        ignored_bodies):
+            return False
+    return True
+
+
+# =============================================================================
+# Inverse kinematics
+# =============================================================================
+
 def solve_ik(robot_id: int, target_pos: np.ndarray,
              target_orn=None) -> np.ndarray:
     """

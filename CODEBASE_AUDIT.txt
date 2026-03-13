@@ -119,18 +119,41 @@ Fix:   After relocating, either:
            ID compensates). Document this as a known simplification.
 
 ================================================================================
-5. MOTION PLANNING — LINEAR INTERPOLATION, NO COLLISION CHECKING
+5. MOTION PLANNING — LINEAR INTERPOLATION, NO COLLISION CHECKING  [DONE]
 ================================================================================
-Where: streams.py lines 413-432
-What:  Motion "planning" is linear interpolation in joint space between two
-       configs. No collision detection, no obstacle avoidance, no RRT/PRM.
-       Comment on line 413 says "TODO: Implement actual motion planning".
+Where: streams.py plan_motion(), robot_utils.py, test_full_pipeline.py
 
-Fix:   Implement a real motion planner (e.g., RRT-Connect or PRM using
-       PyBullet's collision checking). The motion planner should NOT reason
-       about line of sight — it should only produce collision-free paths.
-       Line-of-sight clearing is the responsibility of pick-and-place
-       occluder relocation, not motion planning.
+Fixed: Replaced linear interpolation with collision-aware motion planning:
+
+       robot_utils.py — two new utilities:
+         is_config_collision_free(): saves robot state, sets query joints,
+         runs performCollisionDetection + getContactPoints, restores state.
+         Filters adjacent-link self-contacts (_PANDA_IGNORED_SELF_PAIRS),
+         base-link ground contact, and caller-specified ignored bodies.
+         is_path_collision_free(): samples n_checks configs along a
+         straight-line edge and delegates to is_config_collision_free().
+
+       streams.py — plan_motion() rewritten with three-tier strategy:
+         (a) If robot_id is None (heuristic mode), linear interpolation
+             as before — no physics to check against.
+         (b) Direct path: check the straight line from q1 to q2.  If
+             collision-free, return the linear trajectory (fast path —
+             covers the common case where the arm swings through open
+             space).
+         (c) RRT-Connect (Kuffner & LaValle, 2000): bidirectional tree
+             search with 0.2 rad/joint step size, 2000 max iterations,
+             5% goal bias.  Connect phase greedily extends toward the
+             other tree's new node.  Path is smoothed with 75 rounds of
+             random shortcut attempts (pick two non-adjacent waypoints,
+             replace with direct edge if collision-free).
+         If RRT-Connect fails, the stream yields nothing — PDDLStream
+         retries with different bindings or reports planning failure.
+
+       test_full_pipeline.py — move execution updated:
+         Now iterates through traj.waypoints[1:] (skipping the start
+         config) and calls move_robot_smooth() per waypoint with 30
+         steps per segment.  Previously jumped directly to q2, ignoring
+         the trajectory.
 
 ================================================================================
 54. ORACLE VISIBILITY — SINGLE RAY WITH MAGIC THRESHOLD
@@ -244,7 +267,8 @@ The PLANNING ARCHITECTURE models spatial capabilities:
   - KIF fluents for partial observability are sound
 
 The EXECUTION follows the plan:
-  - Move execution uses the plan's IK-solved config (#52 — done)
+  - Move execution follows trajectory waypoints with collision-free
+    paths (#5 — done, #52 — done)
   - Pick execution uses plan grasp + kin_solution (#7 — done)
   - Place execution uses plan grasp + kin_solution (#7 — done)
   - move_robot_to_pos() and compute_ik() removed — solve_ik() replaces them
@@ -258,11 +282,12 @@ Verification logging workflow (for non-truncated planner/execution traces):
   - Batch runs can be captured under logs/phase3_batch/run_*.log.
 
 Priority order for remaining fixes:
-  1. Fix stale registry after occluder relocation (#44)
-  2. Add collision-free motion planning (#5)
-  3. Multi-ray visibility oracle (#54)
-  4. Parameterized scene generation (#55)
-  5. Remove dead computation (#56)
+  1. Multi-ray visibility oracle (#54)
+  2. Parameterized scene generation (#55)
+  3. Remove dead computation (#56)
+  4. Fix stale registry after occluder relocation (#44) — low priority:
+     with pick-and-place the occluder is removed, so stale shadow AABBs
+     cause rays through empty space; target detection by body ID still works
 
 Proposal alignment work (PA-1 through PA-4) is tracked separately above
 and must be addressed before thesis submission.
