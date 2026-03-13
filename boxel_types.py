@@ -79,4 +79,4 @@ class CameraObservation:
     point_cloud: np.ndarray  # Point cloud (N, 3) in world coordinates
     visible_objects: List[str]  # List of object names that are visible
     object_poses: Dict[str, Tuple[np.ndarray, np.ndarray]]  # Dict mapping object names to (position, orientation)
-    boxels: List[Boxel] = None  # List of Semantic Boxels generated from the observation
+    boxels: Optional[List[Boxel]] = None  # List of Semantic Boxels generated from the observation
