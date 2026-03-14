@@ -447,6 +447,139 @@ Impact: LOW for the architecture — only object spawn parameters change.
        is addressed.
 
 ================================================================================
+78. INCOMPLETE VIEW-BLOCKING MODEL — PIPELINE LOOPS FOREVER ON SOME SHADOWS
+================================================================================
+Where: pddlstream_planner.py _build_init() lines 291-303,
+       test_full_pipeline.py lines 181-188 (shadow_occluder_map),
+       boxel_env.py generate_boxels()
+
+What:  The blocks_view_at facts in the planner init state only model
+       the CREATING occluder for each shadow (from shadow_occluder_map).
+       But the camera's line of sight to a shadow can be blocked by ANY
+       object in the scene — not just the one that geometrically cast
+       the shadow.
+
+       Observed failure (run_2026-03-14_16-10-02):
+         - shadow_001 is created by occluder_3 (obj_004).
+         - shadow_occluder_map records: shadow_001 → obj_004.
+         - Plan #3 correctly picks up occluder_3 and places it in free space.
+         - But occluder_1 (at [0.5, 0.2, z]) physically sits between the
+           camera and shadow_001. It blocks 55% of sensing rays.
+         - The planner's view_clear(shadow_001) derived predicate evaluates
+           to TRUE because obj_004 was moved — but occluder_1 was never
+           modeled in blocks_view_at for shadow_001.
+         - Plans #4-#10 all generate move → sense → pick, sensing keeps
+           reporting "still_blocked (55%)", and the loop repeats until
+           the replan limit is hit.
+
+       Two sub-problems:
+       (a) blocks_view_at only records the creating occluder, not all
+           objects that physically obstruct the camera → shadow corridor.
+       (b) occluder_1 is visible but does NOT appear in the boxel registry
+           as an OBJECT boxel (its shadow falls off the table or is too
+           small). Without an OBJECT boxel, the planner cannot plan to
+           move it. Even if blocks_view_at included it, there would be
+           no (Obj occluder_1) or (obj_at_boxel occluder_1 ...) facts.
+
+Fix:   (a) At init time, compute blocks_view_at for ALL object boxels
+           against ALL shadow boxels using camera ray-casting. For each
+           (object, shadow) pair, cast rays from the camera through the
+           shadow volume; if the object intercepts rays, emit
+           (blocks_view_at obj obj_boxel shadow).
+       (b) Ensure ALL visible objects get OBJECT boxels in the registry,
+           even if they don't cast shadows. Currently generate_boxels()
+           only marks objects as is_occluder if they cast shadows, but
+           the Boxel is still created. Verify the full pipeline from
+           generate_boxels → create_boxel_registry_from_boxels preserves
+           all visible objects.
+       (c) The execution loop should detect the infinite-replan pattern
+           (same shadow blocked repeatedly) and either give up or try
+           a different strategy.
+
+Impact: HIGH — causes the pipeline to loop forever on scenes where a
+       non-creating object blocks a shadow's view corridor. This is not
+       a corner case: in the current 3-occluder scene, it happens
+       whenever the target is behind the occluder whose shadow is also
+       blocked by another occluder from the camera's perspective.
+
+================================================================================
+79. ROBOT ARM BLOCKS SENSING DURING EXECUTION
+================================================================================
+Where: domain_pddlstream.pddl (sense action), test_full_pipeline.py
+What:  The PDDL `sense` action lacks an `at_config` precondition to ensure the
+       robot is out of the way before sensing. Consequently, the planner schedules
+       the `move` to the target's pick configuration *before* the `sense` action.
+       The robot arm is physically inside the shadow during the camera raycast,
+       occluding the target it is trying to find.
+
+================================================================================
+80. FAKE IK FALLBACK ALLOWS GARBAGE DATA
+================================================================================
+Where: streams.py (_heuristic_ik)
+What:  `_heuristic_ik` is a fake IK stub that simply adds linear offsets to the
+       home configuration's joint angles. While marked as heuristic, it does not
+       compute real kinematics and produces physically invalid configurations. If
+       the robot ID is missing, this allows garbage data to flow completely
+       through the pipeline.
+
+================================================================================
+81. MISSING RECURSIVE OBJECT DISCOVERY (PA-2)
+================================================================================
+Where: free_space.py
+What:  The proposal explicitly claims that free space partitioning will
+       recursively discover new objects and repeat the bounding process. The
+       implementation is just a standard, single-pass octree subdivision that
+       never detects new objects.
+
+================================================================================
+82. SILENT IK FAILURES IN EXECUTION
+================================================================================
+Where: test_full_pipeline.py (execute_pick, execute_place)
+What:  If `solve_ik` fails for the approach or lift/retreat waypoints, the code
+       prints a warning and silently falls back to `config.joint_positions` (the
+       actual contact point). This causes the robot to smash directly into the
+       object or table without an approach trajectory, continuing execution in an
+       invalid physical state.
+
+================================================================================
+83. BLIND SPOT IN RAYCASTING (ROBOT ARM IGNORED)
+================================================================================
+Where: test_full_pipeline.py (sense_shadow_raycasting)
+What:  `sense_shadow_raycasting` only checks if rays hit the target or the
+       occluder. If rays hit the robot arm (which is currently inside the shadow
+       due to Issue #79), it ignores them and silently returns `clear_but_empty`.
+       This creates false negatives where the robot thinks the shadow is empty
+       just because its own arm was in the way.
+
+================================================================================
+84. INCOMPLETE MAGIC NUMBER CLEANUP
+================================================================================
+Where: test_full_pipeline.py
+What:  The audit claims Issue #69 (Magic Numbers) is "DONE", but the execution
+       code is still full of unexplained constants that are critical to
+       success/failure: `approach_height = 0.10`, `lift_height = 0.25`,
+       `z_levels` offsets (`+0.04`, `0.33`, `0.67`), and ray grid density `n = 7`.
+       None of these are tied to the proposal or justified in comments.
+
+================================================================================
+85. DEAD / COMMENTED CODE POLLUTION
+================================================================================
+Where: streams.py, domain_pddlstream.pddl
+What:  `sample_push_config` and the `push` PDDL action are commented out but
+       left polluting the codebase. They should be removed if superseded by
+       pick-and-place.
+
+================================================================================
+86. PDDL STATE DRIFT AFTER PICK/PLACE (PF-2/PF-3)
+================================================================================
+Where: domain_pddlstream.pddl
+What:  `pick` and `place` are modeled in PDDL as single-configuration
+       instantaneous actions. However, the Python execution moves through a
+       multi-step sequence and leaves the robot at a lift/retreat configuration.
+       The PDDL state does not update `at_config` to reflect this drift, causing
+       the symbolic state to desync from the physical state.
+
+================================================================================
 FOR LATER
 ================================================================================
 - Incremental boxel recomputation after occluder relocation (without redoing
@@ -458,34 +591,49 @@ FOR LATER
   commented out, not deleted — can be revived if needed.
 
 ================================================================================
-SUMMARY (updated 2026-03-13, verified by second-pass audit)
+SUMMARY (updated 2026-03-14)
 ================================================================================
 
-CRITICAL ISSUES (must address before academic evaluation):
+QUICK WINS (Tier 1 — under 30 min each):
+  #85  Dead / commented code pollution (push action).
+  #84  Incomplete magic number cleanup in execution code.
+  #80  Fake IK fallback allows garbage data — lock down or remove.
+  #83  Blind spot in raycasting (robot arm ignored).
+
+HIGH VALUE FIXES (Tier 2 — hours, fix real failures):
+  #79  Robot arm blocks sensing during execution.
+  #78  Incomplete view-blocking model — ROOT CAUSE of infinite replan
+       loop observed in run_2026-03-14_16-10-02.  blocks_view_at only
+       records the creating occluder, not all objects that block camera
+       LOS to a shadow.
+  #82  Silent IK failures in execution cause collisions.
+  #86  PDDL state drift after pick/place (PF-2/PF-3).
+  #67  _build_init() hardcodes assumption targets are only in shadows.
+
+THESIS-CRITICAL (Tier 3 — days/weeks):
+  #55  Hardcoded scene — no scenario variation (prerequisite for #76).
   #76  No evaluation framework (PA-1) — thesis cannot have a Results
        section without metrics, baselines, or scene variation.
+  #81  Missing recursive object discovery (PA-2) — implement or
+       document as accepted simplification / future work.
+
+DEFERRABLE (Tier 4 — accepted simplifications, fidelity):
+  #44  Stale shadow registry after occluder relocation (accepted).
+  #73  shadow_occluder_map goes stale on replan (low impact, fragile).
+  #59  Objects fly away on first grasp — constraint-based grasping works
+  +#77  functionally; friction grasping is a fidelity improvement.
+       Depends on #77 (object dimensions exceed gripper capacity).
 
 ACCEPTED DEVIATIONS (documented, no further code changes needed):
   #61  Optimistic sensing + reactive replanning instead of conditional
        effects.  PDDLStream cannot do contingent planning; replanning is
        standard TAMP practice.  Documented in domain PDDL and code.
 
-MODERATE ISSUES (should address):
-  #67  _build_init() hardcodes assumption targets are only in shadows.
-  #69  ~30 magic numbers — justification comments added (DONE).
-
-STILL OPEN FROM PRIOR AUDITS:
-  #44  Stale shadow registry after occluder relocation (accepted).
-  #55  Hardcoded scene — no scenario variation (required by proposal).
+ALREADY RESOLVED:
   #56  Dead computation: point cloud and compute_neighbors() (FIXED).
-  #59  Objects fly away on first grasp — root cause is constraint-based
-       grasping (JOINT_FIXED weld), not parameter tuning.  Fix: replace
-       with friction-based grasping.  Depends on #77.
   #60  Simulation flickering during planning (DONE — RenderingLock).
-  #73  shadow_occluder_map goes stale on replan (low impact, fragile).
-  #77  Object dimensions exceed Panda gripper capacity (0.08 m opening).
-       Occluders 0.15 m (ungraspable), targets 0.08 m (at limit).
-       Must resize before friction-based grasping (#59 fix) can work.
+  #69  ~30 magic numbers — justification comments added (DONE; see #84
+       for remaining gaps in execution code).
 
 PDDL/PYTHON ALIGNMENT:
   PF-1 sense: MISMATCH (accepted #61) — optimistic + reactive replanning.
@@ -545,25 +693,48 @@ Verification logging workflow (archived #58):
     wsl bash -lc "... python3 -u test_full_pipeline.py --no-gui" 2>&1 |
       Tee-Object -FilePath .\logs\manual_run.log
 
-Priority order for remaining fixes:
-  CRITICAL (blocks academic evaluation):
-    1. Evaluation framework (#76/PA-1) — metrics, baselines, scene variation
+Priority order for remaining fixes (updated 2026-03-14):
 
-  MODERATE:
-    2. Document magic numbers (#69) — DONE (justification comments added)
-    3. Remove dead computation (#56) — DONE (point cloud skipped, compute_neighbors removed)
-    4. _build_init targets-only-in-shadows assumption (#67) — low impact
+  TIER 1 — Quick wins (under 30 min each, no design decisions):
+    1. #85  Delete dead/commented push code            ~5 min
+    2. #84  Comment remaining magic numbers             ~20 min
+    3. #80  Lock down / remove fake IK fallback          ~15 min
+    4. #83  Fix raycasting blind spot (count robot hits) ~15 min
 
-  EXECUTION (blocks reliable pick-and-place):
-    5. Friction-based grasping (#59) — remove constraint, use finger friction
-    6. Object graspability (#77) — resize objects to fit Panda gripper
-       (#59 depends on #77 — must fix together)
+  TIER 2 — Medium effort, high value (1-4 hours, fixes real failures):
+    5. #79  Move arm out of the way before sensing       ~1 hr
+    6. #78  Fix view-blocking model (blocks_view_at for  ~3-4 hr
+           ALL object-shadow pairs) — ROOT CAUSE of
+           the infinite replan loop observed in
+           run_2026-03-14_16-10-02
+    7. #82  Handle IK failures properly (abort/replan    ~1-2 hr
+           instead of silent fallback)
+    8. #86  Verify/fix PDDL state drift after pick/place ~1-2 hr
+    9. #67  Fix targets-only-in-shadows assumption        ~1-2 hr
 
-  LOW PRIORITY (accepted simplifications):
-    7. Stale registry after occluder relocation (#44) — accepted
-    8. Stale shadow_occluder_map on replan (#73) — low impact
-    9. Parameterized scene generation (#55) — needed for evaluation (#76)
-   10. Fix simulation flickering (#60) — DONE (RenderingLock)
+  TIER 3 — Large effort, thesis-critical (days-weeks):
+   10. #55  Parameterize scene (prerequisite for #76)    ~1-2 days
+   11. #76  Evaluation framework (PA-1) — metrics,       ~1-2 weeks
+           baselines, batch runner, scene variation.
+           Required for thesis Results section.
+   12. #81  Recursive object discovery (PA-2) — new      ~2-3 days
+           feature, or document as accepted
+           simplification / future work
+
+  TIER 4 — Deferrable (accepted simplifications, fidelity):
+   13. #44  Stale shadow registry — accepted, raycasting by body ID
+           compensates
+   14. #73  Stale shadow_occluder_map — low impact, derived predicates
+           compensate
+   15. #59  Friction-based grasping — fidelity improvement, not
+    +#77   correctness fix. Constraint grasping works functionally.
+           Depends on #77 (object resizing). Fix together if pursued.
+
+  Already resolved:
+    #56  Dead computation (DONE — point cloud skipped, neighbors removed)
+    #60  Simulation flickering (DONE — RenderingLock)
+    #69  Magic numbers (DONE — justification comments added, see #84
+         for remaining gaps in execution code)
 
 Proposal alignment work (PA-1 through PA-6) and PDDL/Python alignment
 (PF-1 through PF-5) are tracked in their respective sections above and
