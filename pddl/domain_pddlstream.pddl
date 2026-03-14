@@ -40,7 +40,6 @@
     
     ;; --- Ground truth (actual world state) ---
     (obj_at_boxel ?o ?b)     ; Object ?o is physically at boxel ?b
-    ;; (occluder_at ?o ?b)   ; Removed (#53): was only needed for push stream domain binding
     
     ;; --- Know-If fluent (do we know the value?) ---
     (obj_at_boxel_KIF ?o ?b) ; We know whether ?o is at ?b (true or false)
@@ -52,7 +51,6 @@
     (obj_pose_known ?o)
     
     ;; --- Stream certified facts ---
-    ;; (push_solution ?obj ?b_from ?b_to ?q_start ?q_end ?traj) ; Removed (#53): push superseded
     (valid_grasp ?o ?g)           ; Grasp ?g valid for object ?o
     (motion ?q1 ?q2 ?t)           ; Trajectory ?t from ?q1 to ?q2
     (kin_solution ?o ?b ?g ?q)    ; Config ?q for picking ?o from ?b with ?g
@@ -82,34 +80,6 @@
     (and (Boxel ?region)
          (is_shadow ?region)
          (not (view_blocked ?region))))
-  
-  ;; =========================================================================
-  ;; PUSH: Superseded by pick-and-place for occluder relocation (#53).
-  ;; Kept commented out for reference. The pick → move → place sequence
-  ;; is deterministic and uses existing robot motion infrastructure.
-  ;; =========================================================================
-  ;; (:action push
-  ;;   :parameters (?obj ?b_from ?b_to ?q_start ?q_end ?traj)
-  ;;   :precondition (and
-  ;;     (Boxel ?obj)
-  ;;     (Boxel ?b_from)
-  ;;     (Boxel ?b_to)
-  ;;     (Config ?q_start)
-  ;;     (Config ?q_end)
-  ;;     (Trajectory ?traj)
-  ;;     (is_object ?obj)
-  ;;     (obj_at_boxel ?obj ?b_from)
-  ;;     (at_config ?q_start)
-  ;;     (push_solution ?obj ?b_from ?b_to ?q_start ?q_end ?traj)
-  ;;     (handempty)
-  ;;   )
-  ;;   :effect (and
-  ;;     (obj_at_boxel ?obj ?b_to)
-  ;;     (not (obj_at_boxel ?obj ?b_from))
-  ;;     (at_config ?q_end)
-  ;;     (not (at_config ?q_start))
-  ;;   )
-  ;; )
   
   ;; =========================================================================
   ;; SENSE: Observe a region to check for an object

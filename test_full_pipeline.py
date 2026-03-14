@@ -332,7 +332,8 @@ def main(gui=True, run_logger=None):
                     env.camera_position,
                     shadow_boxel,
                     target_pybullet_id,
-                    occluder_pybullet_id
+                    occluder_pybullet_id,
+                    robot_id=robot_id
                 )
 
                 if sense_outcome == "found_target":
@@ -441,14 +442,17 @@ def main(gui=True, run_logger=None):
     return belief.is_target_found()
 
 
-def sense_shadow_raycasting(camera_pos, shadow_boxel, target_pybullet_id, occluder_pybullet_id=None):
+def sense_shadow_raycasting(camera_pos, shadow_boxel, target_pybullet_id,
+                            occluder_pybullet_id=None, robot_id=None):
     """
     Sense a shadow region using PyBullet ray-casting from the fixed camera.
 
     Returns one of three outcomes:
       - found_target: at least one ray hits the target
       - clear_but_empty: no ray hits target and no ray hits the occluder
+        or robot arm
       - still_blocked: no ray hits target and at least one ray hits occluder
+        or robot arm
 
     This keeps visibility verification inside the sensing action (Phase 3):
     blocked sensing must not be treated as "target absent".
@@ -459,11 +463,14 @@ def sense_shadow_raycasting(camera_pos, shadow_boxel, target_pybullet_id, occlud
         target_pybullet_id: PyBullet body ID of the target object
         occluder_pybullet_id: Optional PyBullet body ID of the occluder that
             geometrically blocks this shadow
+        robot_id: Optional PyBullet body ID of the robot.  If provided, rays
+            hitting the robot arm are counted as blocked (audit #83).
 
     Returns:
         Tuple[str, float]:
           - outcome string in {"found_target", "clear_but_empty", "still_blocked"}
-          - blocked_fraction (fraction of rays that hit occluder; 0 when unknown)
+          - blocked_fraction (fraction of rays blocked by occluder or robot;
+            0 when not blocked)
     """
     ray_origin = np.array(camera_pos)
 
@@ -494,6 +501,7 @@ def sense_shadow_raycasting(camera_pos, shadow_boxel, target_pybullet_id, occlud
 
     results = p.rayTestBatch(ray_froms, ray_tos)
     occluder_hits = 0
+    robot_hits = 0
     total_rays = len(results)
 
     for hit_obj_id, _link, _frac, _pos, _normal in results:
@@ -501,9 +509,15 @@ def sense_shadow_raycasting(camera_pos, shadow_boxel, target_pybullet_id, occlud
             return "found_target", 0.0
         if (occluder_pybullet_id is not None) and (hit_obj_id == occluder_pybullet_id):
             occluder_hits += 1
+        elif (robot_id is not None) and (hit_obj_id == robot_id):
+            robot_hits += 1
 
-    if occluder_hits > 0:
-        blocked_fraction = occluder_hits / total_rays if total_rays > 0 else 0.0
+    blocked_total = occluder_hits + robot_hits
+    if blocked_total > 0:
+        blocked_fraction = blocked_total / total_rays if total_rays > 0 else 0.0
+        if robot_hits > 0 and occluder_hits == 0:
+            print(f"    NOTE: {robot_hits}/{total_rays} rays blocked by "
+                  f"robot arm (not occluder)")
         return "still_blocked", blocked_fraction
 
     return "clear_but_empty", 0.0
@@ -537,7 +551,13 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui):
         attachment, and a RobotConfig representing the robot's actual
         final joint configuration (lift position).
     """
+    # Approach 0.10 m above contact: clears the tallest scene object
+    # (occluder 0.15 m cube ≈ 0.075 m half-height) with margin, while
+    # staying low enough for reliable IK on the Panda.
     approach_height = 0.10
+    # Lift 0.25 m above contact: must clear the occluder height (0.15 m)
+    # plus table-edge tolerance so the grasped object doesn't collide
+    # with anything during the subsequent move trajectory.
     lift_height = 0.25
     approach_dir = np.array([0.0, 0.0, 1.0])
 
@@ -605,6 +625,7 @@ def execute_place(robot_id, env, obj_name, place_pos, grasp, config,
         RobotConfig: The robot's actual final joint configuration
         (retreat position above the placement).
     """
+    # Same clearances as execute_pick — see comments there.
     approach_height = 0.10
     retreat_height = 0.25
     approach_dir = np.array([0.0, 0.0, 1.0])

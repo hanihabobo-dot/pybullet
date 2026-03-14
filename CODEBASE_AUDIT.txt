@@ -513,7 +513,7 @@ What:  The PDDL `sense` action lacks an `at_config` precondition to ensure the
        occluding the target it is trying to find.
 
 ================================================================================
-80. FAKE IK FALLBACK ALLOWS GARBAGE DATA
+80. FAKE IK FALLBACK ALLOWS GARBAGE DATA  [DONE]
 ================================================================================
 Where: streams.py (_heuristic_ik)
 What:  `_heuristic_ik` is a fake IK stub that simply adds linear offsets to the
@@ -521,6 +521,11 @@ What:  `_heuristic_ik` is a fake IK stub that simply adds linear offsets to the
        compute real kinematics and produces physically invalid configurations. If
        the robot ID is missing, this allows garbage data to flow completely
        through the pipeline.
+
+Fix:   DONE — _heuristic_ik removed entirely. BoxelStreams constructor now
+       raises ValueError if robot_id is None (no allow_heuristic escape hatch).
+       compute_kin_solution logs and yields nothing when robot_id is missing.
+       pddlstream_planner.py allow_heuristic parameter removed.
 
 ================================================================================
 81. MISSING RECURSIVE OBJECT DISCOVERY (PA-2)
@@ -542,7 +547,7 @@ What:  If `solve_ik` fails for the approach or lift/retreat waypoints, the code
        invalid physical state.
 
 ================================================================================
-83. BLIND SPOT IN RAYCASTING (ROBOT ARM IGNORED)
+83. BLIND SPOT IN RAYCASTING (ROBOT ARM IGNORED)  [DONE]
 ================================================================================
 Where: test_full_pipeline.py (sense_shadow_raycasting)
 What:  `sense_shadow_raycasting` only checks if rays hit the target or the
@@ -551,8 +556,12 @@ What:  `sense_shadow_raycasting` only checks if rays hit the target or the
        This creates false negatives where the robot thinks the shadow is empty
        just because its own arm was in the way.
 
+Fix:   DONE — sense_shadow_raycasting now accepts robot_id parameter; rays
+       hitting the robot arm are counted as blocked and produce "still_blocked"
+       outcome instead of false "clear_but_empty".
+
 ================================================================================
-84. INCOMPLETE MAGIC NUMBER CLEANUP
+84. INCOMPLETE MAGIC NUMBER CLEANUP  [DONE]
 ================================================================================
 Where: test_full_pipeline.py
 What:  The audit claims Issue #69 (Magic Numbers) is "DONE", but the execution
@@ -561,13 +570,21 @@ What:  The audit claims Issue #69 (Magic Numbers) is "DONE", but the execution
        `z_levels` offsets (`+0.04`, `0.33`, `0.67`), and ray grid density `n = 7`.
        None of these are tied to the proposal or justified in comments.
 
+Fix:   DONE — Added justification comments for approach_height (0.10 m) and
+       lift_height/retreat_height (0.25 m) in execute_pick() and execute_place().
+       z_levels and n=7 were already commented in the #69 fix.
+
 ================================================================================
-85. DEAD / COMMENTED CODE POLLUTION
+85. DEAD / COMMENTED CODE POLLUTION  [DONE]
 ================================================================================
 Where: streams.py, domain_pddlstream.pddl
 What:  `sample_push_config` and the `push` PDDL action are commented out but
        left polluting the codebase. They should be removed if superseded by
        pick-and-place.
+
+Fix:   DONE — Removed commented-out sample_push_config (streams.py),
+       push action + push_solution/occluder_at predicates (domain_pddlstream.pddl),
+       and sample-push-config stream (stream.pddl).
 
 ================================================================================
 86. PDDL STATE DRIFT AFTER PICK/PLACE (PF-2/PF-3)

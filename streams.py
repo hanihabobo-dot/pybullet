@@ -97,14 +97,15 @@ class BoxelStreams:
     
     def __init__(self, registry: BoxelRegistry, robot_id: int = None,
                  physics_client: int = None, object_body_ids: dict = None,
-                 support_body_ids: frozenset = None,
-                 allow_heuristic: bool = False):
+                 support_body_ids: frozenset = None):
         """
         Initialize streams with environment context.
 
         Args:
             registry: BoxelRegistry containing all boxels
-            robot_id: PyBullet body ID of the robot (required for real IK)
+            robot_id: PyBullet body ID of the robot (required for IK).
+                Must be provided; without it compute_kin_solution yields
+                nothing and plan_motion falls back to linear interpolation.
             physics_client: PyBullet physics client ID (0 if using default)
             object_body_ids: Mapping from object/boxel identifiers to PyBullet
                 body IDs. Used to exclude the grasped object from collision
@@ -116,9 +117,6 @@ class BoxelStreams:
                 because the Panda is mounted on the table and its lower arm
                 links overlap the table's collision geometry in PyBullet.
                 Not ignored for pure transit motions with no grasped object.
-            allow_heuristic: If True, permit heuristic IK when robot_id is
-                None (for symbolic-only testing).  Default False — production
-                code must always provide a robot_id.
         """
         self.registry = registry
         self.robot_id = robot_id
@@ -126,15 +124,10 @@ class BoxelStreams:
         self.object_body_ids = object_body_ids or {}
         self.support_body_ids = support_body_ids or frozenset()
         
-        if self.robot_id is None and not allow_heuristic:
+        if self.robot_id is None:
             raise ValueError(
                 "BoxelStreams requires robot_id for kinematically valid IK. "
-                "Pass allow_heuristic=True only for symbolic-only testing."
-            )
-        if self.robot_id is None:
-            logger.warning(
-                "BoxelStreams created without robot_id — all IK will use "
-                "heuristic fallback (configs will NOT be kinematically valid)"
+                "Heuristic IK fallback has been removed (audit #80)."
             )
         
         # Home configuration
@@ -154,44 +147,6 @@ class BoxelStreams:
         # tighter values rarely improve the solution but slow planning).
         self.ik_max_iterations = 100
         self.ik_residual_threshold = 1e-4
-    
-    # =========================================================================
-    # STREAM: Sample Push Solution — superseded by pick-and-place (#53)
-    # =========================================================================
-    # def sample_push_config(self, occluder_id: str, b_from: str) -> Iterator[Tuple]:
-    #     """
-    #     Generate push solutions: destination, start/end configs, and trajectory.
-    #     Superseded by pick → move → place for occluder relocation (#53).
-    #     """
-    #     boxel = self.registry.get_boxel(occluder_id)
-    #     if boxel is None:
-    #         return
-    #     occluder_center = boxel.center
-    #     for angle in np.linspace(0, 2*np.pi, 4, endpoint=False):
-    #         push_pos = occluder_center + np.array([
-    #             0.15 * np.cos(angle), 0.15 * np.sin(angle), 0.1
-    #         ])
-    #         q_start_config = self._compute_sensing_ik(push_pos, occluder_center)
-    #         if q_start_config is None:
-    #             continue
-    #         self._config_counter += 1
-    #         q_start_config.name = f"q_push_start_{occluder_id}_{self._config_counter}"
-    #         push_direction = np.array([np.cos(angle), np.sin(angle), 0.0])
-    #         push_dist = np.max(boxel.extent[:2]) + 0.10
-    #         dest_center = occluder_center + push_direction * push_dist
-    #         dest_pos = dest_center + np.array([0.0, 0.0, 0.1])
-    #         q_end_config = self._compute_sensing_ik(dest_pos, dest_center)
-    #         if q_end_config is None:
-    #             continue
-    #         self._config_counter += 1
-    #         q_end_config.name = f"q_push_end_{occluder_id}_{self._config_counter}"
-    #         self._traj_counter += 1
-    #         traj = Trajectory(
-    #             waypoints=[q_start_config, q_end_config],
-    #             name=f"traj_push_{occluder_id}_{self._traj_counter}"
-    #         )
-    #         b_to_name = f"push_dest_{occluder_id}_{self._config_counter}"
-    #         yield (b_to_name, q_start_config, q_end_config, traj)
     
     IK_NUM_SEEDS = 8
 
@@ -294,32 +249,6 @@ class BoxelStreams:
             seed = rest + np.array(offset)
             seed = np.clip(seed, JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH)
             yield seed.tolist()
-    
-    def _heuristic_ik(self, ee_pos: np.ndarray, 
-                      look_at: np.ndarray) -> Optional[RobotConfig]:
-        """
-        Fake IK fallback for testing without a loaded robot.
-        
-        WARNING: This is NOT inverse kinematics. It perturbs the home config
-        by an arbitrary function of the target position. The resulting joint
-        angles have no guaranteed relationship to the requested end-effector
-        pose. Configs produced here are marked with is_heuristic=True so
-        downstream code can detect and reject them when real IK is expected.
-        """
-        logger.warning(
-            "Using heuristic IK (ee_pos=%s) — result is NOT a valid IK "
-            "solution. Config will be marked is_heuristic=True.",
-            ee_pos.tolist()
-        )
-        
-        offset = (ee_pos - np.array([0.5, 0, 0.5])) * 0.5
-        joint_offsets = np.array([offset[1], offset[2], offset[0], 
-                                  0, offset[1], offset[2], 0])
-        
-        new_joints = self.home_config.joint_positions + joint_offsets * 0.3
-        new_joints = np.clip(new_joints, JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH)
-        
-        return RobotConfig(joint_positions=new_joints, is_heuristic=True)
     
     def _direction_to_quat(self, direction: np.ndarray) -> np.ndarray:
         """
@@ -820,12 +749,8 @@ class BoxelStreams:
         ignored = frozenset({body_id}) if body_id is not None else frozenset()
 
         if self.robot_id is None:
-            config = self._heuristic_ik(target_pos, boxel.center)
-            if config is not None:
-                config.ignored_body_ids = ignored
-                self._config_counter += 1
-                config.name = f"q_kin_{obj_id}_{self._config_counter}"
-                yield (config,)
+            logger.warning("compute_kin: no robot_id — cannot compute IK "
+                           "for %s at %s", obj_id, boxel_id)
             return
 
         seen = set()

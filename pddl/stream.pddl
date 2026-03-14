@@ -1,20 +1,5 @@
 (define (stream boxel-streams)
   
-  ;; Push stream: superseded by pick-and-place for occluder relocation (#53).
-  ;; Kept commented out for reference.
-  ;; (:stream sample-push-config
-  ;;   :inputs (?obj ?b_from)
-  ;;   :domain (and (is_object ?obj) (occluder_at ?obj ?b_from))
-  ;;   :outputs (?b_to ?q_start ?q_end ?traj)
-  ;;   :certified (and
-  ;;     (Boxel ?b_to)
-  ;;     (Config ?q_start)
-  ;;     (Config ?q_end)
-  ;;     (Trajectory ?traj)
-  ;;     (push_solution ?obj ?b_from ?b_to ?q_start ?q_end ?traj)
-  ;;     (config_for_boxel ?q_start ?b_from))
-  ;; )
-  
   ;; Sample grasp poses for an object  
   (:stream sample-grasp
     :inputs (?o)

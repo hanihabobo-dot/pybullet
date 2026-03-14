@@ -54,15 +54,13 @@ class PDDLStreamPlanner:
                  shadow_occluder_map: Dict[str, str] = None,
                  physics_client: int = None,
                  object_body_ids: Dict[str, int] = None,
-                 support_body_ids: frozenset = None,
-                 allow_heuristic: bool = False):
+                 support_body_ids: frozenset = None):
         """
         Initialize the planner.
 
         Args:
             registry: BoxelRegistry with scene boxels
-            robot_id: PyBullet robot body ID (required for real IK;
-                without it, BoxelStreams falls back to heuristic IK)
+            robot_id: PyBullet robot body ID (required for IK).
             shadow_occluder_map: Dict mapping shadow_id -> occluder_id
             physics_client: PyBullet physics client ID (0 if default)
             object_body_ids: Mapping from object/boxel identifiers to
@@ -71,8 +69,6 @@ class PDDLStreamPlanner:
                 from collision checks.
             support_body_ids: Body IDs of support surfaces (table, ground
                 plane) ignored during pick/place endpoint checks.
-            allow_heuristic: If True, permit heuristic IK when robot_id
-                is None.  Only for symbolic-only testing (test_planner).
         """
         self.registry = registry
         self.robot_id = robot_id
@@ -82,7 +78,6 @@ class PDDLStreamPlanner:
             registry, robot_id=robot_id, physics_client=physics_client,
             object_body_ids=object_body_ids,
             support_body_ids=support_body_ids,
-            allow_heuristic=allow_heuristic
         )
         self.home_config = self.streams.home_config
         
@@ -371,50 +366,19 @@ class PDDLStreamPlanner:
 
 
 def test_planner():
-    """Test the PDDLStream planner (uses heuristic IK without a robot)."""
+    """
+    Standalone planner test — requires a PyBullet environment with a loaded
+    robot.  Run test_full_pipeline.py instead for the full integration test.
+
+    Heuristic IK fallback has been removed (audit #80); a real robot_id
+    is now mandatory for IK-dependent streams.
+    """
     print("="*60)
     print("Testing PDDLStream Planner")
     print("="*60)
-    
-    # Load registry from JSON
-    registry = BoxelRegistry.load_from_json('boxel_data.json')
-    print(f"Loaded {len(registry.boxels)} boxels")
-    
-    # Count shadow and occluder boxels
-    shadows = [b.id for b in registry.boxels.values() if b.boxel_type == BoxelType.SHADOW]
-    occluders = [b.id for b in registry.boxels.values() if b.boxel_type == BoxelType.OBJECT]
-    print(f"Shadow boxels: {len(shadows)}")
-    print(f"Occluder boxels: {len(occluders)}")
-    
-    # Create shadow->occluder mapping from registry ground-truth
-    shadow_occluder_map = {}
-    for shadow_id in shadows:
-        shadow_boxel = registry.get_boxel(shadow_id)
-        if shadow_boxel and shadow_boxel.created_by_boxel_id:
-            shadow_occluder_map[shadow_id] = shadow_boxel.created_by_boxel_id
-    print(f"Shadow-Occluder mapping: {shadow_occluder_map}")
-    
-    # Create planner (no robot_id: BoxelStreams will use heuristic IK)
-    planner = PDDLStreamPlanner(registry, shadow_occluder_map=shadow_occluder_map,
-                                allow_heuristic=True)
-    
-    # Plan (uses planner.home_config as default current_config)
-    print("\nPlanning to find and hold target_1...")
-    plan = planner.plan(
-        target_objects=['target_1'],
-        goal=('holding', 'target_1'),
-        max_time=60.0,
-        verbose=True
-    )
-    
-    if plan:
-        print("\n--- Generated Plan ---")
-        for i, action in enumerate(plan):
-            print(f"  {i+1}. {action}")
-    else:
-        print("\nNo plan found!")
-    
-    return plan is not None
+    print("ERROR: Standalone planner test requires a loaded PyBullet robot.")
+    print("       Run test_full_pipeline.py for full integration testing.")
+    return False
 
 
 if __name__ == "__main__":
