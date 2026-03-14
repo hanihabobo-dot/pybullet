@@ -145,7 +145,7 @@ Limitation:
        completeness or practical efficiency.
 
 ================================================================================
-67. _build_init() HARDCODES ASSUMPTION THAT TARGETS ARE ONLY IN SHADOWS
+67. _build_init() HARDCODES ASSUMPTION THAT TARGETS ARE ONLY IN SHADOWS  [DONE]
 ================================================================================
 Where: pddlstream_planner.py _build_init(), lines 269-286
 
@@ -161,6 +161,13 @@ What:  For every OBJECT boxel (line 280-281) and every FREE_SPACE boxel
        target could be anywhere the robot hasn't looked.  The current
        implementation precludes scenarios where a target is on an open
        part of the table but the robot doesn't know which one it is.
+
+Fix:   DONE — _build_init() now takes an optional observed_clear_regions
+       parameter.  When None (default), all object/free-space boxels are
+       treated as observed (preserving current behavior for the fixed
+       overhead camera scenario).  When an explicit set is provided, only
+       those regions get KIF facts.  The assumption is documented in the
+       docstring with guidance for extending to partial-coverage sensors.
 
 Impact: Low for the current hidden-object scenario (targets are always
        behind occluders by construction).  But this prevents extending
@@ -447,7 +454,7 @@ Impact: LOW for the architecture — only object spawn parameters change.
        is addressed.
 
 ================================================================================
-78. INCOMPLETE VIEW-BLOCKING MODEL — PIPELINE LOOPS FOREVER ON SOME SHADOWS
+78. INCOMPLETE VIEW-BLOCKING MODEL — PIPELINE LOOPS FOREVER ON SOME SHADOWS  [DONE]
 ================================================================================
 Where: pddlstream_planner.py _build_init() lines 291-303,
        test_full_pipeline.py lines 181-188 (shadow_occluder_map),
@@ -481,20 +488,17 @@ What:  The blocks_view_at facts in the planner init state only model
            move it. Even if blocks_view_at included it, there would be
            no (Obj occluder_1) or (obj_at_boxel occluder_1 ...) facts.
 
-Fix:   (a) At init time, compute blocks_view_at for ALL object boxels
-           against ALL shadow boxels using camera ray-casting. For each
-           (object, shadow) pair, cast rays from the camera through the
-           shadow volume; if the object intercepts rays, emit
-           (blocks_view_at obj obj_boxel shadow).
-       (b) Ensure ALL visible objects get OBJECT boxels in the registry,
-           even if they don't cast shadows. Currently generate_boxels()
-           only marks objects as is_occluder if they cast shadows, but
-           the Boxel is still created. Verify the full pipeline from
-           generate_boxels → create_boxel_registry_from_boxels preserves
-           all visible objects.
-       (c) The execution loop should detect the infinite-replan pattern
-           (same shadow blocked repeatedly) and either give up or try
-           a different strategy.
+Fix:   DONE — (a) compute_shadow_blockers() in test_full_pipeline.py
+       uses camera raycasting to find ALL objects blocking each shadow.
+       shadow_occluder_map is now Dict[shadow_id, List[blocker_ids]].
+       _build_init() in pddlstream_planner.py emits blocks_view_at for
+       every (blocker, shadow) pair.
+       (b) Verified: generate_boxels() → create_boxel_registry_from_boxels
+       preserves all visible objects as OBJECT boxels regardless of
+       whether they cast shadows.
+       (c) Execution loop tracks blocked_counts per shadow; after 3
+       consecutive "still_blocked" outcomes on the same shadow, marks
+       it as empty and moves on.
 
 Impact: HIGH — causes the pipeline to loop forever on scenes where a
        non-creating object blocks a shadow's view corridor. This is not
@@ -503,7 +507,7 @@ Impact: HIGH — causes the pipeline to loop forever on scenes where a
        blocked by another occluder from the camera's perspective.
 
 ================================================================================
-79. ROBOT ARM BLOCKS SENSING DURING EXECUTION
+79. ROBOT ARM BLOCKS SENSING DURING EXECUTION  [DONE]
 ================================================================================
 Where: domain_pddlstream.pddl (sense action), test_full_pipeline.py
 What:  The PDDL `sense` action lacks an `at_config` precondition to ensure the
@@ -511,6 +515,10 @@ What:  The PDDL `sense` action lacks an `at_config` precondition to ensure the
        the `move` to the target's pick configuration *before* the `sense` action.
        The robot arm is physically inside the shadow during the camera raycast,
        occluding the target it is trying to find.
+
+Fix:   DONE — Execution-side fix: the sense handler now moves the robot arm
+       to home configuration before raycasting (test_full_pipeline.py).
+       current_config is updated to track the move.
 
 ================================================================================
 80. FAKE IK FALLBACK ALLOWS GARBAGE DATA  [DONE]
@@ -537,7 +545,7 @@ What:  The proposal explicitly claims that free space partitioning will
        never detects new objects.
 
 ================================================================================
-82. SILENT IK FAILURES IN EXECUTION
+82. SILENT IK FAILURES IN EXECUTION  [DONE]
 ================================================================================
 Where: test_full_pipeline.py (execute_pick, execute_place)
 What:  If `solve_ik` fails for the approach or lift/retreat waypoints, the code
@@ -545,6 +553,12 @@ What:  If `solve_ik` fails for the approach or lift/retreat waypoints, the code
        actual contact point). This causes the robot to smash directly into the
        object or table without an approach trajectory, continuing execution in an
        invalid physical state.
+
+Fix:   DONE — execute_pick() and execute_place() now abort (return None)
+       when the contact-point IK fails.  The execution loop detects the
+       failure and breaks to trigger replanning.  Approach/retreat
+       fallbacks only use the contact config (never the plan config),
+       which is a safe degradation.
 
 ================================================================================
 83. BLIND SPOT IN RAYCASTING (ROBOT ARM IGNORED)  [DONE]
@@ -587,7 +601,7 @@ Fix:   DONE — Removed commented-out sample_push_config (streams.py),
        and sample-push-config stream (stream.pddl).
 
 ================================================================================
-86. PDDL STATE DRIFT AFTER PICK/PLACE (PF-2/PF-3)
+86. PDDL STATE DRIFT AFTER PICK/PLACE (PF-2/PF-3)  [DONE]
 ================================================================================
 Where: domain_pddlstream.pddl
 What:  `pick` and `place` are modeled in PDDL as single-configuration
@@ -595,6 +609,13 @@ What:  `pick` and `place` are modeled in PDDL as single-configuration
        multi-step sequence and leaves the robot at a lift/retreat configuration.
        The PDDL state does not update `at_config` to reflect this drift, causing
        the symbolic state to desync from the physical state.
+
+Fix:   DONE — Execution code now reads the actual PyBullet joint state
+       (p.getJointState) after every move/pick/place action and stores it
+       in current_config.  This ensures replanning uses the robot's true
+       configuration.  The PDDL model's accepted simplification (not
+       updating at_config in pick/place) is compensated by this execution-
+       side tracking.
 
 ================================================================================
 FOR LATER
@@ -618,14 +639,16 @@ QUICK WINS (Tier 1 — under 30 min each):
   #83  Blind spot in raycasting (robot arm ignored).
 
 HIGH VALUE FIXES (Tier 2 — hours, fix real failures):
-  #79  Robot arm blocks sensing during execution.
-  #78  Incomplete view-blocking model — ROOT CAUSE of infinite replan
-       loop observed in run_2026-03-14_16-10-02.  blocks_view_at only
-       records the creating occluder, not all objects that block camera
-       LOS to a shadow.
-  #82  Silent IK failures in execution cause collisions.
-  #86  PDDL state drift after pick/place (PF-2/PF-3).
-  #67  _build_init() hardcodes assumption targets are only in shadows.
+  #79  Robot arm blocks sensing during execution (DONE — move to home
+       before sense).
+  #78  Incomplete view-blocking model (DONE — compute_shadow_blockers
+       via raycasting + infinite-replan detection).
+  #82  Silent IK failures in execution (DONE — abort and replan on
+       contact IK failure).
+  #86  PDDL state drift after pick/place (DONE — read actual joint
+       state after every action).
+  #67  _build_init() assumption (DONE — parameterized via
+       observed_clear_regions).
 
 THESIS-CRITICAL (Tier 3 — days/weeks):
   #55  Hardcoded scene — no scenario variation (prerequisite for #76).
@@ -651,6 +674,11 @@ ALREADY RESOLVED:
   #60  Simulation flickering during planning (DONE — RenderingLock).
   #69  ~30 magic numbers — justification comments added (DONE; see #84
        for remaining gaps in execution code).
+  #79  Robot arm blocks sensing (DONE — Tier 2, 2026-03-14).
+  #78  Incomplete view-blocking model (DONE — Tier 2, 2026-03-14).
+  #82  Silent IK failures in execution (DONE — Tier 2, 2026-03-14).
+  #86  PDDL state drift (DONE — Tier 2, 2026-03-14).
+  #67  Targets-only-in-shadows assumption (DONE — Tier 2, 2026-03-14).
 
 PDDL/PYTHON ALIGNMENT:
   PF-1 sense: MISMATCH (accepted #61) — optimistic + reactive replanning.
@@ -718,16 +746,13 @@ Priority order for remaining fixes (updated 2026-03-14):
     3. #80  Lock down / remove fake IK fallback          ~15 min
     4. #83  Fix raycasting blind spot (count robot hits) ~15 min
 
-  TIER 2 — Medium effort, high value (1-4 hours, fixes real failures):
-    5. #79  Move arm out of the way before sensing       ~1 hr
-    6. #78  Fix view-blocking model (blocks_view_at for  ~3-4 hr
-           ALL object-shadow pairs) — ROOT CAUSE of
-           the infinite replan loop observed in
-           run_2026-03-14_16-10-02
-    7. #82  Handle IK failures properly (abort/replan    ~1-2 hr
-           instead of silent fallback)
-    8. #86  Verify/fix PDDL state drift after pick/place ~1-2 hr
-    9. #67  Fix targets-only-in-shadows assumption        ~1-2 hr
+  TIER 2 — Medium effort, high value (DONE 2026-03-14):
+    5. #79  Move arm out of the way before sensing       DONE
+    6. #78  Fix view-blocking model (blocks_view_at for  DONE
+           ALL object-shadow pairs)
+    7. #82  Handle IK failures properly (abort/replan)   DONE
+    8. #86  Verify/fix PDDL state drift after pick/place DONE
+    9. #67  Fix targets-only-in-shadows assumption        DONE
 
   TIER 3 — Large effort, thesis-critical (days-weeks):
    10. #55  Parameterize scene (prerequisite for #76)    ~1-2 days

@@ -176,15 +176,22 @@ def main(gui=True, run_logger=None):
     print(f"  ORACLE: Actually hidden in {oracle_hidden_shadow} (ground-truth AABB containment)")
     print(f"  Robot must search to find it!")
     
-    # Create shadow->occluder mapping from the registry's ground-truth data.
-    # Each shadow boxel knows which occluder created it (created_by_boxel_id).
-    shadow_occluder_map = {}
+    # Build comprehensive shadow → [blocker_ids] mapping via raycasting
+    # (audit #78).  Unlike the old approach that only recorded the creating
+    # occluder, this detects ALL objects that physically block the camera's
+    # line of sight to each shadow.
+    shadow_occluder_map = compute_shadow_blockers(
+        env.camera_position, registry, shadows, occluders, env
+    )
     for shadow_id in shadows:
-        shadow_boxel = registry.get_boxel(shadow_id)
-        if shadow_boxel and shadow_boxel.created_by_boxel_id:
-            shadow_occluder_map[shadow_id] = shadow_boxel.created_by_boxel_id
-        else:
-            print(f"  WARNING: Shadow {shadow_id} has no linked occluder — skipping")
+        if shadow_id not in shadow_occluder_map or not shadow_occluder_map[shadow_id]:
+            shadow_boxel = registry.get_boxel(shadow_id)
+            if shadow_boxel and shadow_boxel.created_by_boxel_id:
+                shadow_occluder_map.setdefault(shadow_id, []).append(
+                    shadow_boxel.created_by_boxel_id
+                )
+            else:
+                print(f"  WARNING: Shadow {shadow_id} has no linked occluder — skipping")
     
     # Create mapping from boxel IDs to PyBullet object names and IDs
     # Boxel IDs are like "obj_000", PyBullet names are like "occluder_1"
@@ -249,6 +256,9 @@ def main(gui=True, run_logger=None):
     grasp_constraint_id = None
     exit_reason = None
     current_config = planner.home_config
+    # Track repeated "still_blocked" outcomes per shadow to detect the
+    # infinite-replan pattern described in audit #78(c).
+    blocked_counts = {}  # shadow_id → consecutive-block count
     
     while not belief.is_target_found() and plan_count < max_replans:
         plan_count += 1
@@ -310,13 +320,29 @@ def main(gui=True, run_logger=None):
                 for wp in traj.waypoints[1:]:
                     move_robot_smooth(robot_id, wp.joint_positions, gui,
                                       steps=30)
-                current_config = q2
+                # Track actual joint state, not the plan's q2, so that
+                # subsequent actions and replans see the true config
+                # (audit #86).
+                actual_joints = np.array(
+                    [p.getJointState(robot_id, i)[0] for i in range(7)]
+                )
+                current_config = RobotConfig(
+                    joint_positions=actual_joints,
+                    name=q2.name
+                )
                 print(f"    -> Arrived at {dest_boxel_id}")
                     
             elif action_name == 'sense':
                 obj, shadow_id = params
                 print(f"    Sensing {shadow_id} (fixed camera)...")
-                
+
+                # Move the arm to home before sensing so it doesn't
+                # occlude the camera's line of sight to the shadow
+                # region (audit #79).
+                home_joints = planner.home_config.joint_positions
+                move_robot_smooth(robot_id, home_joints, gui, steps=40)
+                current_config = planner.home_config
+
                 shadow_boxel = registry.get_boxel(str(shadow_id))
                 if shadow_boxel is None:
                     print(f"    WARNING: Shadow '{shadow_id}' not found in registry. Replanning...")
@@ -345,9 +371,17 @@ def main(gui=True, run_logger=None):
                     print(f"    -> REPLANNING with updated belief...")
                     break  # Exit action loop to replan
                 else:
+                    sid_str = str(shadow_id)
+                    blocked_counts[sid_str] = blocked_counts.get(sid_str, 0) + 1
                     print(f"    View to {shadow_id} still blocked "
-                          f"({blocked_fraction:.0%} rays hit occluder).")
-                    print(f"    -> REPLANNING without marking shadow empty...")
+                          f"({blocked_fraction:.0%} rays hit occluder). "
+                          f"[attempt {blocked_counts[sid_str]}]")
+                    if blocked_counts[sid_str] >= 3:
+                        print(f"    ERROR: {shadow_id} blocked {blocked_counts[sid_str]} "
+                              f"times — giving up on this shadow (audit #78c)")
+                        belief.mark_sensed(sid_str, found=False)
+                    else:
+                        print(f"    -> REPLANNING without marking shadow empty...")
                     break  # Exit action loop to replan
                     
             elif action_name == 'pick':
@@ -365,9 +399,13 @@ def main(gui=True, run_logger=None):
                     print(f"    ERROR: Cannot resolve PyBullet object for '{obj_str}'")
                     break
 
-                grasp_constraint_id, current_config = execute_pick(
+                result = execute_pick(
                     robot_id, env, pick_obj_name, pick_pos,
                     grasp, config, gui)
+                if result[0] is None:
+                    print(f"    IK failure during pick — replanning (audit #82)")
+                    break
+                grasp_constraint_id, current_config = result
                 print(f"    *** {pick_obj_name} PICKED UP! ***")
 
             elif action_name == 'place':
@@ -384,9 +422,13 @@ def main(gui=True, run_logger=None):
                     print(f"    ERROR: Cannot resolve position for boxel '{boxel_id_str}'")
                     break
 
-                current_config = execute_place(
+                place_result = execute_place(
                     robot_id, env, obj_str, place_pos, grasp, config,
                     grasp_constraint_id, gui)
+                if place_result is None:
+                    print(f"    IK failure during place — replanning (audit #82)")
+                    break
+                current_config = place_result
                 grasp_constraint_id = None
 
                 env.update_object_positions()
@@ -523,6 +565,67 @@ def sense_shadow_raycasting(camera_pos, shadow_boxel, target_pybullet_id,
     return "clear_but_empty", 0.0
 
 
+def compute_shadow_blockers(camera_pos, registry, shadow_ids, object_ids, env):
+    """
+    For each shadow, find ALL object boxels that block the camera's view.
+
+    Casts a coarse ray grid from the camera through each shadow volume.
+    Any object whose PyBullet body intercepts at least one ray is recorded
+    as a blocker for that shadow.  This replaces the old one-to-one
+    shadow_occluder_map that only tracked the creating occluder (audit #78).
+
+    Args:
+        camera_pos: Camera position [x, y, z].
+        registry: BoxelRegistry with all boxels.
+        shadow_ids: List of shadow boxel IDs.
+        object_ids: List of object boxel IDs.
+        env: BoxelTestEnv for resolving PyBullet body IDs.
+
+    Returns:
+        Dict mapping shadow_id → list of blocker object boxel IDs.
+    """
+    pybullet_to_boxel = {}
+    for obj_bid in object_ids:
+        obj_boxel = registry.get_boxel(obj_bid)
+        if obj_boxel and obj_boxel.object_name and obj_boxel.object_name in env.objects:
+            body_id = env.objects[obj_boxel.object_name].object_id
+            pybullet_to_boxel[body_id] = obj_bid
+
+    ray_origin = camera_pos.tolist()
+    blockers = {}
+
+    for shadow_id in shadow_ids:
+        sb = registry.get_boxel(shadow_id)
+        if sb is None:
+            continue
+
+        blocker_set = set()
+        min_c, max_c = sb.min_corner, sb.max_corner
+        z_mid = (min_c[2] + max_c[2]) / 2.0
+        n = 5
+
+        ray_froms = []
+        ray_tos = []
+        for xi in np.linspace(min_c[0], max_c[0], n):
+            for yi in np.linspace(min_c[1], max_c[1], n):
+                ray_froms.append(ray_origin)
+                ray_tos.append([float(xi), float(yi), float(z_mid)])
+
+        results = p.rayTestBatch(ray_froms, ray_tos)
+        for hit_id, _link, _frac, _pos, _normal in results:
+            if hit_id in pybullet_to_boxel:
+                blocker_set.add(pybullet_to_boxel[hit_id])
+
+        blockers[shadow_id] = list(blocker_set)
+
+    print(f"  Shadow blockers (audit #78):")
+    for sid, bids in blockers.items():
+        if bids:
+            print(f"    {sid} blocked by: {bids}")
+
+    return blockers
+
+
 def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui):
     """
     Execute pick action using the plan's grasp pose.
@@ -567,20 +670,23 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui):
 
     pc = env.client_id
     approach_joints = solve_ik(robot_id, approach_ee, grasp.orientation, pc)
+    contact_joints = solve_ik(robot_id, contact_ee, grasp.orientation, pc)
     lift_joints = solve_ik(robot_id, lift_ee, grasp.orientation, pc)
 
-    if approach_joints is None or lift_joints is None:
-        print(f"    WARNING: IK failed for pick waypoints of {obj_name}, "
-              f"falling back to nearest valid waypoint")
-        if lift_joints is None:
-            lift_joints = approach_joints if approach_joints is not None \
-                else config.joint_positions
-        if approach_joints is None:
-            approach_joints = config.joint_positions
-
-    contact_joints = solve_ik(robot_id, contact_ee, grasp.orientation, pc)
+    # Abort if any critical waypoint IK fails — silently falling back to
+    # config.joint_positions caused the robot to skip approach/lift and
+    # smash into objects (audit #82).
     if contact_joints is None:
-        contact_joints = config.joint_positions
+        print(f"    ERROR: IK failed for pick contact of {obj_name} — aborting")
+        return None, None
+    if approach_joints is None:
+        print(f"    WARNING: IK failed for pick approach of {obj_name}, "
+              f"using contact config directly")
+        approach_joints = contact_joints
+    if lift_joints is None:
+        print(f"    WARNING: IK failed for pick lift of {obj_name}, "
+              f"using approach config as fallback")
+        lift_joints = approach_joints
 
     move_robot_smooth(robot_id, approach_joints, gui)
     open_gripper(robot_id, gui)
@@ -596,7 +702,13 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui):
 
     move_robot_smooth(robot_id, lift_joints, gui)
 
-    final_config = RobotConfig(joint_positions=np.asarray(lift_joints),
+    # Read the actual joint state — position control may not reach the exact
+    # IK target.  Tracking the true state prevents PDDL state drift from
+    # compounding across chained actions within a plan (audit #86).
+    actual_joints = np.array(
+        [p.getJointState(robot_id, i)[0] for i in range(7)]
+    )
+    final_config = RobotConfig(joint_positions=actual_joints,
                                name="post_pick_lift")
     return grasp_constraint_id, final_config
 
@@ -636,20 +748,22 @@ def execute_place(robot_id, env, obj_name, place_pos, grasp, config,
 
     pc = env.client_id
     approach_joints = solve_ik(robot_id, approach_ee, grasp.orientation, pc)
+    contact_joints = solve_ik(robot_id, contact_ee, grasp.orientation, pc)
     retreat_joints = solve_ik(robot_id, retreat_ee, grasp.orientation, pc)
 
-    if approach_joints is None or retreat_joints is None:
-        print(f"    WARNING: IK failed for place waypoints of {obj_name}, "
-              f"falling back to nearest valid waypoint")
-        if retreat_joints is None:
-            retreat_joints = approach_joints if approach_joints is not None \
-                else config.joint_positions
-        if approach_joints is None:
-            approach_joints = config.joint_positions
-
-    contact_joints = solve_ik(robot_id, contact_ee, grasp.orientation, pc)
+    # Abort if contact IK fails — silently falling back caused collisions
+    # (audit #82).
     if contact_joints is None:
-        contact_joints = config.joint_positions
+        print(f"    ERROR: IK failed for place contact of {obj_name} — aborting")
+        return None
+    if approach_joints is None:
+        print(f"    WARNING: IK failed for place approach of {obj_name}, "
+              f"using contact config directly")
+        approach_joints = contact_joints
+    if retreat_joints is None:
+        print(f"    WARNING: IK failed for place retreat of {obj_name}, "
+              f"using approach config as fallback")
+        retreat_joints = approach_joints
 
     move_robot_smooth(robot_id, approach_joints, gui)
 
@@ -666,7 +780,11 @@ def execute_place(robot_id, env, obj_name, place_pos, grasp, config,
 
     move_robot_smooth(robot_id, retreat_joints, gui)
 
-    return RobotConfig(joint_positions=np.asarray(retreat_joints),
+    # Read actual joint state to prevent drift accumulation (audit #86).
+    actual_joints = np.array(
+        [p.getJointState(robot_id, i)[0] for i in range(7)]
+    )
+    return RobotConfig(joint_positions=actual_joints,
                        name="post_place_retreat")
 
 
