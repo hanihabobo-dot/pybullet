@@ -50,12 +50,60 @@ _PANDA_IGNORED_SELF_PAIRS = frozenset({
 _PANDA_GRIPPER_LINKS = frozenset({6, 7, 8, 9, 10, 11})
 
 
+# =============================================================================
+# Reference-counted rendering lock
+# =============================================================================
+# PyBullet's COV_ENABLE_RENDERING toggle forces an OpenGL buffer swap.
+# During planning, IK and collision-check functions are called thousands of
+# times — each wrapping its resetJointState calls with rendering off/on.
+# The high-frequency toggling causes visible scene flickering (audit #60).
+#
+# RenderingLock is a nestable context manager backed by a global counter.
+# The first acquire (0 → 1) disables rendering; the last release (1 → 0)
+# re-enables it.  Inner acquires/releases are no-ops.  Wrapping the entire
+# planning phase with one outer lock eliminates all intermediate toggles.
+#
+# Assumes a single PyBullet physics client (true for this codebase).
+
+_rendering_lock_count = 0
+
+
+class RenderingLock:
+    """Nestable context manager that suppresses PyBullet rendering toggles.
+
+    Usage::
+
+        with RenderingLock(physics_client):
+            # rendering is disabled here; nested locks are no-ops
+            ...
+        # rendering re-enabled when the outermost lock exits
+    """
+
+    def __init__(self, physics_client: int = 0):
+        self.physics_client = physics_client
+
+    def __enter__(self):
+        global _rendering_lock_count
+        if _rendering_lock_count == 0:
+            p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0,
+                                       physicsClientId=self.physics_client)
+        _rendering_lock_count += 1
+        return self
+
+    def __exit__(self, *exc):
+        global _rendering_lock_count
+        _rendering_lock_count -= 1
+        if _rendering_lock_count == 0:
+            p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1,
+                                       physicsClientId=self.physics_client)
+        return False
+
+
 def is_config_collision_free(robot_id: int, joint_positions,
                               physics_client: int = 0,
                               ignored_bodies=None,
                               allow_gripper_collisions: bool = False,
-                              log_collisions: bool = True,
-                              _rendering_managed: bool = False) -> bool:
+                              log_collisions: bool = True) -> bool:
     """
     Check whether a 7-DOF arm configuration is collision-free.
 
@@ -73,6 +121,9 @@ def is_config_collision_free(robot_id: int, joint_positions,
       and non-robot bodies are also ignored.  Use this for pick/place
       endpoint checks where the gripper must enter cluttered space.
 
+    Rendering is managed via ``RenderingLock`` — safe to call both
+    standalone and from within an outer lock (e.g. planning phase).
+
     Args:
         robot_id:                 PyBullet body ID of the robot.
         joint_positions:          Sequence of 7 target joint angles.
@@ -82,8 +133,6 @@ def is_config_collision_free(robot_id: int, joint_positions,
                                   environment collision reporting.
         log_collisions:           If True, log the first collision found
                                   at DEBUG level.
-        _rendering_managed:       If True, caller already disabled rendering;
-                                  skip the enable/disable toggle here.
 
     Returns:
         True if the configuration has no disallowed contacts.
@@ -92,59 +141,54 @@ def is_config_collision_free(robot_id: int, joint_positions,
         ignored_bodies = frozenset()
 
     saved = None
-    if not _rendering_managed:
-        p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0,
-                                   physicsClientId=physics_client)
-    try:
-        saved = [p.getJointState(robot_id, i, physicsClientId=physics_client)[0]
-                 for i in ARM_JOINT_INDICES]
+    with RenderingLock(physics_client):
+        try:
+            saved = [p.getJointState(robot_id, i, physicsClientId=physics_client)[0]
+                     for i in ARM_JOINT_INDICES]
 
-        for i, angle in zip(ARM_JOINT_INDICES, joint_positions):
-            p.resetJointState(robot_id, i, angle,
-                              physicsClientId=physics_client)
-
-        p.performCollisionDetection(physicsClientId=physics_client)
-        contacts = p.getContactPoints(bodyA=robot_id,
-                                      physicsClientId=physics_client)
-
-        for c in contacts:
-            body_a, body_b, link_a, link_b = c[1], c[2], c[3], c[4]
-
-            if body_a == robot_id and body_b == robot_id:
-                pair = (min(link_a, link_b), max(link_a, link_b))
-                if pair not in _PANDA_IGNORED_SELF_PAIRS:
-                    if log_collisions:
-                        logger.debug("collision: self-contact links (%d, %d)",
-                                     link_a, link_b)
-                    return False
-                continue
-
-            other = body_b if body_a == robot_id else body_a
-            robot_link = link_a if body_a == robot_id else link_b
-
-            if other in ignored_bodies:
-                continue
-            if robot_link == -1:
-                continue
-            if allow_gripper_collisions and robot_link in _PANDA_GRIPPER_LINKS:
-                continue
-
-            if log_collisions:
-                logger.debug("collision: robot link %d <-> body %d (link %d)",
-                             robot_link,
-                             other,
-                             link_b if body_a == robot_id else link_a)
-            return False
-
-        return True
-    finally:
-        if saved is not None:
-            for i, angle in zip(ARM_JOINT_INDICES, saved):
+            for i, angle in zip(ARM_JOINT_INDICES, joint_positions):
                 p.resetJointState(robot_id, i, angle,
                                   physicsClientId=physics_client)
-        if not _rendering_managed:
-            p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1,
-                                       physicsClientId=physics_client)
+
+            p.performCollisionDetection(physicsClientId=physics_client)
+            contacts = p.getContactPoints(bodyA=robot_id,
+                                          physicsClientId=physics_client)
+
+            for c in contacts:
+                body_a, body_b, link_a, link_b = c[1], c[2], c[3], c[4]
+
+                if body_a == robot_id and body_b == robot_id:
+                    pair = (min(link_a, link_b), max(link_a, link_b))
+                    if pair not in _PANDA_IGNORED_SELF_PAIRS:
+                        if log_collisions:
+                            logger.debug("collision: self-contact links (%d, %d)",
+                                         link_a, link_b)
+                        return False
+                    continue
+
+                other = body_b if body_a == robot_id else body_a
+                robot_link = link_a if body_a == robot_id else link_b
+
+                if other in ignored_bodies:
+                    continue
+                if robot_link == -1:
+                    continue
+                if allow_gripper_collisions and robot_link in _PANDA_GRIPPER_LINKS:
+                    continue
+
+                if log_collisions:
+                    logger.debug("collision: robot link %d <-> body %d (link %d)",
+                                 robot_link,
+                                 other,
+                                 link_b if body_a == robot_id else link_a)
+                return False
+
+            return True
+        finally:
+            if saved is not None:
+                for i, angle in zip(ARM_JOINT_INDICES, saved):
+                    p.resetJointState(robot_id, i, angle,
+                                      physicsClientId=physics_client)
 
 
 def is_path_collision_free(robot_id: int, q_start, q_end,
@@ -173,21 +217,15 @@ def is_path_collision_free(robot_id: int, q_start, q_end,
     """
     q_s = np.asarray(q_start, dtype=float)
     q_e = np.asarray(q_end, dtype=float)
-    p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0,
-                               physicsClientId=physics_client)
-    try:
+    with RenderingLock(physics_client):
         for t in np.linspace(0.0, 1.0, n_checks):
             q = (1.0 - t) * q_s + t * q_e
             if not is_config_collision_free(robot_id, q, physics_client,
                                             ignored_bodies,
                                             allow_gripper_collisions=allow_gripper_collisions,
-                                            log_collisions=False,
-                                            _rendering_managed=True):
+                                            log_collisions=False):
                 return False
         return True
-    finally:
-        p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1,
-                                   physicsClientId=physics_client)
 
 
 # =============================================================================
@@ -227,53 +265,50 @@ def solve_ik(robot_id: int, target_pos: np.ndarray,
                 else list(target_orn))
 
     saved = None
-    p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0,
-                               physicsClientId=physics_client)
-    try:
-        saved = [p.getJointState(robot_id, i,
-                                 physicsClientId=physics_client)[0]
-                 for i in ARM_JOINT_INDICES]
+    with RenderingLock(physics_client):
+        try:
+            saved = [p.getJointState(robot_id, i,
+                                     physicsClientId=physics_client)[0]
+                     for i in ARM_JOINT_INDICES]
 
-        for i, angle in zip(ARM_JOINT_INDICES, REST_POSES):
-            p.resetJointState(robot_id, i, angle,
-                              physicsClientId=physics_client)
-
-        joint_positions = p.calculateInverseKinematics(
-            robot_id, END_EFFECTOR_LINK,
-            target_pos.tolist(), orn_list,
-            lowerLimits=JOINT_LIMITS_LOW.tolist(),
-            upperLimits=JOINT_LIMITS_HIGH.tolist(),
-            jointRanges=JOINT_RANGES.tolist(),
-            restPoses=REST_POSES,
-            maxNumIterations=100,
-            residualThreshold=1e-4,
-            physicsClientId=physics_client,
-        )
-
-        if joint_positions is None or len(joint_positions) < 7:
-            return None
-
-        arm_joints = np.array(joint_positions[:7])
-
-        # 0.1 rad tolerance (~5.7°) accommodates PyBullet's iterative IK
-        # solver, which can slightly overshoot joint limits.  Solutions
-        # within tolerance are clipped; beyond it they're rejected.
-        if np.any(arm_joints < JOINT_LIMITS_LOW - 0.1) or \
-           np.any(arm_joints > JOINT_LIMITS_HIGH + 0.1):
-            return None
-
-        return np.clip(arm_joints, JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH)
-
-    except Exception as e:
-        logger.warning("solve_ik failed for pos=%s: %s", target_pos.tolist(), e)
-        return None
-    finally:
-        if saved is not None:
-            for i, angle in zip(ARM_JOINT_INDICES, saved):
+            for i, angle in zip(ARM_JOINT_INDICES, REST_POSES):
                 p.resetJointState(robot_id, i, angle,
                                   physicsClientId=physics_client)
-        p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1,
-                                   physicsClientId=physics_client)
+
+            joint_positions = p.calculateInverseKinematics(
+                robot_id, END_EFFECTOR_LINK,
+                target_pos.tolist(), orn_list,
+                lowerLimits=JOINT_LIMITS_LOW.tolist(),
+                upperLimits=JOINT_LIMITS_HIGH.tolist(),
+                jointRanges=JOINT_RANGES.tolist(),
+                restPoses=REST_POSES,
+                maxNumIterations=100,
+                residualThreshold=1e-4,
+                physicsClientId=physics_client,
+            )
+
+            if joint_positions is None or len(joint_positions) < 7:
+                return None
+
+            arm_joints = np.array(joint_positions[:7])
+
+            # 0.1 rad tolerance (~5.7°) accommodates PyBullet's iterative IK
+            # solver, which can slightly overshoot joint limits.  Solutions
+            # within tolerance are clipped; beyond it they're rejected.
+            if np.any(arm_joints < JOINT_LIMITS_LOW - 0.1) or \
+               np.any(arm_joints > JOINT_LIMITS_HIGH + 0.1):
+                return None
+
+            return np.clip(arm_joints, JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH)
+
+        except Exception as e:
+            logger.warning("solve_ik failed for pos=%s: %s", target_pos.tolist(), e)
+            return None
+        finally:
+            if saved is not None:
+                for i, angle in zip(ARM_JOINT_INDICES, saved):
+                    p.resetJointState(robot_id, i, angle,
+                                      physicsClientId=physics_client)
 
 
 def move_robot_smooth(robot_id: int, target_joints, gui: bool = True,

@@ -54,16 +54,16 @@ class PDDLStreamPlanner:
                  shadow_occluder_map: Dict[str, str] = None,
                  physics_client: int = None,
                  object_body_ids: Dict[str, int] = None,
-                 support_body_ids: frozenset = None,
-                 allow_heuristic: bool = False):
+                 support_body_ids: frozenset = None):
         """
         Initialize the planner.
 
         Args:
             registry: BoxelRegistry with scene boxels
-            robot_id: PyBullet robot body ID (required for real IK;
-                without it, BoxelStreams falls back to heuristic IK)
-            shadow_occluder_map: Dict mapping shadow_id -> occluder_id
+            robot_id: PyBullet robot body ID (required for IK).
+            shadow_occluder_map: Dict mapping shadow_id -> list of blocker
+                object boxel IDs.  Includes ALL objects that block the
+                camera's LOS to each shadow (audit #78).
             physics_client: PyBullet physics client ID (0 if default)
             object_body_ids: Mapping from object/boxel identifiers to
                 PyBullet body IDs.  Passed to BoxelStreams so that
@@ -71,8 +71,6 @@ class PDDLStreamPlanner:
                 from collision checks.
             support_body_ids: Body IDs of support surfaces (table, ground
                 plane) ignored during pick/place endpoint checks.
-            allow_heuristic: If True, permit heuristic IK when robot_id
-                is None.  Only for symbolic-only testing (test_planner).
         """
         self.registry = registry
         self.robot_id = robot_id
@@ -82,7 +80,6 @@ class PDDLStreamPlanner:
             registry, robot_id=robot_id, physics_client=physics_client,
             object_body_ids=object_body_ids,
             support_body_ids=support_body_ids,
-            allow_heuristic=allow_heuristic
         )
         self.home_config = self.streams.home_config
         
@@ -112,7 +109,8 @@ class PDDLStreamPlanner:
                        goal: Tuple,
                        current_config: 'Union[RobotConfig, str]' = None,
                        known_empty_shadows: List[str] = None,
-                       moved_occluders: Dict[str, str] = None) -> PDDLProblem:
+                       moved_occluders: Dict[str, str] = None,
+                       observed_clear_regions: Optional[List[str]] = None) -> PDDLProblem:
         """
         Create a PDDLStream problem from current state.
         
@@ -124,6 +122,8 @@ class PDDLStreamPlanner:
                 string accepted for backward compat, wrapped automatically)
             known_empty_shadows: Shadows we've already checked (not containing target)
             moved_occluders: Dict mapping occluder_id -> destination_boxel_id
+            observed_clear_regions: Regions explicitly observed clear; see
+                _build_init() docstring (audit #67).
             
         Returns:
             PDDLProblem for PDDLStream solver
@@ -131,7 +131,8 @@ class PDDLStreamPlanner:
         if current_config is None:
             current_config = self.home_config
         init = self._build_init(target_objects, current_config,
-                                known_empty_shadows, moved_occluders)
+                                known_empty_shadows, moved_occluders,
+                                observed_clear_regions)
         
         constant_map = {}
         stream_map = self._get_stream_map()
@@ -233,7 +234,8 @@ class PDDLStreamPlanner:
                     target_objects: List[str],
                     current_config: 'Union[RobotConfig, str]' = None,
                     known_empty_shadows: List[str] = None,
-                    moved_occluders: Dict[str, str] = None) -> List[Tuple]:
+                    moved_occluders: Dict[str, str] = None,
+                    observed_clear_regions: Optional[List[str]] = None) -> List[Tuple]:
         """
         Build the init state as a list of fact tuples.
 
@@ -246,6 +248,15 @@ class PDDLStreamPlanner:
             known_empty_shadows: Shadows already checked (empty)
             moved_occluders: Dict mapping occluder_id -> destination_boxel_id
                 for occluders that have been pushed aside
+            observed_clear_regions: Boxel IDs that the robot has directly
+                observed to NOT contain the target.  If ``None`` (default),
+                ALL object and free-space boxels are treated as observed-clear
+                — this is correct for the current scenario where a fixed
+                overhead camera sees the entire table and any non-hidden
+                target would be visible (audit #67).
+                Supply an explicit set when extending to scenarios with
+                limited sensor coverage where the robot has not yet
+                observed all regions.
 
         Returns:
             List of fact tuples for the init state
@@ -280,21 +291,35 @@ class PDDLStreamPlanner:
                 else:
                     init.append(('obj_at_boxel', boxel.id, boxel.id))
                     init.append(('obj_at_boxel_KIF', boxel.id, boxel.id))
-                for obj in target_objects:
-                    init.append(('obj_at_boxel_KIF', obj, boxel.id))
+
+                # KIF for target objects: only emit "known not here" if this
+                # region has been observed clear.  When observed_clear_regions
+                # is None, the fixed overhead camera covers the entire table,
+                # so all visible boxels are observed (audit #67).
+                if observed_clear_regions is None or boxel.id in observed_clear_regions:
+                    for obj in target_objects:
+                        init.append(('obj_at_boxel_KIF', obj, boxel.id))
 
             elif boxel.boxel_type == BoxelType.FREE_SPACE:
                 init.append(('is_free_space', boxel.id))
-                for obj in target_objects:
-                    init.append(('obj_at_boxel_KIF', obj, boxel.id))
+                if observed_clear_regions is None or boxel.id in observed_clear_regions:
+                    for obj in target_objects:
+                        init.append(('obj_at_boxel_KIF', obj, boxel.id))
 
         # Static geometric facts: blocks_view_at(occ, occ_boxel, shadow).
         # Always added regardless of moved status — they describe geometry,
         # not current state. The derived predicate blocks_view combines these
         # with obj_at_boxel to determine actual view blockage.
+        #
+        # shadow_occluder_map is Dict[shadow_id, List[blocker_ids]] — includes
+        # ALL objects that block the camera's LOS to each shadow, not just the
+        # creating occluder (audit #78).
         if self.shadow_occluder_map:
-            for shadow_id, occluder_id in self.shadow_occluder_map.items():
-                init.append(('blocks_view_at', occluder_id, occluder_id, shadow_id))
+            for shadow_id, blocker_ids in self.shadow_occluder_map.items():
+                if isinstance(blocker_ids, str):
+                    blocker_ids = [blocker_ids]
+                for occluder_id in blocker_ids:
+                    init.append(('blocks_view_at', occluder_id, occluder_id, shadow_id))
         else:
             for shadow_id in shadows:
                 shadow_boxel = self.registry.get_boxel(shadow_id)
@@ -318,7 +343,8 @@ class PDDLStreamPlanner:
              known_empty_shadows: List[str] = None,
              moved_occluders: Dict[str, str] = None,
              max_time: float = 30.0,
-             verbose: bool = True) -> Optional[List[Tuple]]:
+             verbose: bool = True,
+             observed_clear_regions: Optional[List[str]] = None) -> Optional[List[Tuple]]:
         """
         Generate a plan using PDDLStream.
         
@@ -330,6 +356,8 @@ class PDDLStreamPlanner:
             moved_occluders: Dict mapping occluder_id -> destination_boxel_id
             max_time: Maximum planning time in seconds
             verbose: Print planning info
+            observed_clear_regions: Regions explicitly observed clear; see
+                _build_init() docstring (audit #67).
             
         Returns:
             List of action tuples, or None if planning fails
@@ -337,7 +365,8 @@ class PDDLStreamPlanner:
         if current_config is None:
             current_config = self.home_config
         problem = self.create_problem(target_objects, goal, current_config,
-                                      known_empty_shadows, moved_occluders)
+                                      known_empty_shadows, moved_occluders,
+                                      observed_clear_regions)
         
         if verbose:
             print(f"\n--- PDDLStream Planning ---")
@@ -371,50 +400,19 @@ class PDDLStreamPlanner:
 
 
 def test_planner():
-    """Test the PDDLStream planner (uses heuristic IK without a robot)."""
+    """
+    Standalone planner test — requires a PyBullet environment with a loaded
+    robot.  Run test_full_pipeline.py instead for the full integration test.
+
+    Heuristic IK fallback has been removed (audit #80); a real robot_id
+    is now mandatory for IK-dependent streams.
+    """
     print("="*60)
     print("Testing PDDLStream Planner")
     print("="*60)
-    
-    # Load registry from JSON
-    registry = BoxelRegistry.load_from_json('boxel_data.json')
-    print(f"Loaded {len(registry.boxels)} boxels")
-    
-    # Count shadow and occluder boxels
-    shadows = [b.id for b in registry.boxels.values() if b.boxel_type == BoxelType.SHADOW]
-    occluders = [b.id for b in registry.boxels.values() if b.boxel_type == BoxelType.OBJECT]
-    print(f"Shadow boxels: {len(shadows)}")
-    print(f"Occluder boxels: {len(occluders)}")
-    
-    # Create shadow->occluder mapping from registry ground-truth
-    shadow_occluder_map = {}
-    for shadow_id in shadows:
-        shadow_boxel = registry.get_boxel(shadow_id)
-        if shadow_boxel and shadow_boxel.created_by_boxel_id:
-            shadow_occluder_map[shadow_id] = shadow_boxel.created_by_boxel_id
-    print(f"Shadow-Occluder mapping: {shadow_occluder_map}")
-    
-    # Create planner (no robot_id: BoxelStreams will use heuristic IK)
-    planner = PDDLStreamPlanner(registry, shadow_occluder_map=shadow_occluder_map,
-                                allow_heuristic=True)
-    
-    # Plan (uses planner.home_config as default current_config)
-    print("\nPlanning to find and hold target_1...")
-    plan = planner.plan(
-        target_objects=['target_1'],
-        goal=('holding', 'target_1'),
-        max_time=60.0,
-        verbose=True
-    )
-    
-    if plan:
-        print("\n--- Generated Plan ---")
-        for i, action in enumerate(plan):
-            print(f"  {i+1}. {action}")
-    else:
-        print("\nNo plan found!")
-    
-    return plan is not None
+    print("ERROR: Standalone planner test requires a loaded PyBullet robot.")
+    print("       Run test_full_pipeline.py for full integration testing.")
+    return False
 
 
 if __name__ == "__main__":

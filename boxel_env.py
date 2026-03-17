@@ -175,8 +175,8 @@ class BoxelTestEnv:
     def _create_occluders(self):
         """Create occluder cubes on the table."""
         # 0.15 m (15 cm) cubes — large enough to fully occlude a target
-        # (0.08 m) from the overhead camera, small enough for the Panda
-        # gripper to grasp (max opening 0.08 m allows top-down pinch).
+        # (0.08 m) from the overhead camera.  NOTE: these do NOT fit in
+        # the Panda gripper (max opening 0.08 m).  See audit #77.
         occluder_size = [0.15, 0.15, 0.15]
         occluder_z = self.table_surface_height + occluder_size[2] / 2
         
@@ -291,14 +291,12 @@ class BoxelTestEnv:
 
         Only computes what downstream code actually consumes: visible objects,
         object poses, and semantic boxels.  RGB, depth, and point-cloud fields
-        are left as empty arrays (no consumer exists; see audit #56).
+        default to None (no consumer exists; see audit #56).
         """
         visible_objects, object_poses = self.oracle_detect_objects()
         boxels = self.generate_boxels(visible_objects)
 
-        empty_img = np.empty((0,), dtype=np.uint8)
         return CameraObservation(
-            rgb_image=empty_img, depth_image=empty_img, point_cloud=empty_img,
             visible_objects=visible_objects, object_poses=object_poses, boxels=boxels
         )
     
