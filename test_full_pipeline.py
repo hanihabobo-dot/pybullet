@@ -13,7 +13,7 @@ Run from WSL:
     source wsl_env/bin/activate
     export DISPLAY=:0
     export LIBGL_ALWAYS_SOFTWARE=1
-    export PYTHONPATH=/mnt/c/Users/HaniAlassiriAlhabbou/git/pddlstream_lib
+    export PYTHONPATH=/path/to/pddlstream_lib
     python3 test_full_pipeline.py
 
 Or with no GUI (for testing):
@@ -28,7 +28,10 @@ import argparse
 import random
 
 # Add pddlstream to path (for WSL)
-PDDLSTREAM_PATH = '/mnt/c/Users/HaniAlassiriAlhabbou/git/pddlstream_lib'
+PDDLSTREAM_PATH = os.environ.get(
+    'PDDLSTREAM_PATH',
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'pddlstream_lib')
+)
 if os.path.exists(PDDLSTREAM_PATH):
     sys.path.insert(0, PDDLSTREAM_PATH)
 

@@ -30,6 +30,8 @@ temp/
 statistics/
 logs/
 
-# Documentation HTML (local only)
+# Documentation and personal files (local only)
 technical_documentation.html
 progress_report.html
+proposal
+SESSION_HANDOFF.md

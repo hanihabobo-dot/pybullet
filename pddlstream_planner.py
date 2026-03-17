@@ -7,7 +7,7 @@ the actual PDDLStream solver with FastDownward backend.
 
 Usage (from WSL):
     source wsl_env/bin/activate
-    export PYTHONPATH=/mnt/c/Users/HaniAlassiriAlhabbou/git/pddlstream_lib
+    export PYTHONPATH=/path/to/pddlstream_lib
     python3 pddlstream_planner.py
 
 PDDLStream path is added to sys.path via the hardcoded PDDLSTREAM_PATH constant below.
@@ -17,7 +17,10 @@ import sys
 import os
 
 # Add pddlstream to path (for WSL)
-PDDLSTREAM_PATH = '/mnt/c/Users/HaniAlassiriAlhabbou/git/pddlstream_lib'
+PDDLSTREAM_PATH = os.environ.get(
+    'PDDLSTREAM_PATH',
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'pddlstream_lib')
+)
 if PDDLSTREAM_PATH not in sys.path:
     sys.path.insert(0, PDDLSTREAM_PATH)
 
