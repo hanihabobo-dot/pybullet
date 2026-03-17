@@ -311,7 +311,7 @@ def solve_ik(robot_id: int, target_pos: np.ndarray,
                                       physicsClientId=physics_client)
 
 
-def move_robot_smooth(robot_id: int, target_joints, gui: bool = True,
+def move_robot_smooth(robot_id: int, target_joints, gui: bool = False,
                       steps: int = 60):
     """
     Smoothly interpolate joint positions from the current state to
@@ -339,7 +339,7 @@ def move_robot_smooth(robot_id: int, target_joints, gui: bool = True,
             time.sleep(1 / 120)
 
 
-def open_gripper(robot_id: int, gui: bool = True):
+def open_gripper(robot_id: int, gui: bool = False):
     """Open the Panda gripper (finger width ~0.08 m)."""
     import time
     # 0.04 m per finger = 0.08 m total opening (Panda max is 0.08 m).
@@ -357,7 +357,7 @@ def open_gripper(robot_id: int, gui: bool = True):
             time.sleep(1 / 120)
 
 
-def close_gripper(robot_id: int, gui: bool = True):
+def close_gripper(robot_id: int, gui: bool = False):
     """Close the Panda gripper."""
     import time
     # 0.01 m per finger leaves a 0.02 m gap — fully closed around

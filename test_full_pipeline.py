@@ -36,7 +36,8 @@ import numpy as np
 import pybullet as p
 import pybullet_data
 
-from boxel_env import BoxelTestEnv
+from boxel_env import (BoxelTestEnv, SceneConfig,
+                       default_scene, mixed_shapes_scene, scalability_scene)
 from boxel_data import BoxelRegistry, BoxelType, create_boxel_registry_from_boxels
 from cell_merger import merge_free_space_cells
 from pddlstream_planner import PDDLStreamPlanner
@@ -93,7 +94,7 @@ class BeliefState:
         return self.target_found_in is not None
 
 
-def main(gui=True, run_logger=None):
+def main(gui=True, run_logger=None, scene_config=None):
     print("=" * 60)
     print("FULL PIPELINE: PDDLStream + Replanning")
     print("=" * 60)
@@ -102,7 +103,7 @@ def main(gui=True, run_logger=None):
     # PHASE 1: Setup Environment
     # =========================================================
     print("\n--- Phase 1: Environment Setup ---")
-    env = BoxelTestEnv(gui=gui)
+    env = BoxelTestEnv(gui=gui, scene_config=scene_config)
     robot_id = env.objects["robot"].object_id
     print(f"Robot ID: {robot_id}")
     
@@ -318,8 +319,8 @@ def main(gui=True, run_logger=None):
                 print(f"    Moving to {dest_boxel_id} ({len(traj.waypoints)} waypoints)...")
 
                 for wp in traj.waypoints[1:]:
-                    move_robot_smooth(robot_id, wp.joint_positions, gui,
-                                      steps=30)
+                    move_robot_smooth(robot_id, wp.joint_positions,
+                                      gui, steps=30)
                 # Track actual joint state, not the plan's q2, so that
                 # subsequent actions and replans see the true config
                 # (audit #86).
@@ -799,11 +800,33 @@ if __name__ == "__main__":
     parser.add_argument('--log-level', choices=['quiet', 'normal', 'verbose'],
                         default='normal',
                         help='Console verbosity (log file always captures everything)')
+    parser.add_argument('--scene', choices=['default', 'mixed', 'scalability'],
+                        default='default',
+                        help='Scene preset: default (original cubes), mixed (diverse '
+                             'shapes), scalability (random for evaluation)')
+    parser.add_argument('--n-occluders', type=int, default=3,
+                        help='Number of occluders (scalability scene only)')
+    parser.add_argument('--n-targets', type=int, default=4,
+                        help='Number of targets (scalability scene only)')
+    parser.add_argument('--seed', type=int, default=0,
+                        help='Random seed (scalability/mixed scenes)')
     args = parser.parse_args()
+
+    scene_builders = {
+        'default': lambda: default_scene(),
+        'mixed': lambda: mixed_shapes_scene(seed=args.seed),
+        'scalability': lambda: scalability_scene(
+            n_occluders=args.n_occluders,
+            n_targets=args.n_targets,
+            seed=args.seed,
+        ),
+    }
+    scene_cfg = scene_builders[args.scene]()
 
     logger = RunLogger(verbosity=args.log_level)
     try:
-        success = main(gui=not args.no_gui, run_logger=logger)
+        success = main(gui=not args.no_gui, run_logger=logger,
+                       scene_config=scene_cfg)
     finally:
         logger.close()
     sys.exit(0 if success else 1)

@@ -72,16 +72,16 @@ git clone https://github.com/caelan/pddlstream.git ../pddlstream_lib
 
 ### Running the Full Pipeline
 
-From PowerShell via WSL (the planner requires Linux):
+The planner requires PDDLStream, which runs on Linux. From the project directory:
 
-```powershell
-wsl bash -lc "cd /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels && source wsl_env/bin/activate && python3 -u test_full_pipeline.py"
+```bash
+python3 -u test_full_pipeline.py
 ```
 
 With verbose logging and headless mode:
 
-```powershell
-wsl bash -lc "cd /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels && source wsl_env/bin/activate && python3 -u test_full_pipeline.py --log-level verbose --no-gui"
+```bash
+python3 -u test_full_pipeline.py --log-level verbose --no-gui
 ```
 
 ### CLI Options

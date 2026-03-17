@@ -3,6 +3,10 @@ CODEBASE AUDIT — OPEN ISSUES
 ================================================================================
 Date: 2026-02-25 (original audit, merged from 3 audit passes)
 Updated: 2026-03-13 (#61 accepted as deviation; archived #64, #65, #70-#72, #74, #75)
+Updated: 2026-03-17 (#55 partially done; #56 partially done; #87-#92 dead code
+         inventory added; CODEBASE POLICY section added)
+Updated: 2026-03-17 (#95 systemic PDDL state drift added; PDDL issues
+         promoted to Tier 0 — highest priority)
 
 Resolved issues archived to archive/CODEBASE_AUDIT_RESOLVED.txt.
 
@@ -224,7 +228,7 @@ What:  Hardcoded values with no comments explaining their origin, rationale,
        tuning process.
 
 ================================================================================
-55. HARDCODED SCENE — NO SCENARIO VARIATION
+55. HARDCODED SCENE — NO SCENARIO VARIATION  [PARTIALLY DONE]
 ================================================================================
 Where: boxel_env.py _create_occluders(), _create_targets()
 What:  The scene has exactly 3 occluders and 4 targets at hardcoded
@@ -234,13 +238,25 @@ What:  The scene has exactly 3 occluders and 4 targets at hardcoded
        says "We will vary the number of occluders and the complexity of
        the scene to test scalability" but only one scene exists.
 
-Fix:   Parameterize BoxelTestEnv to accept scene configs: number of
-       occluders, targets, size ranges, randomized positions. Create
-       a scene generator for evaluation. This is required for any
-       evaluation section in the thesis.
+Fix:   PARTIALLY DONE — Scene parameterization infrastructure implemented:
+       - SceneConfig dataclass with ObjectSpec (supports BOX, CYLINDER,
+         SPHERE) and per-object size/color/mass/friction.
+       - Three preset scenes: default_scene() (original cubes),
+         mixed_shapes_scene() (cylinders, boxes, spheres),
+         scalability_scene() (random generation with configurable
+         n_occluders, n_targets, seed).
+       - CLI flags: --scene {default,mixed,scalability},
+         --n-occluders, --n-targets, --seed.
+       - _random_xy_positions() for rejection-sampled placement.
+       - BoxelTestEnv.__init__() and reset() accept scene_config.
+
+       REMAINING: No batch evaluation runner uses these presets yet.
+       The infrastructure exists but is not wired into an experiment
+       framework (#76).  The default scene still uses 0.15 m occluder
+       cubes that exceed gripper capacity (#77).
 
 ================================================================================
-56. DEAD COMPUTATION — POINT CLOUD AND NEIGHBORS NEVER USED
+56. DEAD COMPUTATION — POINT CLOUD AND NEIGHBORS NEVER USED  [PARTIALLY DONE]
 ================================================================================
 Where: boxel_env.py get_camera_observation(), boxel_data.py compute_neighbors()
 What:  (a) Every get_camera_observation() call generates an RGB image,
@@ -251,10 +267,17 @@ What:  (a) Every get_camera_observation() call generates an RGB image,
        and populates neighbor_ids on every boxel. No code ever reads
        these relationships. They're serialized to JSON and ignored.
 
-Fix:   (a) Make point cloud / image generation optional (lazy).
-       (b) Remove compute_neighbors() call from
-       create_boxel_registry_from_boxels(), or document it as a
-       future-use feature. Don't compute what nothing consumes.
+Fix:   PARTIALLY DONE —
+       (a) get_camera_observation() no longer computes RGB, depth, or
+       point cloud — it only returns visible_objects, object_poses,
+       and boxels.  HOWEVER, the method bodies _depth_buffer_to_meters()
+       and _depth_to_point_cloud() (~28 lines) are still defined in
+       boxel_env.py with no callers in root code.  See #87.
+       (b) compute_neighbors() is no longer called from
+       create_boxel_registry_from_boxels().  HOWEVER, the method body
+       (~65 lines) plus helpers _check_adjacency() and
+       _opposite_direction() remain in boxel_data.py with no callers
+       in root code.  See #87.
 
 ================================================================================
 PROPOSAL ALIGNMENT GAPS
@@ -618,6 +641,348 @@ Fix:   DONE — Execution code now reads the actual PyBullet joint state
        side tracking.
 
 ================================================================================
+87. DEAD METHODS AND PROPERTIES — NEVER CALLED FROM ROOT CODE
+================================================================================
+Where: Multiple files (see table)
+What:  The following methods and properties are defined but have zero
+       callers in the root codebase.  Some had their call sites removed
+       during earlier cleanups (#56, #85) but the definitions were left.
+       Others were written speculatively and never wired in.
+
+       File                   Method / Property              Lines  Notes
+       ─────────────────────  ─────────────────────────────  ─────  ──────────────
+       boxel_data.py          compute_neighbors()             ~35   Call removed (#56)
+       boxel_data.py          _check_adjacency()              ~25   Helper for above
+       boxel_data.py          _opposite_direction()            ~8   Helper for above
+       boxel_data.py          load_from_json()                ~12   Only archive/ uses
+       boxel_env.py           _depth_buffer_to_meters()        ~4   Call removed (#56)
+       boxel_env.py           _depth_to_point_cloud()         ~22   Call removed (#56)
+       boxel_env.py           ObjectSpec.max_horizontal_width  ~4   Property, zero refs
+       free_space.py          clear_debug_items()             ~10   Never called
+       streams.py             _direction_to_quat()            ~30   Never called
+       streams.py             _rotation_matrix_to_quat()      ~30   Called only by above
+
+       boxel_data.py convenience getters (borderline — used only by
+       to_dict() for the JSON summary, no external callers):
+         get_object_boxels(), get_shadow_boxels(), get_free_space_boxels()
+
+       Instance attribute set but never read:
+         boxel_env.py  debug_camera_distance               Set in __init__
+         boxel_env.py  debug_camera_yaw                    Set in __init__
+         boxel_env.py  debug_camera_pitch                  Set in __init__
+         boxel_env.py  debug_camera_target                 Set in __init__
+
+       Total: ~160 lines of unreachable method bodies + 4 dead attributes.
+
+       Per codebase policy (see CODEBASE POLICY below), dead code is
+       preserved for reference and potential future use.  This issue
+       tracks it for documentation completeness, not as a cleanup task.
+
+================================================================================
+88. UNUSED IMPORTS ACROSS CODEBASE
+================================================================================
+Where: Multiple files (see table)
+What:  The following imports are present but the imported names are never
+       referenced in the file.
+
+       File                    Unused Import
+       ──────────────────────  ──────────────────────────────────────────
+       boxel_data.py           asdict (from dataclasses)
+       boxel_data.py           Set (from typing)
+       cell_merger.py          Set (from typing)
+       streams.py              Generator (from typing)
+       pddlstream_planner.py   from_fn (from pddlstream.language.generator)
+       pddlstream_planner.py   from_test (from pddlstream.language.generator)
+       pddlstream_planner.py   read (from pddlstream.utils) — shadowed by
+                                the local read_pddl_file(); never used
+
+       Impact: No runtime effect (unused imports cost a negligible amount
+       of import time).  Cosmetic cleanliness issue only.
+
+================================================================================
+89. UNUSED FUNCTION PARAMETERS — config IN execute_pick / execute_place
+================================================================================
+Where: test_full_pipeline.py execute_pick(), execute_place()
+What:  Both functions accept a `config` parameter (the plan's RobotConfig
+       from compute_kin_solution).  Neither function references it.  All
+       approach/contact/lift/retreat waypoints are re-derived from IK at
+       execution time using the object's actual position + grasp offset.
+
+       The parameter was originally used as a fallback ("if IK fails, use
+       the plan config"), but #82 changed the fallback to abort-and-replan
+       instead.  The parameter survived the refactor.
+
+       The caller still passes config from the plan:
+         execute_pick(robot_id, env, ..., grasp, config, gui)
+         execute_place(robot_id, env, ..., grasp, config, ..., gui)
+       but the value is silently ignored inside both functions.
+
+       Impact: Confusing to readers — the parameter signature suggests the
+       plan config influences execution, but it does not.
+
+================================================================================
+90. VISUALIZATION INTENTIONALLY DISABLED — UNUSED BoxelVisualizer INSTANCE
+================================================================================
+Where: boxel_env.py (line 319), visualization.py, test_full_pipeline.py (line 146)
+
+What:  BoxelVisualizer is imported and instantiated in BoxelTestEnv.__init__
+       (self.visualizer = BoxelVisualizer()), but none of its methods
+       (draw_boxels, clear_all) are called from root code.  The only call
+       site was intentionally commented out in test_full_pipeline.py:
+
+         # if gui:
+         #     ...
+         #     env.draw_boxels(all_boxels, duration=0)
+
+       This was disabled by explicit decision to simplify pipeline runs
+       and reduce visual noise during development.  The visualization
+       module (visualization.py, ~145 lines) remains fully functional
+       and can be re-enabled by uncommenting the call.
+
+       The entire visualization.py module, plus the BoxelVisualizer import
+       and self.visualizer attribute in boxel_env.py, are unreachable from
+       any currently-executed code path.
+
+Status: INTENTIONAL — not a bug.  Visualization is preserved for future
+       use and debugging.  See CODEBASE POLICY below.
+
+================================================================================
+91. DEAD CameraObservation FIELDS — rgb_image, depth_image, point_cloud
+================================================================================
+Where: boxel_types.py (CameraObservation), boxel_env.py get_camera_observation()
+
+What:  CameraObservation defines three optional fields:
+         rgb_image:   Optional[np.ndarray] = None
+         depth_image: Optional[np.ndarray] = None
+         point_cloud: Optional[np.ndarray] = None
+
+       get_camera_observation() never populates them — it returns a
+       CameraObservation with only visible_objects, object_poses, and
+       boxels set.  No code reads these fields.
+
+       The fields exist because the original implementation computed all
+       three (removed as part of #56).  The field declarations remain as
+       part of the dataclass definition.
+
+       Impact: No runtime cost (None is the default).  The fields reserve
+       the interface for future use (e.g. real perception integration).
+
+================================================================================
+92. RunLogger CONTEXT MANAGER PROTOCOL NEVER USED
+================================================================================
+Where: run_logger.py (lines 151-155), test_full_pipeline.py (lines 826-831)
+
+What:  RunLogger implements __enter__ and __exit__ for use as a context
+       manager ("with RunLogger(...) as logger:").  However, the actual
+       usage in test_full_pipeline.py creates the logger manually and
+       calls logger.close() in a finally block:
+
+         logger = RunLogger(verbosity=args.log_level)
+         try:
+             success = main(gui=not args.no_gui, run_logger=logger, ...)
+         finally:
+             logger.close()
+
+       The context manager protocol works correctly — it is simply not
+       used.  Both patterns are equivalent; this is a style inconsistency,
+       not a bug.
+
+================================================================================
+93. ACTIONS ARE NOT GENERIC — HIDDEN SUB-ACTIONS EMBEDDED IN EXECUTION
+================================================================================
+Where: test_full_pipeline.py (sense handler, execute_pick, execute_place)
+
+What:  PDDL actions are modeled as atomic operations, but their Python
+       execution handlers secretly perform operations that belong to
+       OTHER action types.  The planner cannot reason about, plan for,
+       or optimize these hidden sub-actions.
+
+       sense handler (lines 340-345):
+         Contains a hidden MOVE: moves the arm to home configuration
+         before raycasting.  The planner doesn't know sensing requires
+         the arm to be out of the way — it has no (at_config ?q_home)
+         precondition on the sense action.  This was added as a
+         workaround for #79 (arm blocking camera), but embedding a
+         move inside sense violates action atomicity.
+
+       execute_pick (lines 630-714):
+         Contains 3 hidden MOVEs (approach, descend to contact, lift),
+         3 hidden IK SOLVES (re-deriving geometry the planner never
+         planned), a GRIPPER_OPEN, a GRIPPER_CLOSE, and a CONSTRAINT
+         WELD (p.createConstraint).  The PDDL pick action is a single
+         instantaneous operation; the Python handler is a 6-step
+         choreographed sequence.
+
+       execute_place (lines 717-789):
+         Contains 3 hidden MOVEs (approach, descend, retreat), 3 hidden
+         IK SOLVES, a GRIPPER_OPEN, a CONSTRAINT REMOVAL, and 30 hidden
+         PHYSICS STEPS for object settling.  Same atomicity violation
+         as pick.
+
+       Complete inventory of hidden sub-actions:
+         sense:  1 move
+         pick:   3 moves, 3 IK solves, 1 open_gripper, 1 close_gripper,
+                 1 createConstraint
+         place:  3 moves, 3 IK solves, 1 open_gripper,
+                 1 removeConstraint, 30 stepSimulation
+
+       Consequences:
+       (a) The planner cannot optimize the approach/retreat motions or
+           detect collisions on them — they are invisible to the
+           symbolic search.
+       (b) The execution-time IK solves (solve_ik in execute_pick/place)
+           can fail, producing None.  These failures are handled by
+           abort-and-replan (#82), but the planner has no awareness
+           that its "valid" plan might fail at execution.
+       (c) The hidden move in sense causes PDDL state drift — the robot
+           moves to home but the PDDL state still says (at_config ?q)
+           from the last move action.  Compensated by current_config
+           tracking (#86) but architecturally unsound.
+       (d) The approach/retreat heights (0.10 m, 0.25 m) are hardcoded
+           constants that the planner never validates for collisions.
+
+       Related audit entries:
+         #79  Arm blocks sensing — the hidden move was the workaround
+         #82  Silent IK failures — hidden IK solves can fail
+         #86  PDDL state drift — hidden moves cause drift
+         PF-1 sense PDDL/Python mismatch (accepted #61)
+         PF-2 pick PDDL/Python mismatch (documented)
+         PF-3 place PDDL/Python mismatch (documented)
+
+Fix:   To make actions truly generic, decompose each into sub-actions
+       in the PDDL domain:
+       (a) sense: add (at_config ?q_home) precondition, or add a
+           separate prepare_sense action that moves the arm home.
+       (b) pick: decompose into approach(?o ?b ?g ?q_approach),
+           grasp(?o), lift(?o ?q_lift) — each with their own
+           compute-kin stream calls and plan-motion trajectories.
+       (c) place: decompose into approach(?o ?b ?g ?q_approach),
+           release(?o), retreat(?q_retreat).
+       Cost: 3x more stream evaluations per pick/place, longer plans,
+       and more complex domain.  The current hardcoded approach works
+       functionally and is a common simplification in TAMP research.
+
+================================================================================
+94. DEAD DEFENSIVE CODE — HEURISTIC CONFIG REJECTION LOOP
+================================================================================
+Where: test_full_pipeline.py lines 300-308
+
+What:  After the planner returns a plan, a loop checks every action
+       parameter for RobotConfig objects with is_heuristic=True and
+       raises RuntimeError if found.
+
+       This check is dead: _heuristic_ik() was removed in #80, and
+       BoxelStreams raises ValueError if robot_id is None.  No code
+       path can produce a RobotConfig with is_heuristic=True.  The
+       condition can never trigger.
+
+       The loop runs on every plan (iterating all actions and all
+       params), imposing negligible but nonzero overhead per planning
+       cycle.
+
+================================================================================
+95. SYSTEMIC PDDL STATE DRIFT — SYMBOLIC/PHYSICAL DESYNC ACROSS ACTIONS
+================================================================================
+Where: domain_pddlstream.pddl (all actions),
+       test_full_pipeline.py (sense handler, execute_pick, execute_place),
+       pddlstream_planner.py (_build_init),
+       boxel_data.py (BoxelRegistry)
+
+What:  The PDDL symbolic state and the PyBullet physical state diverge
+       systematically during plan execution.  This is not a single bug —
+       it is a structural pattern affecting every action that modifies
+       the world.  Four distinct drift channels have been identified:
+
+       (a) ROBOT CONFIG DRIFT (pick/place) — #86, PF-2, PF-3
+           PDDL pick/place are modeled as instantaneous single-config
+           actions.  Python execution performs multi-waypoint sequences
+           (approach → contact → lift/retreat) and leaves the robot at a
+           post-action configuration that PDDL never learns about.  After
+           pick, PDDL says (at_config ?q_pick) while the robot is at
+           post_pick_lift.  After place, PDDL says (at_config ?q_place)
+           while the robot is at post_place_retreat.
+           Mitigation: execution reads actual p.getJointState and passes
+           it to the planner on replan (#86 DONE).  Drift still exists
+           WITHIN a single plan — if the plan chains pick → move, the
+           move starts from the wrong config in the symbolic model.
+
+       (b) HIDDEN MOVE IN SENSE — #93, #79
+           The sense handler secretly moves the robot to home before
+           raycasting (workaround for #79).  PDDL has no at_config
+           precondition or effect on sense — the symbolic state still
+           records (at_config ?q) from the previous move action.
+           Mitigation: current_config updated in execution loop.  Same
+           within-plan drift as (a).
+
+       (c) STALE SHADOW GEOMETRY — #44
+           After an occluder is relocated via pick-and-place, the
+           BoxelRegistry is NOT recomputed.  Shadow boxel AABBs still
+           describe the pre-relocation geometry.  Sensing uses these
+           stale AABBs to target raycasts.
+           Mitigation: target detection is by PyBullet body ID, so any
+           ray that hits the target works regardless of AABB accuracy.
+           Fragile if the scene changes more substantially.
+
+       (d) STALE BLOCKS_VIEW_AT FACTS — #73
+           shadow_occluder_map is built once before the first plan.
+           After occluder relocation, _build_init() still emits
+           blocks_view_at facts for the original occluder positions.
+           Mitigation: derived predicate blocks_view checks
+           obj_at_boxel, which IS updated — so the stale facts are
+           functionally dead.  But the data structure is fragile:
+           any extension that references blocks_view_at directly
+           (rather than through the derived predicate) would break.
+
+       Systemic consequences:
+       - Within a single plan, the symbolic and physical states are
+         out of sync after every non-move action.  If the planner
+         generates plans with pick → move or sense → pick sequences,
+         the move/pick operates on a config the robot is NOT at.
+       - The execution-side mitigations (#86 current_config tracking)
+         only take effect on REPLAN — they cannot fix drift within
+         a single plan's action sequence.
+       - The stale geometry data (#44, #73) accumulates across replans
+         because the registry is never refreshed.
+
+       This is the root architectural issue underlying #44, #73, #86,
+       and #93.  Fixing it properly requires either:
+       (a) Making the PDDL model faithful — decompose pick/place into
+           sub-actions, add at_config to sense, update registry on
+           replan.  This is the #93 fix plus registry refresh.
+       (b) Adding execution-time state reconciliation — before each
+           action in a plan, re-derive configs from the actual physical
+           state rather than trusting the plan's symbolic parameters.
+       (c) Both: faithful PDDL model + execution-time validation.
+
+Related: #44, #73, #86 (DONE), #93, PF-2, PF-3
+
+================================================================================
+CODEBASE POLICY
+================================================================================
+
+COMMENTED-OUT CODE — DO NOT DELETE
+       Commented-out code (e.g. visualization calls, disabled features,
+       archived logic) is preserved intentionally.  It serves as inline
+       documentation of previous approaches, quick-enable toggles for
+       debugging, and reference for future re-implementation.
+
+       Examples of intentionally preserved commented-out code:
+       - test_full_pipeline.py line 146: draw_boxels call (disabled to
+         simplify pipeline runs; re-enable for visual debugging)
+       - archive/ folder: entire previous implementations kept for
+         reference
+
+       Rule: NEVER delete commented-out code without explicit approval.
+       If code is truly obsolete, move it to archive/ rather than
+       deleting it.
+
+DEAD CODE — PRESERVED FOR FUTURE USE
+       Dead methods, unused imports, and unreachable code paths documented
+       in issues #87–#92 are tracked for awareness but are NOT scheduled
+       for deletion.  They impose no runtime cost and may be needed for
+       future features (evaluation framework, real perception, etc.).
+
+================================================================================
 FOR LATER
 ================================================================================
 - Incremental boxel recomputation after occluder relocation (without redoing
@@ -629,40 +994,70 @@ FOR LATER
   commented out, not deleted — can be revived if needed.
 
 ================================================================================
-SUMMARY (updated 2026-03-14)
+SUMMARY (updated 2026-03-17, PDDL issues promoted to Tier 0)
 ================================================================================
 
+PDDL-CRITICAL (Tier 0 — PDDL/physical state desync, highest priority):
+  #95  SYSTEMIC PDDL STATE DRIFT — symbolic/physical desync across
+       all actions.  Consolidated issue: the PDDL symbolic state and
+       PyBullet physical state diverge through 4 channels (robot config
+       drift, hidden moves, stale shadow geometry, stale blocks_view_at).
+       Root architectural issue underlying #44, #73, #86, #93.
+  #93  Actions are not generic — hidden sub-actions embedded in
+       execution.  sense contains a hidden move; pick contains 3
+       hidden moves + 3 IK solves + gripper control + constraint
+       weld; place contains 3 hidden moves + 3 IK solves + gripper
+       control + constraint removal + physics settling.  The planner
+       cannot reason about these sub-actions.  Fixing requires PDDL
+       domain decomposition (approach/grasp/lift as separate actions).
+  #44  Stale shadow registry after occluder relocation — BoxelRegistry
+       never recomputed.  Shadow AABBs describe pre-relocation geometry.
+       Raycasting by body ID compensates but the data is structurally
+       wrong.
+  #73  shadow_occluder_map goes stale on replan — blocks_view_at facts
+       reference original occluder positions.  Derived predicates
+       compensate but the data structure is fragile.
+
 QUICK WINS (Tier 1 — under 30 min each):
-  #85  Dead / commented code pollution (push action).
-  #84  Incomplete magic number cleanup in execution code.
-  #80  Fake IK fallback allows garbage data — lock down or remove.
-  #83  Blind spot in raycasting (robot arm ignored).
+  #85  Dead / commented code pollution (push action).                  DONE
+  #84  Incomplete magic number cleanup in execution code.              DONE
+  #80  Fake IK fallback allows garbage data — lock down or remove.     DONE
+  #83  Blind spot in raycasting (robot arm ignored).                   DONE
 
 HIGH VALUE FIXES (Tier 2 — hours, fix real failures):
-  #79  Robot arm blocks sensing during execution (DONE — move to home
-       before sense).
-  #78  Incomplete view-blocking model (DONE — compute_shadow_blockers
-       via raycasting + infinite-replan detection).
-  #82  Silent IK failures in execution (DONE — abort and replan on
-       contact IK failure).
-  #86  PDDL state drift after pick/place (DONE — read actual joint
-       state after every action).
-  #67  _build_init() assumption (DONE — parameterized via
-       observed_clear_regions).
+  #79  Robot arm blocks sensing during execution.                      DONE
+  #78  Incomplete view-blocking model (compute_shadow_blockers).       DONE
+  #82  Silent IK failures in execution (abort and replan).             DONE
+  #86  PDDL state drift after pick/place (read actual joint state).    DONE
+  #67  _build_init() assumption (observed_clear_regions param).        DONE
 
 THESIS-CRITICAL (Tier 3 — days/weeks):
-  #55  Hardcoded scene — no scenario variation (prerequisite for #76).
+  #55  Hardcoded scene — PARTIALLY DONE.  SceneConfig, mixed_shapes,
+       scalability presets, and CLI flags implemented.  Still needs
+       batch evaluation runner (#76).
   #76  No evaluation framework (PA-1) — thesis cannot have a Results
        section without metrics, baselines, or scene variation.
   #81  Missing recursive object discovery (PA-2) — implement or
        document as accepted simplification / future work.
 
 DEFERRABLE (Tier 4 — accepted simplifications, fidelity):
-  #44  Stale shadow registry after occluder relocation (accepted).
-  #73  shadow_occluder_map goes stale on replan (low impact, fragile).
   #59  Objects fly away on first grasp — constraint-based grasping works
   +#77  functionally; friction grasping is a fidelity improvement.
        Depends on #77 (object dimensions exceed gripper capacity).
+
+DEAD CODE — DOCUMENTED, PRESERVED (Tier 5 — no action needed):
+  #87  Dead methods/properties across codebase (~160 lines).
+       Tracked for awareness; preserved per codebase policy.
+  #88  Unused imports (7 import statements across 3 files).
+  #89  Unused function parameters (config in execute_pick/place).
+  #90  Visualization intentionally disabled — BoxelVisualizer unused.
+       Disabled by explicit decision; preserved for re-enabling.
+  #91  Dead CameraObservation fields (rgb_image, depth_image,
+       point_cloud always None).  Interface reserved for future use.
+  #92  RunLogger context manager never used (style inconsistency).
+  #94  Dead heuristic config rejection loop (lines 300-308).
+       Checks for is_heuristic=True on configs that can no longer be
+       produced.  Unreachable since #80 removed _heuristic_ik.
 
 ACCEPTED DEVIATIONS (documented, no further code changes needed):
   #61  Optimistic sensing + reactive replanning instead of conditional
@@ -670,7 +1065,10 @@ ACCEPTED DEVIATIONS (documented, no further code changes needed):
        standard TAMP practice.  Documented in domain PDDL and code.
 
 ALREADY RESOLVED:
-  #56  Dead computation: point cloud and compute_neighbors() (FIXED).
+  #56  Dead computation: point cloud and compute_neighbors()
+       (PARTIALLY DONE — calls removed, method bodies remain; see #87).
+  #55  Scene parameterization (PARTIALLY DONE — infrastructure exists,
+       needs evaluation runner; see Tier 3).
   #60  Simulation flickering during planning (DONE — RenderingLock).
   #69  ~30 magic numbers — justification comments added (DONE; see #84
        for remaining gaps in execution code).
@@ -679,6 +1077,10 @@ ALREADY RESOLVED:
   #82  Silent IK failures in execution (DONE — Tier 2, 2026-03-14).
   #86  PDDL state drift (DONE — Tier 2, 2026-03-14).
   #67  Targets-only-in-shadows assumption (DONE — Tier 2, 2026-03-14).
+  #85  Dead/commented push code (DONE — Tier 1, 2026-03-14).
+  #84  Magic number cleanup in execution (DONE — Tier 1, 2026-03-14).
+  #80  Fake IK fallback removed (DONE — Tier 1, 2026-03-14).
+  #83  Raycasting blind spot fixed (DONE — Tier 1, 2026-03-14).
 
 PDDL/PYTHON ALIGNMENT:
   PF-1 sense: MISMATCH (accepted #61) — optimistic + reactive replanning.
@@ -738,45 +1140,67 @@ Verification logging workflow (archived #58):
     wsl bash -lc "... python3 -u test_full_pipeline.py --no-gui" 2>&1 |
       Tee-Object -FilePath .\logs\manual_run.log
 
-Priority order for remaining fixes (updated 2026-03-14):
+Priority order for remaining fixes (updated 2026-03-17):
 
-  TIER 1 — Quick wins (under 30 min each, no design decisions):
-    1. #85  Delete dead/commented push code            ~5 min
-    2. #84  Comment remaining magic numbers             ~20 min
-    3. #80  Lock down / remove fake IK fallback          ~15 min
-    4. #83  Fix raycasting blind spot (count robot hits) ~15 min
+  TIER 0 — PDDL-CRITICAL (highest priority — symbolic/physical desync):
+    #95  Systemic PDDL state drift — the root             ~2-3 weeks
+         architectural issue.  Symbolic and physical
+         states diverge through 4 channels.  Fixing
+         requires PDDL domain faithfulness + registry
+         refresh + execution-time state reconciliation.
+    #93  Actions not generic — hidden sub-actions in       ~1-2 weeks
+         sense/pick/place execution.  Fixing requires
+         PDDL domain decomposition (approach/grasp/lift
+         as separate actions with own streams).
+    #44  Stale shadow registry after relocation —          ~2-3 days
+         recompute BoxelRegistry (or affected shadows
+         only) after every occluder pick-and-place.
+    #73  Stale shadow_occluder_map on replan —             ~1 day
+         refresh blocks_view_at facts from current
+         physical state before each replan.
 
-  TIER 2 — Medium effort, high value (DONE 2026-03-14):
-    5. #79  Move arm out of the way before sensing       DONE
-    6. #78  Fix view-blocking model (blocks_view_at for  DONE
-           ALL object-shadow pairs)
-    7. #82  Handle IK failures properly (abort/replan)   DONE
-    8. #86  Verify/fix PDDL state drift after pick/place DONE
-    9. #67  Fix targets-only-in-shadows assumption        DONE
+  TIER 1 — Quick wins (ALL DONE as of 2026-03-14):
+    #85  Delete dead/commented push code                 DONE
+    #84  Comment remaining magic numbers                 DONE
+    #80  Lock down / remove fake IK fallback             DONE
+    #83  Fix raycasting blind spot (count robot hits)    DONE
+
+  TIER 2 — Medium effort, high value (ALL DONE as of 2026-03-14):
+    #79  Move arm out of the way before sensing          DONE
+    #78  Fix view-blocking model                         DONE
+    #82  Handle IK failures properly (abort/replan)      DONE
+    #86  Verify/fix PDDL state drift after pick/place    DONE
+    #67  Fix targets-only-in-shadows assumption           DONE
 
   TIER 3 — Large effort, thesis-critical (days-weeks):
-   10. #55  Parameterize scene (prerequisite for #76)    ~1-2 days
-   11. #76  Evaluation framework (PA-1) — metrics,       ~1-2 weeks
-           baselines, batch runner, scene variation.
-           Required for thesis Results section.
-   12. #81  Recursive object discovery (PA-2) — new      ~2-3 days
-           feature, or document as accepted
-           simplification / future work
+    #55  Parameterize scene — PARTIALLY DONE.
+         SceneConfig + presets exist; needs evaluation runner (#76).
+    #76  Evaluation framework (PA-1) — metrics,          ~1-2 weeks
+         baselines, batch runner, scene variation.
+         Required for thesis Results section.
+    #81  Recursive object discovery (PA-2) — new         ~2-3 days
+         feature, or document as accepted
+         simplification / future work
 
   TIER 4 — Deferrable (accepted simplifications, fidelity):
-   13. #44  Stale shadow registry — accepted, raycasting by body ID
-           compensates
-   14. #73  Stale shadow_occluder_map — low impact, derived predicates
-           compensate
-   15. #59  Friction-based grasping — fidelity improvement, not
-    +#77   correctness fix. Constraint grasping works functionally.
-           Depends on #77 (object resizing). Fix together if pursued.
+    #59  Friction-based grasping — fidelity improvement, not
+    +#77 correctness fix. Constraint grasping works functionally.
+         Depends on #77 (object resizing). Fix together if pursued.
+
+  TIER 5 — Dead code inventory (documented, preserved per policy):
+    #87  Dead methods/properties (~160 lines across 5 files)
+    #88  Unused imports (7 statements across 3 files)
+    #89  Unused parameters (config in execute_pick/place)
+    #90  Visualization disabled (intentional; ~145 lines dormant)
+    #91  Dead CameraObservation fields (interface reserved)
+    #92  RunLogger context manager unused (style inconsistency)
+    #94  Dead heuristic config rejection loop (unreachable since #80)
 
   Already resolved:
-    #56  Dead computation (DONE — point cloud skipped, neighbors removed)
+    #56  Dead computation (PARTIALLY DONE — calls removed, method
+         bodies remain; see #87)
     #60  Simulation flickering (DONE — RenderingLock)
-    #69  Magic numbers (DONE — justification comments added, see #84
-         for remaining gaps in execution code)
+    #69  Magic numbers (DONE — justification comments added)
 
 Proposal alignment work (PA-1 through PA-6) and PDDL/Python alignment
 (PF-1 through PF-5) are tracked in their respective sections above and

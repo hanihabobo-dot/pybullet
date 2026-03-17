@@ -1,5 +1,7 @@
 # Semantic Boxels for Task and Motion Planning
 
+> **[Read the full project wiki](wiki/Home.md)** -- comprehensive documentation covering architecture, modules, data structures, PDDL domain, execution pipeline, design decisions, and known issues.
+
 A PyBullet-based system for generating **semantic boxels** - task-relevant 3D regions used for belief representation in Task and Motion Planning (TAMP). This system discretizes a workspace into meaningful regions including object bounding boxes, occlusion shadows, and free space cells.
 
 ## Overview
@@ -28,17 +30,21 @@ python -m http.server 8080
 # Then open: http://localhost:8080/boxel_viewer.html
 ```
 
-## Full Pipeline Logging (No Truncation)
+## Full Pipeline (TAMP + Execution)
 
-Use this command from PowerShell to run the full planner/execution loop and
-capture the entire output to a log file for debugging:
+The planner requires PDDLStream, which runs on Linux. Use WSL from the project directory:
 
-```powershell
-wsl bash -lc "cd /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels && source wsl_env/bin/activate && python3 -u test_full_pipeline.py --no-gui" 2>&1 | Tee-Object -FilePath .\logs\phase3_run.log
+```bash
+python3 -u test_full_pipeline.py
 ```
 
-For stress tests with repeated runs, save each run to its own file under
-`logs/phase3_batch/`.
+With verbose logging and headless mode:
+
+```bash
+python3 -u test_full_pipeline.py --log-level verbose --no-gui
+```
+
+Each run auto-creates a timestamped log directory under `logs/run_<timestamp>/` containing the full output, boxel data, and PDDL problem export.
 
 ## Project Structure
 
