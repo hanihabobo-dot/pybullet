@@ -17,20 +17,20 @@ python3 -u test_full_pipeline.py
 
 ## Documentation
 
-Detailed documentation is in the **[project wiki](wiki/Home.md)**:
+Detailed documentation is in the **[project wiki](https://github.com/hanihabobo-dot/pybullet/wiki)**:
 
 | Page | What it covers |
 |------|---------------|
-| [Architecture Overview](wiki/Architecture_Overview.md) | Module dependencies, data flow diagrams, file structure |
-| [Scene Environment](wiki/Scene_Environment.md) | PyBullet setup, camera model, scene presets, object detection |
-| [Spatial Reasoning](wiki/Spatial_Reasoning.md) | Shadow calculation, free-space octree, cell merging |
-| [Planning System](wiki/Planning_System.md) | PDDLStream integration, problem construction, replanning |
-| [Robot Control and Streams](wiki/Robot_Control_and_Streams.md) | IK, RRT-Connect motion planning, grasp sampling |
-| [Execution Pipeline](wiki/Execution_Pipeline.md) | End-to-end walkthrough, action handlers, concrete scenario |
-| [Core Data Structures](wiki/Core_Data_Structures.md) | All types, dataclasses, and enums |
-| [PDDL Domain Reference](wiki/PDDL_Domain_Reference.md) | Predicates, actions, streams, PDDL/Python alignment |
-| [Design Decisions](wiki/Design_Decisions.md) | Rationale for key choices and proposal deviations |
-| [Known Issues and Roadmap](wiki/Known_Issues_and_Roadmap.md) | Audit status, open issues, future work |
+| [Architecture Overview](https://github.com/hanihabobo-dot/pybullet/wiki/Architecture_Overview) | Module dependencies, data flow diagrams, file structure |
+| [Scene Environment](https://github.com/hanihabobo-dot/pybullet/wiki/Scene_Environment) | PyBullet setup, camera model, scene presets, object detection |
+| [Spatial Reasoning](https://github.com/hanihabobo-dot/pybullet/wiki/Spatial_Reasoning) | Shadow calculation, free-space octree, cell merging |
+| [Planning System](https://github.com/hanihabobo-dot/pybullet/wiki/Planning_System) | PDDLStream integration, problem construction, replanning |
+| [Robot Control and Streams](https://github.com/hanihabobo-dot/pybullet/wiki/Robot_Control_and_Streams) | IK, RRT-Connect motion planning, grasp sampling |
+| [Execution Pipeline](https://github.com/hanihabobo-dot/pybullet/wiki/Execution_Pipeline) | End-to-end walkthrough, action handlers, concrete scenario |
+| [Core Data Structures](https://github.com/hanihabobo-dot/pybullet/wiki/Core_Data_Structures) | All types, dataclasses, and enums |
+| [PDDL Domain Reference](https://github.com/hanihabobo-dot/pybullet/wiki/PDDL_Domain_Reference) | Predicates, actions, streams, PDDL/Python alignment |
+| [Design Decisions](https://github.com/hanihabobo-dot/pybullet/wiki/Design_Decisions) | Rationale for key choices and proposal deviations |
+| [Known Issues and Roadmap](https://github.com/hanihabobo-dot/pybullet/wiki/Known_Issues_and_Roadmap) | Audit status, open issues, future work |
 
 ## License
 
