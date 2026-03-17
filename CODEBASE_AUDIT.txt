@@ -982,6 +982,72 @@ DEAD CODE — PRESERVED FOR FUTURE USE
        for deletion.  They impose no runtime cost and may be needed for
        future features (evaluation framework, real perception, etc.).
 
+WIKI — UPDATE AFTER EVERY CHANGE
+       The project wiki lives in the GitHub wiki repo (pybullet.wiki.git),
+       NOT in the main repository.  After any code change that affects
+       architecture, data structures, algorithms, PDDL domain, execution
+       pipeline, or design decisions, the corresponding wiki page(s) MUST
+       be updated to stay in sync.
+
+       Wiki repo: git@github.com:hanihabobo-dot/pybullet.wiki.git
+       Local clone: ../pybullet.wiki/
+
+       Pages and what triggers an update:
+         Architecture_Overview     — new/removed modules, changed data flow
+         Core_Data_Structures      — new/changed dataclasses, types, enums
+         Scene_Environment         — camera, objects, scene presets
+         Spatial_Reasoning         — shadow calc, octree, cell merger
+         Planning_System           — _build_init, streams, replanning
+         Robot_Control_and_Streams — IK, collision, motion planning, grasps
+         Execution_Pipeline        — action handlers, sensing, replanning
+         PDDL_Domain_Reference    — predicates, actions, streams
+         Design_Decisions          — new accepted deviations or rationale
+         Known_Issues_and_Roadmap  — resolved/new audit issues
+
+ARCHIVE — LOCAL ONLY, NOT PUSHED
+       The archive/ folder contains superseded implementations preserved
+       for local reference.  It MUST NOT contain personal information
+       (user paths, names, credentials).  The archive/ folder should be
+       added to .gitignore so it is not pushed to the remote repository.
+       If it is currently tracked, it should be removed from tracking
+       with `git rm -r --cached archive/` and then ignored.
+
+================================================================================
+96. PERSONAL INFORMATION IN GIT HISTORY — DECISION NEEDED
+================================================================================
+Where: git history (all commits prior to fb796fc)
+
+What:  The following files containing personal information (full name,
+       university, hardcoded user paths) were removed from the working
+       tree and HEAD in commit fb796fc, but they still exist in the git
+       history and can be recovered by anyone with access to the repo:
+
+       - SESSION_HANDOFF.md (full name, university, workspace path)
+       - progress_report.html (full name)
+       - proposal (full name, university)
+       - test_full_pipeline.py (hardcoded user path in older commits)
+       - pddlstream_planner.py (hardcoded user path in older commits)
+       - archive/test_wsl_pddlstream.py (hardcoded user path in older commits)
+
+       Scrubbing these from history requires git filter-branch or BFG
+       Repo-Cleaner.  Both rewrite ALL commit hashes, which:
+       (a) Breaks any existing branches, tags, or forks.
+       (b) Forces all collaborators to re-clone.
+       (c) Makes prior commit references in audit entries invalid.
+
+       If the repo is public, the information is already cached by GitHub
+       and possibly by third-party mirrors.  History rewriting only
+       prevents future access via the git repo itself.
+
+Fix:   DECISION NEEDED — choose one:
+       (a) Accept the risk.  The information is your name and a local
+           file path — not credentials or secrets.  No further action.
+       (b) Rewrite history with BFG Repo-Cleaner to strip the files
+           and path strings.  Force-push all branches.  Requires all
+           local clones to be re-created.
+       (c) Delete the repository and re-create it from the current HEAD
+           (nuclear option — clean history, but loses all prior commits).
+
 ================================================================================
 FOR LATER
 ================================================================================
